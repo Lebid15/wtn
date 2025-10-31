@@ -1207,6 +1207,19 @@ Table global_products {
   updated_at timestamp [default: `now()`]
 }
 
+Table price_groups {
+  id int [pk, increment]
+  tenant_id int [ref: > tenants.id, not null]
+  group_name varchar(100) [not null]  // "VIP1", "VIP2", "Default"
+  is_default boolean [default: false]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (tenant_id, group_name) [unique]
+  }
+}
+
 Table global_package_link_numbers {
   id int [pk, increment]
   global_product_id int [ref: > global_products.id, not null]
@@ -1296,7 +1309,7 @@ Table packages {
   display_name varchar [not null]
   description text
   
-  price_usd decimal(18,3) [not null, default: 0]  // >= 0 (لا يمكن سالب)
+  capital_usd decimal(18,3) [not null, default: 0]  // رأس المال (التكلفة الأساسية)
   
   // حقول العداد (تُملأ من product.counter_* عند التفعيل)
   is_counter boolean [default: false]
@@ -1317,7 +1330,22 @@ Table packages {
     (product_id, is_counter)
   }
   
-  Note: "CHECK (price_usd >= 0)"
+  Note: "CHECK (capital_usd >= 0)"
+}
+
+Table package_prices {
+  id int [pk, increment]
+  package_id int [ref: > packages.id, not null]
+  price_group_id int [ref: > price_groups.id, not null]
+  price_usd decimal(18,3) [not null, default: 0]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (package_id, price_group_id) [unique]
+  }
+  
+  Note: "CHECK (price_usd >= capital_usd)"  // السعر يجب أن يكون >= رأس المال
 }
 
 Table orders {
@@ -1330,15 +1358,21 @@ Table orders {
   
   package_link_number int [not null]  // نسخة للحفظ التاريخي
   
-  // الأسعار
-  price_usd decimal(18,3) [not null]
+  // الأسعار والتكاليف
+  cost_usd decimal(18,3) [not null]           // رأس المال (التكلفة من المزود)
+  price_usd decimal(18,3) [not null]          // سعر البيع بالدولار
+  profit_usd decimal(18,3) [not null]         // الربح = price_usd - cost_usd
+  
   agent_currency_id int [ref: > tenant_currencies.id, not null]
-  price_local decimal(18,3) [not null]
-  exchange_rate decimal(18,3) [not null]
+  price_local decimal(18,3) [not null]        // السعر بعملة الوكيل
+  exchange_rate decimal(18,6) [not null]      // سعر الصرف المستخدم
+  
+  price_group_id int [ref: > price_groups.id]  // مجموعة السعر المستخدمة
   
   // حقول العداد (null للباقات العادية)
-  quantity int [null]  // الكمية المطلوبة (500 شدة)
-  unit_price_usd decimal(18,3) [null]  // سعر الوحدة وقت الطلب
+  quantity int [null]                          // الكمية المطلوبة (500 شدة)
+  unit_price_usd decimal(18,3) [null]          // سعر الوحدة وقت الطلب
+  unit_cost_usd decimal(18,3) [null]           // تكلفة الوحدة من المزود
   
   // سلسلة التوجيه
   parent_order_id int [ref: > orders.id, null]
@@ -1352,6 +1386,8 @@ Table orders {
   status varchar [default: 'pending']
   error_message text
   
+  // الوقت
+  duration_seconds int [null]                  // مدة تنفيذ الطلب بالثواني
   completed_at timestamp
   failed_at timestamp
   created_at timestamp [default: `now()`]
