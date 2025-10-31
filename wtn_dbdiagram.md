@@ -213,6 +213,7 @@ Table package_prices {
 Table orders {
   id int [pk, increment]
   uuid varchar [unique, not null]
+  order_number varchar [unique, not null]
   tenant_id int [ref: > tenants.id, not null]
   agent_id int [ref: > agents.id, not null]
   product_id int [ref: > products.id, not null]
@@ -235,6 +236,9 @@ Table orders {
   routing_level int [default: 1]
   customer_data jsonb
   provider_response jsonb
+  source varchar [default: 'web']
+  api_token_id int [ref: > api_tokens.id]
+  order_uuid varchar(36) [unique]
   status varchar [default: 'pending']
   error_message text
   duration_seconds int
@@ -249,7 +253,10 @@ Table orders {
     (status)
     (parent_order_id)
     (child_order_id)
+    order_uuid
   }
+  
+  Note: "source: web, api, mobile"
 }
 
 Table providers {
@@ -450,5 +457,114 @@ Table agent_tier_history {
   
   indexes {
     (agent_id, changed_at)
+  }
+}
+
+Table api_tokens {
+  id int [pk, increment]
+  tenant_id int [ref: > tenants.id, not null]
+  token varchar(64) [unique, not null]
+  label varchar(100)
+  allowed_ips text
+  is_active boolean [default: true]
+  daily_limit int
+  daily_usage int [default: 0]
+  last_reset_date date
+  total_requests int [default: 0]
+  total_orders int [default: 0]
+  last_used_at timestamp
+  last_ip varchar(45)
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (tenant_id, is_active)
+    token
+  }
+}
+
+Table api_logs {
+  id int [pk, increment]
+  api_token_id int [ref: > api_tokens.id, not null]
+  tenant_id int [ref: > tenants.id, not null]
+  endpoint varchar(255)
+  method varchar(10)
+  ip_address varchar(45)
+  request_body text
+  response_body text
+  response_code int
+  response_time_ms int
+  status varchar(20)
+  error_code varchar(10)
+  created_at timestamp [default: `now()`]
+  
+  indexes {
+    (api_token_id, created_at)
+    (tenant_id, created_at)
+    (status, created_at)
+  }
+}
+
+Table announcements {
+  id int [pk, increment]
+  created_by_type varchar(20) [not null]
+  super_admin_id int [ref: > super_admins.id]
+  tenant_id int [ref: > tenants.id]
+  title varchar(255) [not null]
+  content text [not null]
+  icon varchar(50)
+  image_url varchar(500)
+  type varchar(20) [default: 'info']
+  priority int [default: 0]
+  start_date timestamp
+  end_date timestamp
+  is_active boolean [default: true]
+  is_pinned boolean [default: false]
+  views_count int [default: 0]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (created_by_type, tenant_id, is_active)
+    (is_active, priority, created_at)
+    (start_date, end_date)
+  }
+  
+  Note: "created_by_type: super_admin, tenant"
+  Note: "type: info, warning, success, error, promotion"
+}
+
+Table announcement_views {
+  id int [pk, increment]
+  announcement_id int [ref: > announcements.id, not null]
+  viewer_type varchar(20) [not null]
+  tenant_id int [ref: > tenants.id]
+  agent_id int [ref: > agents.id]
+  viewed_at timestamp [default: `now()`]
+  
+  indexes {
+    (announcement_id, viewer_type, tenant_id, agent_id) [unique]
+    (announcement_id, viewed_at)
+  }
+  
+  Note: "viewer_type: tenant, agent"
+}
+
+Table about_pages {
+  id int [pk, increment]
+  tenant_id int [ref: > tenants.id, not null, unique]
+  title varchar(255) [default: 'من نحن']
+  content text [not null]
+  logo_url varchar(500)
+  cover_image_url varchar(500)
+  contact_email varchar(255)
+  contact_phone varchar(50)
+  social_links json
+  is_published boolean [default: true]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    tenant_id
   }
 }
