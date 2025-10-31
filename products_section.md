@@ -1369,6 +1369,10 @@ Table orders {
   
   price_group_id int [ref: > price_groups.id]  // مجموعة السعر المستخدمة
   
+  // سعر البيع للزبون (للتقارير فقط - لا يُرسل للمستأجر)
+  customer_price_local decimal(18,3) [null]    // ما دفعه الزبون النهائي
+  customer_profit_local decimal(18,3) [null]   // ربح الوكيل من الزبون
+  
   // حقول العداد (null للباقات العادية)
   quantity int [null]                          // الكمية المطلوبة (500 شدة)
   unit_price_usd decimal(18,3) [null]          // سعر الوحدة وقت الطلب

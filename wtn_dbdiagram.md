@@ -47,6 +47,8 @@ Table agents {
   preferred_currency_id int [ref: > tenant_currencies.id]
   preferred_language varchar [default: 'ar']
   price_group_id int [ref: > price_groups.id]
+  current_month_sales_usd decimal(18,3) [default: 0]
+  last_tier_update timestamp
   balance_usd decimal(18,3) [default: 0]
   overdraft_limit_usd decimal(18,3) [default: 0]
   is_internal_account boolean [default: false]
@@ -152,6 +154,10 @@ Table price_groups {
   tenant_id int [ref: > tenants.id, not null]
   group_name varchar(100) [not null]
   is_default boolean [default: false]
+  tier_icon varchar
+  tier_color varchar
+  target_sales_usd decimal(18,3)
+  next_tier_id int [ref: > price_groups.id]
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
   
@@ -219,6 +225,8 @@ Table orders {
   price_local decimal(18,3) [not null]
   exchange_rate decimal(18,6) [not null]
   price_group_id int [ref: > price_groups.id]
+  customer_price_local decimal(18,3)
+  customer_profit_local decimal(18,3)
   quantity int
   unit_price_usd decimal(18,3)
   unit_cost_usd decimal(18,3)
@@ -247,16 +255,66 @@ Table orders {
 Table providers {
   id int [pk, increment]
   uuid varchar [unique, not null]
-  provider_name varchar [not null]
-  description text
-  api_endpoint varchar
-  api_key_encrypted text
-  api_secret_encrypted text
-  webhook_url varchar
+  tenant_id int [ref: > tenants.id, not null]
+  provider_type varchar [not null]
+  display_name varchar [not null]
+  base_url varchar
   is_active boolean [default: true]
-  config_json jsonb
+  internal_username varchar
+  internal_password_encrypted text
+  znet_mobile varchar
+  znet_password_encrypted text
+  zdk_token_encrypted text
+  stock_pool_id int
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (tenant_id, display_name)
+  }
+}
+
+Table stock_pools {
+  id int [pk, increment]
+  tenant_id int [ref: > tenants.id, not null]
+  pool_name varchar [not null]
+  product_id int [ref: > products.id]
+  total_codes int [default: 0]
+  available_codes int [default: 0]
+  used_codes int [default: 0]
+  created_at timestamp [default: `now()`]
+}
+
+Table stock_codes {
+  id int [pk, increment]
+  stock_pool_id int [ref: > stock_pools.id, not null]
+  package_id int [ref: > packages.id, not null]
+  code varchar [not null]
+  status varchar [default: 'available']
+  order_id int [ref: > orders.id]
+  used_at timestamp
+  created_at timestamp [default: `now()`]
+  
+  indexes {
+    (stock_pool_id, status)
+    (order_id)
+  }
+}
+
+Table package_routing {
+  id int [pk, increment]
+  tenant_id int [ref: > tenants.id, not null]
+  package_id int [ref: > packages.id, not null]
+  provider_a_type varchar [default: 'manual']
+  provider_a_id int [ref: > providers.id]
+  provider_b_type varchar [default: 'closed']
+  provider_b_id int [ref: > providers.id]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (tenant_id, package_id) [unique]
+  }
 }
 
 Table product_providers {
@@ -294,6 +352,8 @@ Table transactions {
     (agent_id, created_at)
     (reference_type, reference_id)
   }
+  
+  Note: "type: order, deposit, withdrawal, refund, adjustment"
 }
 
 Table subscription_payments {
@@ -331,5 +391,64 @@ Table subscription_grace_periods {
   
   indexes {
     (tenant_id, created_at)
+  }
+}
+
+Table payment_methods {
+  id int [pk, increment]
+  tenant_id int [ref: > tenants.id, not null]
+  method_type varchar [not null]
+  method_name varchar [not null]
+  details jsonb
+  instructions text
+  is_active boolean [default: true]
+  sort_order int [default: 0]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (tenant_id, is_active)
+  }
+}
+
+Table deposit_requests {
+  id int [pk, increment]
+  uuid varchar [unique, not null]
+  tenant_id int [ref: > tenants.id, not null]
+  agent_id int [ref: > agents.id, not null]
+  payment_method_id int [ref: > payment_methods.id, not null]
+  amount_local decimal(18,3) [not null]
+  currency_code varchar [not null]
+  exchange_rate decimal(18,6) [not null]
+  amount_usd decimal(18,3) [not null]
+  status varchar [default: 'pending']
+  agent_notes text
+  tenant_notes text
+  receipt_url varchar
+  submitted_at timestamp [default: `now()`]
+  reviewed_at timestamp
+  reviewed_by int [ref: > tenants.id]
+  transaction_id int [ref: > transactions.id]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  
+  indexes {
+    (tenant_id, status, created_at)
+    (agent_id, created_at)
+    (status)
+  }
+}
+
+Table agent_tier_history {
+  id int [pk, increment]
+  agent_id int [ref: > agents.id, not null]
+  old_price_group_id int [ref: > price_groups.id]
+  new_price_group_id int [ref: > price_groups.id, not null]
+  sales_amount_usd decimal(18,3)
+  month_year varchar
+  changed_at timestamp [default: `now()`]
+  
+  indexes {
+    (agent_id, changed_at)
   }
 }
