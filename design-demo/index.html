@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WTN Design System Demo</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="light-theme">
+    <!-- Header Controls -->
+    <header class="demo-header">
+        <div class="container">
+            <h1>WTN Design System</h1>
+            <div class="controls">
+                <button class="toggle-btn" id="themeToggle">
+                    <span class="icon">🌙</span>
+                    <span class="label">Dark Mode</span>
+                </button>
+                <button class="toggle-btn" id="dirToggle">
+                    <span class="icon">🔄</span>
+                    <span class="label">English</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Color Palette -->
+        <section class="demo-section">
+            <h2 class="section-title">Color Palette</h2>
+            <div class="color-grid">
+                <div class="color-card">
+                    <div class="color-swatch" style="background: var(--primary);"></div>
+                    <div class="color-info">
+                        <strong>Primary</strong>
+                        <code>--primary</code>
+                    </div>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background: var(--secondary);"></div>
+                    <div class="color-info">
+                        <strong>Secondary</strong>
+                        <code>--secondary</code>
+                    </div>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background: var(--success);"></div>
+                    <div class="color-info">
+                        <strong>Success</strong>
+                        <code>--success</code>
+                    </div>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background: var(--warning);"></div>
+                    <div class="color-info">
+                        <strong>Warning</strong>
+                        <code>--warning</code>
+                    </div>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background: var(--danger);"></div>
+                    <div class="color-info">
+                        <strong>Danger</strong>
+                        <code>--danger</code>
+                    </div>
+                </div>
+                <div class="color-card">
+                    <div class="color-swatch" style="background: var(--info);"></div>
+                    <div class="color-info">
+                        <strong>Info</strong>
+                        <code>--info</code>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Typography -->
+        <section class="demo-section">
+            <h2 class="section-title">Typography</h2>
+            <div class="typography-demo">
+                <h1>عنوان رئيسي H1</h1>
+                <h2>عنوان ثانوي H2</h2>
+                <h3>عنوان فرعي H3</h3>
+                <h4>عنوان H4</h4>
+                <p class="text-lg">نص كبير - Lorem ipsum dolor sit amet consectetur adipisicing elit.</p>
+                <p>نص عادي - هذا نص تجريبي لعرض الخط الافتراضي في النظام.</p>
+                <p class="text-sm">نص صغير - معلومات إضافية أو تفاصيل ثانوية.</p>
+                <p class="text-muted">نص باهت - نص غير مهم أو وصف تكميلي.</p>
+            </div>
+        </section>
+
+        <!-- Buttons -->
+        <section class="demo-section">
+            <h2 class="section-title">Buttons</h2>
+            
+            <h3 class="subsection-title">Primary Buttons</h3>
+            <div class="button-row">
+                <button class="btn btn-primary btn-sm">صغير</button>
+                <button class="btn btn-primary btn-md">متوسط</button>
+                <button class="btn btn-primary btn-lg">كبير</button>
+                <button class="btn btn-primary btn-md" disabled>معطّل</button>
+            </div>
+
+            <h3 class="subsection-title">Secondary Buttons</h3>
+            <div class="button-row">
+                <button class="btn btn-secondary btn-sm">صغير</button>
+                <button class="btn btn-secondary btn-md">متوسط</button>
+                <button class="btn btn-secondary btn-lg">كبير</button>
+            </div>
+
+            <h3 class="subsection-title">Outline Buttons</h3>
+            <div class="button-row">
+                <button class="btn btn-outline btn-sm">صغير</button>
+                <button class="btn btn-outline btn-md">متوسط</button>
+                <button class="btn btn-outline btn-lg">كبير</button>
+            </div>
+
+            <h3 class="subsection-title">Danger Buttons</h3>
+            <div class="button-row">
+                <button class="btn btn-danger btn-sm">حذف</button>
+                <button class="btn btn-danger btn-md">إلغاء</button>
+                <button class="btn btn-danger btn-lg">حذف نهائي</button>
+            </div>
+
+            <h3 class="subsection-title">Ghost Buttons</h3>
+            <div class="button-row">
+                <button class="btn btn-ghost btn-sm">صغير</button>
+                <button class="btn btn-ghost btn-md">متوسط</button>
+                <button class="btn btn-ghost btn-lg">كبير</button>
+            </div>
+        </section>
+
+        <!-- Inputs -->
+        <section class="demo-section">
+            <h2 class="section-title">Input Fields</h2>
+            
+            <div class="input-grid">
+                <div class="input-group">
+                    <label for="input1" class="input-label">اسم المنتج</label>
+                    <input type="text" id="input1" class="input" placeholder="أدخل اسم المنتج">
+                </div>
+
+                <div class="input-group">
+                    <label for="input2" class="input-label">البريد الإلكتروني</label>
+                    <input type="email" id="input2" class="input" placeholder="example@domain.com">
+                </div>
+
+                <div class="input-group">
+                    <label for="input3" class="input-label">السعر (دولار)</label>
+                    <input type="number" id="input3" class="input" placeholder="0.00" step="0.01">
+                </div>
+
+                <div class="input-group">
+                    <label for="input4" class="input-label">حقل مع خطأ</label>
+                    <input type="text" id="input4" class="input input-error" placeholder="حقل خاطئ">
+                    <span class="input-error-msg">هذا الحقل مطلوب</span>
+                </div>
+
+                <div class="input-group">
+                    <label for="input5" class="input-label">حقل معطّل</label>
+                    <input type="text" id="input5" class="input" placeholder="معطّل" disabled>
+                </div>
+
+                <div class="input-group">
+                    <label for="select1" class="input-label">اختر العملة</label>
+                    <select id="select1" class="input">
+                        <option>دولار أمريكي</option>
+                        <option>ريال سعودي</option>
+                        <option>ليرة تركية</option>
+                        <option>يورو</option>
+                    </select>
+                </div>
+
+                <div class="input-group full-width">
+                    <label for="textarea1" class="input-label">الوصف</label>
+                    <textarea id="textarea1" class="input" rows="3" placeholder="أدخل وصف المنتج..."></textarea>
+                </div>
+            </div>
+        </section>
+
+        <!-- Cards -->
+        <section class="demo-section">
+            <h2 class="section-title">Cards</h2>
+            
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>بطاقة أساسية</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>هذا محتوى البطاقة. يمكن أن يحتوي على نصوص، أزرار، أو أي عناصر أخرى.</p>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-primary btn-sm">إجراء</button>
+                        <button class="btn btn-ghost btn-sm">إلغاء</button>
+                    </div>
+                </div>
+
+                <div class="card card-stats">
+                    <div class="card-body">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-content">
+                            <p class="stat-label">إجمالي المبيعات</p>
+                            <h2 class="stat-value">$12,458</h2>
+                            <span class="stat-change positive">+12.5%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-stats">
+                    <div class="card-body">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-content">
+                            <p class="stat-label">عدد الوكلاء</p>
+                            <h2 class="stat-value">248</h2>
+                            <span class="stat-change negative">-3.2%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-interactive">
+                    <div class="card-body">
+                        <h3>بطاقة تفاعلية</h3>
+                        <p>اضغط على هذه البطاقة للتفاعل</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Alerts -->
+        <section class="demo-section">
+            <h2 class="section-title">Alerts</h2>
+            
+            <div class="alerts-stack">
+                <div class="alert alert-success">
+                    <span class="alert-icon">✓</span>
+                    <div class="alert-content">
+                        <strong>نجح!</strong>
+                        <p>تم حفظ التغييرات بنجاح.</p>
+                    </div>
+                </div>
+
+                <div class="alert alert-error">
+                    <span class="alert-icon">✕</span>
+                    <div class="alert-content">
+                        <strong>خطأ!</strong>
+                        <p>حدث خطأ أثناء معالجة الطلب. يرجى المحاولة مرة أخرى.</p>
+                    </div>
+                </div>
+
+                <div class="alert alert-warning">
+                    <span class="alert-icon">⚠</span>
+                    <div class="alert-content">
+                        <strong>تحذير!</strong>
+                        <p>رصيدك منخفض. يرجى شحن الرصيد لمتابعة العمليات.</p>
+                    </div>
+                </div>
+
+                <div class="alert alert-info">
+                    <span class="alert-icon">ℹ</span>
+                    <div class="alert-content">
+                        <strong>معلومة</strong>
+                        <p>سيتم تحديث النظام غدًا الساعة 2:00 صباحًا.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Table -->
+        <section class="demo-section">
+            <h2 class="section-title">Tables</h2>
+            
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>المعرّف</th>
+                            <th>الاسم</th>
+                            <th>العملة</th>
+                            <th>الرصيد</th>
+                            <th>الحالة</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>wtn-agent-a1b2c3</td>
+                            <td>أحمد محمد</td>
+                            <td>ريال سعودي</td>
+                            <td>3,750.00 ر.س</td>
+                            <td><span class="badge badge-success">نشط</span></td>
+                            <td>
+                                <button class="btn btn-ghost btn-sm">تعديل</button>
+                                <button class="btn btn-ghost btn-sm">عرض</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>wtn-agent-x7y8z9</td>
+                            <td>فاطمة علي</td>
+                            <td>ليرة تركية</td>
+                            <td>16,250 ₺</td>
+                            <td><span class="badge badge-success">نشط</span></td>
+                            <td>
+                                <button class="btn btn-ghost btn-sm">تعديل</button>
+                                <button class="btn btn-ghost btn-sm">عرض</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>wtn-agent-m3n4p5</td>
+                            <td>محمد حسن</td>
+                            <td>دولار</td>
+                            <td>-500.00 $</td>
+                            <td><span class="badge badge-warning">مدين</span></td>
+                            <td>
+                                <button class="btn btn-ghost btn-sm">تعديل</button>
+                                <button class="btn btn-ghost btn-sm">عرض</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>wtn-agent-q6r7s8</td>
+                            <td>سارة أحمد</td>
+                            <td>يورو</td>
+                            <td>920.00 €</td>
+                            <td><span class="badge badge-danger">معطّل</span></td>
+                            <td>
+                                <button class="btn btn-ghost btn-sm">تعديل</button>
+                                <button class="btn btn-ghost btn-sm">عرض</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Modal Demo -->
+        <section class="demo-section">
+            <h2 class="section-title">Modal</h2>
+            <button class="btn btn-primary btn-md" id="openModal">فتح النافذة المنبثقة</button>
+        </section>
+    </main>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>عنوان النافذة</h3>
+                <button class="modal-close" id="closeModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <p>هذا محتوى النافذة المنبثقة. يمكن أن يحتوي على نماذج، معلومات، أو أي محتوى آخر.</p>
+                <div class="input-group">
+                    <label for="modalInput" class="input-label">مثال حقل إدخال</label>
+                    <input type="text" id="modalInput" class="input" placeholder="أدخل النص هنا">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary btn-md">حفظ</button>
+                <button class="btn btn-ghost btn-md" id="cancelModal">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
