@@ -1,0 +1,219 @@
+@import "tailwindcss";
+
+/* ================== جذور الألوان لكل الثيمات ================== */
+
+/* الوضع الفاتح الافتراضي + عند وجود data-theme="light" */
+:root,
+:root[data-theme="light"] {
+  --color-bg-base: 255 249 244;
+  --color-bg-surface: 255 255 255;
+  --color-bg-surface-alt: 255 236 220;
+  --color-bg-surface-hover: 255 243 230;
+
+  --color-text-primary: 45 36 26;
+  --color-text-secondary: 107 96 87;
+
+  --color-border: 248 221 200;
+
+  --color-primary: 255 188 120;
+  --color-primary-hover: 255 176 102;
+  --color-primary-active: 255 164 84;
+  --color-primary-contrast: 45 36 26;
+
+  --color-success: 34 197 94;
+  --color-warning: 181 83 9;
+  --color-danger: 239 68 68;
+
+  --color-bg-input: 255 255 255;
+}
+
+/* Dark 1 */
+:root[data-theme="dark1"] {
+  --color-bg-base: 17 24 39;
+  --color-bg-surface: 31 41 55;
+  --color-bg-surface-alt: 55 65 81;
+  --color-bg-surface-hover: 45 55 72;
+
+  --color-text-primary: 255 255 255;
+  --color-text-secondary: 209 213 219;
+
+  --color-border: 75 85 99;
+
+  --color-primary: 230 175 46;
+  --color-primary-hover: 209 158 41;
+  --color-primary-active: 187 142 38;
+  --color-primary-contrast: 0 0 0;
+
+  --color-success: 34 197 94;
+  --color-warning: 245 158 11;
+  --color-danger: 239 68 68;
+
+  --color-bg-input: 34 37 46;
+}
+
+/* Dark 2 */
+:root[data-theme="dark2"] {
+  --color-bg-base: 15 23 42;
+  --color-bg-surface: 30 41 59;
+  --color-bg-surface-alt: 51 65 85;
+  --color-bg-surface-hover: 41 55 75;
+
+  --color-text-primary: 255 255 255;
+  --color-text-secondary: 203 213 225;
+
+  --color-border: 71 85 105;
+
+  --color-primary: 230 175 46;
+  --color-primary-hover: 209 158 41;
+  --color-primary-active: 187 142 38;
+  --color-primary-contrast: 0 0 0;
+
+  --color-success: 34 197 94;
+  --color-warning: 245 158 11;
+  --color-danger: 239 68 68;
+
+  --color-bg-input: 34 37 46;
+}
+
+/* Dark 3 */
+:root[data-theme="dark3"] {
+  --color-bg-base: 0 0 0;
+  --color-bg-surface: 24 24 27;
+  --color-bg-surface-alt: 39 39 42;
+  --color-bg-surface-hover: 32 32 36;
+
+  --color-text-primary: 255 255 255;
+  --color-text-secondary: 212 212 216;
+
+  --color-border: 63 63 70;
+
+  --color-primary: 230 175 46;
+  --color-primary-hover: 209 158 41;
+  --color-primary-active: 187 142 38;
+  --color-primary-contrast: 0 0 0;
+
+  --color-success: 34 197 94;
+  --color-warning: 245 158 11;
+  --color-danger: 239 68 68;
+
+  --color-bg-input: 34 37 46;
+}
+
+/* Dark 4 */
+:root[data-theme="dark4"] {
+  --color-bg-base: 11 20 26;
+  --color-bg-surface: 17 27 33;
+  --color-bg-surface-alt: 32 44 51;
+  --color-bg-surface-hover: 25 36 43;
+
+  --color-text-primary: 226 232 240;
+  --color-text-secondary: 158 148 141;
+
+  --color-border: 35 49 56;
+
+  --color-primary: 0 92 75;
+  --color-primary-hover: 0 106 86;
+  --color-primary-active: 0 120 97;
+  --color-primary-contrast: 226 232 240;
+
+  --color-success: 34 197 94;
+  --color-warning: 245 158 11;
+  --color-danger: 239 68 68;
+
+  --color-bg-input: 32 44 51;
+}
+
+/* ================== Global Styles ================== */
+
+body {
+  color: rgb(var(--color-text-primary));
+  margin: 0;
+  font-family: Arial, sans-serif;
+}
+
+:root body,
+:root[data-theme="light"] body {
+  background: linear-gradient(135deg, #ffe8d6 0%, #fff2e6 50%, #fff9f4 100%);
+  background-attachment: fixed;
+}
+
+:root[data-theme="dark1"] body {
+  background: linear-gradient(135deg, #242e3a 0%, #1a2532 50%, #111827 100%);
+  background-attachment: fixed;
+}
+
+:root[data-theme="dark2"] body {
+  background: linear-gradient(135deg, #1e293b 0%, #172033 50%, #0f172a 100%);
+  background-attachment: fixed;
+}
+
+:root[data-theme="dark3"] body {
+  background: linear-gradient(135deg, #1a1a1d 0%, #0f0f10 50%, #000000 100%);
+  background-attachment: fixed;
+}
+
+:root[data-theme="dark4"] body {
+  background: linear-gradient(135deg, #0d1f1a 0%, #0c1a17 50%, #0b141a 100%);
+  background-attachment: fixed;
+}
+
+/* ================== Custom Scrollbar ================== */
+
+.custom-scrollbar {
+  scrollbar-width: auto;
+  scrollbar-color: rgba(100, 116, 139, 0.5) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(100, 116, 139, 0.6), rgba(71, 85, 105, 0.7));
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background 0.3s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(71, 85, 105, 0.8), rgba(51, 65, 85, 0.9));
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, rgba(51, 65, 85, 1), rgba(30, 41, 59, 1));
+}
+
+.custom-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ================== Utility Classes ================== */
+
+.bg-bg-base { background-color: rgb(var(--color-bg-base)); }
+.bg-bg-surface { background-color: rgb(var(--color-bg-surface)); }
+.bg-bg-surface-alt { background-color: rgb(var(--color-bg-surface-alt)); }
+.bg-bg-surface-hover { background-color: rgb(var(--color-bg-surface-hover)); }
+
+.text-text-primary { color: rgb(var(--color-text-primary)); }
+.text-text-secondary { color: rgb(var(--color-text-secondary)); }
+
+.border-border { border-color: rgb(var(--color-border)); }
+
+.bg-primary { background-color: rgb(var(--color-primary)); }
+.text-primary { color: rgb(var(--color-primary)); }
+.border-primary { border-color: rgb(var(--color-primary)); }
+
+/* Hide theme toggle on small screens */
+@media (max-width: 768px) {
+  .theme-toggle-btn,
+  .theme-toggle-floating {
+    display: none !important;
+  }
+}

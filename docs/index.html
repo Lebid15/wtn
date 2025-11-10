@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تجربة تفاعلية ثلاثية الأبعاد - 3D Interactive Experience</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    
+    <!-- 3D Canvas Background -->
+    <div id="canvas-container"></div>
+
+    <!-- Theme Toggle Button -->
+    <button id="theme-toggle" class="theme-toggle" title="تبديل الثيم">
+        <span class="theme-icon">🌙</span>
+    </button>
+
+    <!-- Main Content -->
+    <div class="content-wrapper">
+        
+        <!-- Hero Section -->
+        <section class="hero">
+            <p class="subtitle">اكتشف عالماً جديداً من الإبداع والتفاعل</p>
+            
+            <div class="cta-buttons">
+                <button class="btn btn-primary">ابدأ الآن</button>
+                <button class="btn btn-secondary">اكتشف المزيد</button>
+            </div>
+        </section>
+
+        <!-- Interactive 3D Cards -->
+        <section class="cards-section">
+            
+            <div class="card-3d" data-tilt>
+                <div class="card-inner">
+                    <div class="card-icon">🚀</div>
+                    <h3 class="card-title">تطوير متقدم</h3>
+                    <p class="card-desc">تقنيات حديثة ومبتكرة لبناء تطبيقات استثنائية</p>
+                    <div class="card-stats">
+                        <div class="stat">
+                            <span class="stat-value">95%</span>
+                            <span class="stat-label">رضا العملاء</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">1.2K</span>
+                            <span class="stat-label">مستخدم</span>
+                        </div>
+                    </div>
+                    <button class="card-btn">استكشف</button>
+                </div>
+            </div>
+
+            <div class="card-3d" data-tilt>
+                <div class="card-inner">
+                    <div class="card-icon">🎨</div>
+                    <h3 class="card-title">تصميم إبداعي</h3>
+                    <p class="card-desc">واجهات مستخدم جميلة وسهلة الاستخدام</p>
+                    <div class="card-stats">
+                        <div class="stat">
+                            <span class="stat-value">98%</span>
+                            <span class="stat-label">جودة</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">850</span>
+                            <span class="stat-label">تصميم</span>
+                        </div>
+                    </div>
+                    <button class="card-btn">استكشف</button>
+                </div>
+            </div>
+
+            <div class="card-3d" data-tilt>
+                <div class="card-inner">
+                    <div class="card-icon">💡</div>
+                    <h3 class="card-title">أفكار مبتكرة</h3>
+                    <p class="card-desc">حلول ذكية لتحديات العصر الرقمي</p>
+                    <div class="card-stats">
+                        <div class="stat">
+                            <span class="stat-value">100+</span>
+                            <span class="stat-label">مشروع</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">4.9</span>
+                            <span class="stat-label">تقييم</span>
+                        </div>
+                    </div>
+                    <button class="card-btn">استكشف</button>
+                </div>
+            </div>
+
+            <div class="card-3d" data-tilt>
+                <div class="card-inner">
+                    <div class="card-icon">⚡</div>
+                    <h3 class="card-title">أداء فائق</h3>
+                    <p class="card-desc">سرعة وكفاءة في كل عملية</p>
+                    <div class="card-stats">
+                        <div class="stat">
+                            <span class="stat-value">99.9%</span>
+                            <span class="stat-label">استقرار</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">&lt;50ms</span>
+                            <span class="stat-label">استجابة</span>
+                        </div>
+                    </div>
+                    <button class="card-btn">استكشف</button>
+                </div>
+            </div>
+
+            <div class="card-3d" data-tilt>
+                <div class="card-inner">
+                    <div class="card-icon">🔒</div>
+                    <h3 class="card-title">أمان شامل</h3>
+                    <p class="card-desc">حماية متقدمة لبياناتك ومعلوماتك</p>
+                    <div class="card-stats">
+                        <div class="stat">
+                            <span class="stat-value">SSL</span>
+                            <span class="stat-label">تشفير</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">24/7</span>
+                            <span class="stat-label">مراقبة</span>
+                        </div>
+                    </div>
+                    <button class="card-btn">استكشف</button>
+                </div>
+            </div>
+
+            <div class="card-3d" data-tilt>
+                <div class="card-inner">
+                    <div class="card-icon">🌐</div>
+                    <h3 class="card-title">تواصل عالمي</h3>
+                    <p class="card-desc">اتصال بلا حدود مع العالم</p>
+                    <div class="card-stats">
+                        <div class="stat">
+                            <span class="stat-value">50+</span>
+                            <span class="stat-label">دولة</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">2.5M</span>
+                            <span class="stat-label">مستخدم</span>
+                        </div>
+                    </div>
+                    <button class="card-btn">استكشف</button>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Interactive Features -->
+        <section class="features">
+            <h2 class="section-title">مميزات تفاعلية</h2>
+            
+            <div class="features-grid">
+                <div class="feature-item">
+                    <div class="feature-icon-wrapper">
+                        <div class="feature-icon">🎯</div>
+                    </div>
+                    <h4>دقة عالية</h4>
+                    <p>تفاصيل احترافية في كل عنصر</p>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon-wrapper">
+                        <div class="feature-icon">🎭</div>
+                    </div>
+                    <h4>تصميم جذاب</h4>
+                    <p>واجهة ممتعة تجذب الانتباه</p>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon-wrapper">
+                        <div class="feature-icon">🎪</div>
+                    </div>
+                    <h4>تجربة مسلية</h4>
+                    <p>تفاعل ممتع يقضي على الملل</p>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon-wrapper">
+                        <div class="feature-icon">🎨</div>
+                    </div>
+                    <h4>ألوان راقية</h4>
+                    <p>درجات بيج مريحة للعين</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Main Script -->
+    <script src="script.js"></script>
+    
+</body>
+</html>
