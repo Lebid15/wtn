@@ -12,8 +12,9 @@
 
 - [x] توثيق مرجعي (FEATURE_MAP + صور).
 - [x] معمارية + مخطط قاعدة بيانات + خطة (هذه الوثائق).
-- [ ] تهيئة الـ Monorepo (backend NestJS + frontend Next.js).
-- [ ] Prisma schema أولي + أول migration + PostgreSQL.
+- [ ] تهيئة الـ Monorepo (backend Django + DRF + frontend React/Vite).
+- [ ] نماذج Django أولية + أول migration + PostgreSQL.
+- [ ] Redis + Celery + Channels (للّحظية والمهام).
 - [ ] قاعدة التصميم غير المتجاوب (viewport 1600 ثابت + حاوية ثابتة).
 
 **المخرج:** مشروع فارغ يعمل محلياً (backend يرد + frontend يفتح).

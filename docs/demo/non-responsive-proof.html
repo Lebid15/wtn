@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<!-- ⭐ السطر السحري: عرض ثابت 1600 بدل device-width => الجوال يعرض تخطيط الكمبيوتر كامل ويسمح بالتكبير -->
+<meta name="viewport" content="width=1600, user-scalable=yes, initial-scale=0.2">
+<title>إثبات التصميم غير المتجاوب</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:'Cairo','Segoe UI',Tahoma,sans-serif; }
+  body { background:#e8eef0; }
+
+  /* الحاوية بعرض ثابت — لا تتغيّر مع حجم الشاشة إطلاقاً */
+  .app { width:1600px; margin:0 auto; background:#e8eef0; min-height:100vh; }
+
+  /* ===== Navbar مطابق لفكرة المرجع ===== */
+  .topbar { display:flex; align-items:center; justify-content:space-between;
+            background:#2b8a9a; padding:0 14px; height:44px; }
+  .tabs { display:flex; gap:2px; }
+  .tabs a { display:flex; align-items:center; height:44px; padding:0 22px;
+            color:#eafaff; text-decoration:none; font-size:15px; }
+  .tabs a.home { background:#f4f7f8; color:#2b8a9a; }
+  .tabs a.active { background:#f4f7f8; color:#2b8a9a; font-weight:700; }
+  .alerts { display:flex; gap:6px; align-items:center; }
+  .alerts .ico { width:30px; height:30px; border-radius:6px; background:#237483;
+                 display:flex; align-items:center; justify-content:center; color:#fff; font-size:15px; }
+  .alerts .ico.red { background:#c0392b; }
+  .logout { color:#eafaff; font-size:13px; margin-inline-start:10px; }
+
+  /* ===== Sub-nav ===== */
+  .subnav { display:flex; gap:0; background:#fff; border-bottom:1px solid #d7dee0; }
+  .subnav a { padding:10px 20px; color:#3a4a4f; text-decoration:none; font-size:14px;
+              border-inline-start:1px solid #eef2f3; }
+  .subnav a:hover { background:#f4f7f8; }
+
+  .banner { background:#2b8a9a; color:#fff; text-align:center; padding:16px; font-size:15px; }
+
+  /* ===== شريط أدوات + جدول ===== */
+  .toolbar { display:flex; gap:10px; align-items:center; padding:12px 16px; background:#f4f7f8; flex-wrap:wrap; }
+  .toolbar input,.toolbar select { height:30px; border:1px solid #c4ced1; border-radius:4px; padding:0 8px; font-size:13px; }
+  .btn { height:30px; padding:0 14px; border:0; border-radius:4px; background:#2b8a9a; color:#fff; font-size:13px; cursor:pointer; }
+  .btn.g{background:#27ae60}.btn.r{background:#c0392b}
+
+  table { width:100%; border-collapse:collapse; background:#fff; font-size:13px; }
+  th { background:#3a4a4f; color:#fff; padding:8px 6px; text-align:center; font-weight:600; }
+  td { padding:7px 6px; text-align:center; border-bottom:1px solid #eef2f3; }
+  tr:nth-child(even) td { background:#fafcfc; }
+  .dot{display:inline-block;width:11px;height:11px;border-radius:50%}
+  .dot.g{background:#27ae60}.dot.r{background:#c0392b}
+  .plus{color:#27ae60;font-weight:700}.minus{color:#c0392b;font-weight:700}
+
+  .hint { background:#fff8e1; border:1px solid #ffe082; margin:16px; padding:14px 18px;
+          border-radius:8px; font-size:15px; line-height:1.9; color:#5d4d1a; }
+  .hint b{color:#b8860b}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Navbar -->
+  <div class="topbar">
+    <div class="tabs">
+      <a class="home" href="#">🏠</a>
+      <a href="#">OyunPin</a>
+      <a class="active" href="#">Ayarlar — الإعدادات</a>
+      <a href="#">Raporlar — التقارير</a>
+    </div>
+    <div class="alerts">
+      <span class="ico red">1</span>
+      <span class="ico">💬</span><span class="ico">🎮</span><span class="ico">🔌</span>
+      <span class="ico">👤</span><span class="ico">⚠️</span><span class="ico">💳</span>
+      <span class="logout">خروج آمن ⏻</span>
+    </div>
+  </div>
+
+  <!-- Sub-nav -->
+  <div class="subnav">
+    <a href="#">متابعة الدفع</a><a href="#">حساباتي</a><a href="#">حركات الحسابات</a>
+    <a href="#">قائمة الوكلاء</a><a href="#">مجموعات الوكلاء</a><a href="#">إعدادات الموقع</a>
+    <a href="#">إعدادات SMS</a>
+  </div>
+
+  <div class="banner">📢 هذه نسخة تجريبية لإثبات التصميم الثابت — نفس تخطيط الكمبيوتر يظهر على الجوال</div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <input placeholder="بحث..." style="width:220px">
+    <button class="btn">إظهار التفاصيل</button>
+    <select><option>كل المحافظات</option></select>
+    <select><option>مجموعة الأسعار</option></select>
+    <button class="btn g">إضافة وكيل</button>
+    <button class="btn">تصدير Excel</button>
+    <button class="btn r">إزالة الفلتر</button>
+  </div>
+
+  <!-- Table (قائمة الوكلاء) -->
+  <table>
+    <thead><tr>
+      <th>الرقم</th><th>اسم الوكيل</th><th>الرصيد (±)</th><th>الحد الائتماني</th>
+      <th>شحن / خصم</th><th>ألعاب</th><th>نشط</th><th>الحالة</th><th>المجموعة</th><th>إجراء</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>2388</td><td>الكردش للاتصالات 1</td><td>13.57</td><td>-500</td><td><span class="plus">＋</span> <span class="minus">－</span></td><td><span class="dot g"></span></td><td><span class="dot g"></span></td><td>نشط</td><td>5</td><td>⚙ ✏</td></tr>
+      <tr><td>2404</td><td>الكردش للاتصالات 2</td><td style="color:#c0392b">-2636.36</td><td>-5000</td><td><span class="plus">＋</span> <span class="minus">－</span></td><td><span class="dot g"></span></td><td><span class="dot g"></span></td><td>نشط</td><td>4</td><td>⚙ ✏</td></tr>
+      <tr><td>2573</td><td>abd shop</td><td>10912.15</td><td>0</td><td><span class="plus">＋</span> <span class="minus">－</span></td><td><span class="dot r"></span></td><td><span class="dot g"></span></td><td>نشط</td><td>1</td><td>⚙ ✏</td></tr>
+      <tr><td>2133</td><td>aboomarmobile</td><td style="color:#c0392b">-0.15</td><td>-8000</td><td><span class="plus">＋</span> <span class="minus">－</span></td><td><span class="dot g"></span></td><td><span class="dot g"></span></td><td>نشط</td><td>6</td><td>⚙ ✏</td></tr>
+      <tr><td>2504</td><td>alaya</td><td style="color:#c0392b">-1833.09</td><td>-5000</td><td><span class="plus">＋</span> <span class="minus">－</span></td><td><span class="dot g"></span></td><td><span class="dot r"></span></td><td>نشط</td><td>15</td><td>⚙ ✏</td></tr>
+    </tbody>
+  </table>
+
+  <div class="hint">
+    ✅ <b>جرّب على جوالك:</b> افتح هذا الملف بجوالك — راح تشوف <b>كل التخطيط أعلاه</b>
+    بحجم مصغّر (نفس شكل الكمبيوتر تماماً)، وتقدر <b>تكبّر بأصابعك (pinch-zoom)</b>
+    وتتحرّك يمين/يسار وتضغط أي زر. <br>
+    🔑 السرّ كله في سطر واحد بأعلى الملف:
+    <code style="background:#fff;padding:2px 6px;border-radius:4px">&lt;meta name="viewport" content="width=1600"&gt;</code>
+    — يشتغل في React و Django وأي تقنية. <b>مو مشكلة Next.js، مشكلة الإعداد فقط.</b>
+  </div>
+
+</div>
+</body>
+</html>
