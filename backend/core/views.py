@@ -61,3 +61,34 @@ def login_view(request):
 def me_view(request):
     """معلومات المستخدم الحالي (للواجهة بعد الدخول)."""
     return Response(UserSerializer(request.user).data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def dealers_view(request):
+    """قائمة الوكلاء (Bayi Listesi) للمستأجر الحالي — مع فلتر بحث."""
+    qs = (
+        User.objects.filter(tenant=request.user.tenant, role=User.Role.BAYI)
+        .select_related("wallet")
+        .order_by("name")
+    )
+    search = request.query_params.get("q", "").strip()
+    if search:
+        qs = qs.filter(name__icontains=search)
+
+    rows = []
+    for u in qs:
+        wallet = getattr(u, "wallet", None)
+        rows.append({
+            "id": u.id,
+            "login_id": u.login_id,
+            "name": u.name,
+            "balance": str(wallet.balance) if wallet else "0.00",
+            "credit_limit": str(wallet.credit_limit) if wallet else "0.00",
+            "currency": wallet.currency if wallet else "TRY",
+            "status": u.status,
+            "group": u.modules.get("group", "") if u.modules else "",
+            "oyun": bool(u.modules.get("oyun")) if u.modules else False,
+            "children_count": u.children.count(),
+        })
+    return Response({"count": len(rows), "results": rows})
