@@ -21,7 +21,10 @@ class Game(models.Model):
     dealer_note = models.CharField(max_length=255, blank=True, default="")  # Bayiye Açıklama
     description = models.TextField(blank=True, default="")
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
-    require_player_id = models.BooleanField(default=False)  # Zorunlu Oyuncu ID
+    require_player_id = models.BooleanField(default=False)  # Zorunlu Oyuncu ID/GSM
+    kurulu_sale = models.BooleanField(default=True)   # Kurulu Satış — بيع بالحزم المعرّفة
+    toplu_sale = models.BooleanField(default=False)   # Toplu Satış — بيع بالكمية
+    sms_template = models.TextField(blank=True, default="")  # Sms Şablonu
     sort_order = models.PositiveIntegerField(default=0)  # ترتيب العرض (drag & drop)
     created_at = models.DateTimeField(auto_now_add=True)
 

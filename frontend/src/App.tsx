@@ -4,6 +4,7 @@ import AdminLayout from "./layout/AdminLayout";
 import Login from "./pages/Login";
 import Dealers from "./pages/Dealers";
 import Games from "./pages/Games";
+import GameDetail from "./pages/GameDetail";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/dealers" element={<Protected><Dealers /></Protected>} />
           <Route path="/oyunpin" element={<Protected><Games /></Protected>} />
+          <Route path="/oyunpin/:id" element={<Protected><GameDetail /></Protected>} />
           <Route path="/reports" element={<Protected><Placeholder title="التقارير" /></Protected>} />
           <Route path="*" element={<Navigate to="/dealers" replace />} />
         </Routes>
