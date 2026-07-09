@@ -34,6 +34,30 @@ export interface User {
   tenant: Tenant | null;
   wallet: Wallet | null;
 }
+export interface Game {
+  id: number;
+  name: string;
+  image_url: string;
+  status: string;
+  status_label: string;
+  require_player_id: boolean;
+  product_count: number;
+}
+export interface Product {
+  id: number;
+  game: number;
+  name: string;
+  cost_price: string;
+  recommended_price: string;
+  profit: string;
+  kupur: string;
+  status: string;
+  status_label: string;
+  execution_type: string;
+}
+export interface GameDetail extends Game {
+  products: Product[];
+}
 export interface Dealer {
   id: number;
   login_id: string;
