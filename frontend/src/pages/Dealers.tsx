@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { api, type Dealer } from "../api";
+import WalletModal from "../components/WalletModal";
 
 export default function Dealers() {
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState<{ dealer: Dealer; action: "topup" | "deduct" } | null>(null);
 
   function load(search = "") {
     setLoading(true);
@@ -14,6 +16,12 @@ export default function Dealers() {
       .finally(() => setLoading(false));
   }
   useEffect(() => load(), []);
+
+  // تحديث رصيد وكيل في الجدول فوراً بعد شحن/خصم
+  function updateBalance(dealerId: number, balance: string) {
+    setDealers((ds) => ds.map((d) => (d.id === dealerId ? { ...d, balance } : d)));
+    setModal(null);
+  }
 
   const money = (v: string) => Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -69,8 +77,16 @@ export default function Dealers() {
                   </td>
                   <td style={{ ...td, color: "var(--muted)" }}>{money(d.credit_limit)}</td>
                   <td style={td}>
-                    <span style={{ color: "var(--ok)", fontWeight: 700 }}>＋</span>{" "}
-                    <span style={{ color: "var(--danger)", fontWeight: 700 }}>－</span>
+                    <button
+                      onClick={() => setModal({ dealer: d, action: "topup" })}
+                      style={opBtn}
+                      title="شحن رصيد"
+                    >＋</button>{" "}
+                    <button
+                      onClick={() => setModal({ dealer: d, action: "deduct" })}
+                      style={{ ...opBtn, color: "var(--danger)" }}
+                      title="خصم رصيد"
+                    >－</button>
                   </td>
                   <td style={td}><Dot on={d.oyun} /></td>
                   <td style={td}>
@@ -86,6 +102,15 @@ export default function Dealers() {
           )}
         </tbody>
       </table>
+
+      {modal && (
+        <WalletModal
+          dealer={modal.dealer}
+          action={modal.action}
+          onClose={() => setModal(null)}
+          onDone={(balance) => updateBalance(modal.dealer.id, balance)}
+        />
+      )}
     </div>
   );
 }
@@ -124,6 +149,17 @@ const td: React.CSSProperties = {
   padding: "9px 6px",
   textAlign: "center",
   borderBottom: "1px solid #edf1f2",
+};
+const opBtn: React.CSSProperties = {
+  border: "1px solid #d3dbdd",
+  background: "#fff",
+  color: "var(--ok)",
+  width: 26,
+  height: 26,
+  borderRadius: 4,
+  fontWeight: 700,
+  fontSize: 15,
+  lineHeight: 1,
 };
 const badge: React.CSSProperties = { fontSize: 12, padding: "2px 10px", borderRadius: 10 };
 const badgeOk: React.CSSProperties = { background: "#e4f3ea", color: "var(--ok)" };
