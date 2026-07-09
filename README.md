@@ -4,18 +4,29 @@
 وبألوان مخصّصة ووسائل دفع سورية.
 
 ## الحالة الحالية
-🔵 **مرحلة التوثيق** — لم يبدأ البناء بعد.
-
-المستودع حالياً يحتوي على **التوثيق المرجعي** فقط:
+🟢 **قيد البناء** — القلب شغّال (دخول + لوحة + قائمة وكلاء من قاعدة بيانات حقيقية).
 
 ```
-reference/
-  FEATURE_MAP.md      ← الخريطة الكاملة لكل الأقسام والميزات
-  oyunpin/            ← لقطات شاشة قسم الألعاب (7 تبويبات)
-  ayarlar/            ← لقطات شاشة قسم الإعدادات (14 تبويب)
-  raporlar/           ← لقطات شاشة قسم التقارير
-  screenshots/        ← لقطات عامة للوحة الرئيسية
+backend/    Django + DRF (config + core) — API, models, auth
+frontend/   React (Vite) SPA — layout, login, dealer list
+docs/       ARCHITECTURE · DATABASE_SCHEMA · ROADMAP · BUILD_LOG
+reference/  التوثيق المرجعي (FEATURE_MAP + صور)
+scripts/    dev.sh — تشغيل بأمر واحد
 ```
+
+## التشغيل محلياً (على جهازك)
+المتطلّبات: Python 3.11+ · Node 18+ · PostgreSQL يعمل محلياً.
+
+```bash
+git clone https://github.com/lebid15/wtn.git
+cd wtn
+bash scripts/dev.sh          # يجهّز كل شيء ويشغّل الخادمين
+```
+ثم افتح `http://localhost:5173` — دخول: `5550000007` / `admin123`.
+
+## قرار تصميم: واجهة غير متجاوبة (Non-Responsive)
+التصميم بعرض كمبيوتر ثابت (1366px). في الجوال يظهر نفس تخطيط الكمبيوتر كاملاً
+بحجم مصغّر، والمستخدم يكبّر بأصابعه (pinch-zoom) — مطابق تماماً للنظام المرجعي.
 
 ## نطاق النظام
 - **مشمول:** قسم الألعاب (OyunPin) + الإعدادات (Ayarlar) + التقارير (Raporlar).

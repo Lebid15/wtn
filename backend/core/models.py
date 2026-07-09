@@ -1,0 +1,160 @@
+"""
+نماذج القلب (Core): المستأجرون، المستخدمون/الأدوار، المحفظة الموقّعة + دفتر الأستاذ.
+مبني على docs/DATABASE_SCHEMA.md.
+"""
+from decimal import Decimal
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.db import models
+
+
+# ─────────────────────────── المستأجرون (Platform) ───────────────────────────
+class Tenant(models.Model):
+    """مستأجر = وكيل اشترى النظام، له نطاق فرعي ولوحته الخاصة."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "نشط"
+        SUSPENDED = "suspended", "موقوف"
+        TRIAL = "trial", "تجريبي"
+
+    name = models.CharField(max_length=120)
+    subdomain = models.SlugField(max_length=63, unique=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.TRIAL)
+    theme = models.CharField(max_length=20, default="teal")  # teal | blue | orange | custom
+    theme_color = models.CharField(max_length=9, blank=True, default="")  # لون مخصّص #RRGGBB
+    logo_url = models.CharField(max_length=300, blank=True, default="")
+    default_locale = models.CharField(max_length=5, default="ar")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "tenants"
+
+    def __str__(self):
+        return f"{self.name} ({self.subdomain})"
+
+
+# ─────────────────────────── المستخدمون والأدوار ───────────────────────────
+class UserManager(BaseUserManager):
+    def create_user(self, login_id, password=None, **extra):
+        if not login_id:
+            raise ValueError("login_id مطلوب")
+        user = self.model(login_id=login_id, **extra)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, login_id, password=None, **extra):
+        extra.setdefault("role", User.Role.PLATFORM_OWNER)
+        extra.setdefault("is_staff", True)
+        extra.setdefault("is_superuser", True)
+        extra.setdefault("status", User.Status.ACTIVE)
+        return self.create_user(login_id, password, **extra)
+
+
+class User(AbstractBaseUser, PermissionsMixin):
+    """مستخدم النظام عبر كل الأدوار (هرمية Ana Bayi → Bayi → Alt Bayi)."""
+
+    class Role(models.TextChoices):
+        PLATFORM_OWNER = "platform_owner", "مالك المنصّة"
+        TENANT_ADMIN = "tenant_admin", "أدمن المستأجر"
+        ANA_BAYI = "ana_bayi", "وكيل رئيسي"
+        BAYI = "bayi", "وكيل"
+        ALT_BAYI = "alt_bayi", "وكيل فرعي"
+        CUSTOMER = "customer", "عميل"
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "نشط"
+        PASSIVE = "passive", "معطّل"
+        BLACKLISTED = "blacklisted", "قائمة سوداء"
+
+    tenant = models.ForeignKey(
+        Tenant, null=True, blank=True, on_delete=models.CASCADE, related_name="users"
+    )  # null = مستخدم منصّة (سوبر أدمن)
+    parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="children"
+    )
+    role = models.CharField(max_length=16, choices=Role.choices, default=Role.BAYI)
+
+    login_id = models.CharField(max_length=32, unique=True)  # رقم الدخول (5550000007)
+    name = models.CharField(max_length=120)
+    phone = models.CharField(max_length=20, blank=True, default="")
+
+    totp_secret = models.CharField(max_length=64, blank=True, default="")  # مفتاح 2FA
+    totp_enabled = models.BooleanField(default=False)
+
+    country = models.CharField(max_length=2, default="SY")
+    foreign_ip_allowed = models.BooleanField(default=False)  # Bayi Yurt Dışı Ip İzin
+
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
+    modules = models.JSONField(default=dict, blank=True)  # تفعيل الموديولات (النقاط الملوّنة)
+    failed_login_count = models.PositiveIntegerField(default=0)
+
+    is_staff = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = UserManager()
+
+    USERNAME_FIELD = "login_id"
+    REQUIRED_FIELDS = ["name"]
+
+    class Meta:
+        db_table = "users"
+
+    def __str__(self):
+        return f"{self.name} #{self.login_id} [{self.role}]"
+
+
+# ─────────────────────────── المحفظة (رصيد موقّع) ───────────────────────────
+class Wallet(models.Model):
+    """رصيد واحد موقّع (±). السالب = دين. مع حد ائتماني (Kredi Limiti)."""
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="wallets")
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="wallet")
+    balance = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    credit_limit = models.DecimalField(  # أقصى قيمة سالبة مسموحة (مثال -500)
+        max_digits=14, decimal_places=2, default=Decimal("0")
+    )
+    currency = models.CharField(max_length=8, default="TRY")
+
+    class Meta:
+        db_table = "wallets"
+
+    def __str__(self):
+        return f"محفظة {self.user.name}: {self.balance} {self.currency}"
+
+    @property
+    def available(self) -> Decimal:
+        """المتاح للصرف = الرصيد − حد الائتمان (كم يقدر ينزل تحته)."""
+        return self.balance - self.credit_limit
+
+
+class WalletTransaction(models.Model):
+    """دفتر الأستاذ (Ledger) — كل حركة تسجّل before/after للتدقيق."""
+
+    class Type(models.TextChoices):
+        TOPUP = "topup", "شحن"
+        ORDER_DEBIT = "order_debit", "خصم طلب"
+        REFUND = "refund", "استرجاع"
+        MANUAL_CREDIT = "manual_credit", "إضافة يدوية"
+        MANUAL_DEBIT = "manual_debit", "خصم يدوي"
+        ADJUSTMENT = "adjustment", "تسوية"
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="wallet_txns")
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name="transactions")
+    type = models.CharField(max_length=16, choices=Type.choices)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)  # ± موقّع
+    balance_before = models.DecimalField(max_digits=14, decimal_places=2)
+    balance_after = models.DecimalField(max_digits=14, decimal_places=2)
+    ref_type = models.CharField(max_length=20, blank=True, default="")
+    ref_id = models.BigIntegerField(null=True, blank=True)
+    note = models.CharField(max_length=255, blank=True, default="")
+    created_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "wallet_transactions"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.type} {self.amount} → {self.balance_after}"

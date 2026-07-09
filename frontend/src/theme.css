@@ -1,0 +1,77 @@
+/* ===== نظام الثيمات (CSS Variables) — تبديل الثيم بتغيير data-theme ===== */
+
+:root,
+[data-theme="teal"] {
+  --primary: #3a6b73;
+  --primary-dark: #2b545b;
+  --primary-soft: #315c63;
+  --tab-active-text: #2b545b;
+}
+[data-theme="blue"] {
+  --primary: #2c5f9e;
+  --primary-dark: #234c7e;
+  --primary-soft: #27548a;
+  --tab-active-text: #234c7e;
+}
+[data-theme="orange"] {
+  --primary: #c1692a;
+  --primary-dark: #9c531f;
+  --primary-soft: #a95a23;
+  --tab-active-text: #9c531f;
+}
+
+:root {
+  --bg: #eef1f2;
+  --surface: #ffffff;
+  --border: #d7dee0;
+  --text: #233;
+  --muted: #6a7a7f;
+  --th-bg: #41565c;
+  --ok: #3c8f57;
+  --danger: #b0463a;
+  --row-alt: #f8fafb;
+}
+
+/* ===== قاعدة عامة + تصميم غير متجاوب ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Segoe UI", Tahoma, Arial, "Noto Sans Arabic", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+/* حاوية بعرض ثابت — لا تتكيّف مع حجم الشاشة إطلاقاً */
+.app {
+  width: 1366px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: var(--bg);
+}
+a { text-decoration: none; color: inherit; }
+button { cursor: pointer; font-family: inherit; }
+
+/* ===== أزرار عامة ===== */
+.btn {
+  height: 32px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 3px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 14px;
+}
+.btn.g { background: var(--ok); }
+.btn.r { background: var(--danger); }
+.btn:hover { filter: brightness(1.06); }
+
+input, select {
+  height: 32px;
+  border: 1px solid #c4ced1;
+  border-radius: 3px;
+  padding: 0 8px;
+  font-size: 14px;
+}
