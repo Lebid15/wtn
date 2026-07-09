@@ -2,15 +2,16 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<!-- ⭐ السطر السحري: عرض ثابت 1600 بدل device-width => الجوال يعرض تخطيط الكمبيوتر كامل ويسمح بالتكبير -->
-<meta name="viewport" content="width=1600, user-scalable=yes, initial-scale=0.2">
+<!-- ⭐ السطر السحري: عرض ثابت (بدل device-width) => الجوال يعرض تخطيط الكمبيوتر كامل ويسمح بالتكبير.
+     قرّبناه من عرض المرجع (~1366) بدل 1600 => كل شيء يطلع أوضح وأكبر على الجوال. -->
+<meta name="viewport" content="width=1366, user-scalable=yes, initial-scale=0.28">
 <title>إثبات التصميم غير المتجاوب</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; font-family:'Cairo','Segoe UI',Tahoma,sans-serif; }
   body { background:#e8eef0; }
 
   /* الحاوية بعرض ثابت — لا تتغيّر مع حجم الشاشة إطلاقاً */
-  .app { width:1600px; margin:0 auto; background:#e8eef0; min-height:100vh; }
+  .app { width:1366px; margin:0 auto; background:#e8eef0; min-height:100vh; }
 
   /* ===== Navbar مطابق لفكرة المرجع ===== */
   .topbar { display:flex; align-items:center; justify-content:space-between;
@@ -40,9 +41,9 @@
   .btn { height:30px; padding:0 14px; border:0; border-radius:4px; background:#2b8a9a; color:#fff; font-size:13px; cursor:pointer; }
   .btn.g{background:#27ae60}.btn.r{background:#c0392b}
 
-  table { width:100%; border-collapse:collapse; background:#fff; font-size:13px; }
-  th { background:#3a4a4f; color:#fff; padding:8px 6px; text-align:center; font-weight:600; }
-  td { padding:7px 6px; text-align:center; border-bottom:1px solid #eef2f3; }
+  table { width:100%; border-collapse:collapse; background:#fff; font-size:14px; }
+  th { background:#3a4a4f; color:#fff; padding:9px 6px; text-align:center; font-weight:600; }
+  td { padding:8px 6px; text-align:center; border-bottom:1px solid #eef2f3; }
   tr:nth-child(even) td { background:#fafcfc; }
   .dot{display:inline-block;width:11px;height:11px;border-radius:50%}
   .dot.g{background:#27ae60}.dot.r{background:#c0392b}
