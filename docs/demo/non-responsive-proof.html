@@ -7,51 +7,54 @@
 <meta name="viewport" content="width=1366, user-scalable=yes, initial-scale=0.28">
 <title>إثبات التصميم غير المتجاوب</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; font-family:'Cairo','Segoe UI',Tahoma,sans-serif; }
-  body { background:#e8eef0; }
+  /* خط النظام الافتراضي = حاد وواضح على الجوال (بدل خط ناعم يطلع باهت) */
+  * { margin:0; padding:0; box-sizing:border-box;
+      font-family:'Segoe UI',Tahoma,Arial,'Noto Sans Arabic',sans-serif;
+      -webkit-font-smoothing:antialiased; }
+  body { background:#eef1f2; color:#233; }
 
   /* الحاوية بعرض ثابت — لا تتغيّر مع حجم الشاشة إطلاقاً */
   .app { width:1366px; margin:0 auto; background:#e8eef0; min-height:100vh; }
 
-  /* ===== Navbar مطابق لفكرة المرجع ===== */
+  /* ===== Navbar: لون واحد هادئ + بدون تدرّجات ===== */
   .topbar { display:flex; align-items:center; justify-content:space-between;
-            background:#2b8a9a; padding:0 14px; height:44px; }
-  .tabs { display:flex; gap:2px; }
-  .tabs a { display:flex; align-items:center; height:44px; padding:0 22px;
-            color:#eafaff; text-decoration:none; font-size:15px; }
-  .tabs a.home { background:#f4f7f8; color:#2b8a9a; }
-  .tabs a.active { background:#f4f7f8; color:#2b8a9a; font-weight:700; }
+            background:#3a6b73; padding:0 14px; height:46px; }
+  .tabs { display:flex; gap:1px; }
+  .tabs a { display:flex; align-items:center; height:46px; padding:0 24px;
+            color:#f2fafb; text-decoration:none; font-size:16px; }
+  .tabs a.home { background:#f2f5f6; color:#3a6b73; }
+  .tabs a.active { background:#f2f5f6; color:#2b545b; font-weight:700; }
   .alerts { display:flex; gap:6px; align-items:center; }
-  .alerts .ico { width:30px; height:30px; border-radius:6px; background:#237483;
+  .alerts .ico { width:30px; height:30px; border-radius:4px; background:#315c63;
                  display:flex; align-items:center; justify-content:center; color:#fff; font-size:15px; }
   .alerts .ico.red { background:#c0392b; }
-  .logout { color:#eafaff; font-size:13px; margin-inline-start:10px; }
+  .logout { color:#f2fafb; font-size:14px; margin-inline-start:10px; }
 
   /* ===== Sub-nav ===== */
   .subnav { display:flex; gap:0; background:#fff; border-bottom:1px solid #d7dee0; }
-  .subnav a { padding:10px 20px; color:#3a4a4f; text-decoration:none; font-size:14px;
+  .subnav a { padding:11px 22px; color:#33454a; text-decoration:none; font-size:15px;
               border-inline-start:1px solid #eef2f3; }
-  .subnav a:hover { background:#f4f7f8; }
+  .subnav a:hover { background:#f2f5f6; }
 
-  .banner { background:#2b8a9a; color:#fff; text-align:center; padding:16px; font-size:15px; }
+  .banner { background:#3a6b73; color:#fff; text-align:center; padding:14px; font-size:16px; }
 
   /* ===== شريط أدوات + جدول ===== */
-  .toolbar { display:flex; gap:10px; align-items:center; padding:12px 16px; background:#f4f7f8; flex-wrap:wrap; }
-  .toolbar input,.toolbar select { height:30px; border:1px solid #c4ced1; border-radius:4px; padding:0 8px; font-size:13px; }
-  .btn { height:30px; padding:0 14px; border:0; border-radius:4px; background:#2b8a9a; color:#fff; font-size:13px; cursor:pointer; }
-  .btn.g{background:#27ae60}.btn.r{background:#c0392b}
+  .toolbar { display:flex; gap:10px; align-items:center; padding:12px 16px; background:#f2f5f6; flex-wrap:wrap; }
+  .toolbar input,.toolbar select { height:32px; border:1px solid #c4ced1; border-radius:3px; padding:0 8px; font-size:14px; }
+  .btn { height:32px; padding:0 16px; border:0; border-radius:3px; background:#3a6b73; color:#fff; font-size:14px; cursor:pointer; }
+  .btn.g{background:#3c8f57}.btn.r{background:#b0463a}
 
-  table { width:100%; border-collapse:collapse; background:#fff; font-size:14px; }
-  th { background:#3a4a4f; color:#fff; padding:9px 6px; text-align:center; font-weight:600; }
-  td { padding:8px 6px; text-align:center; border-bottom:1px solid #eef2f3; }
-  tr:nth-child(even) td { background:#fafcfc; }
+  table { width:100%; border-collapse:collapse; background:#fff; font-size:15px; }
+  th { background:#41565c; color:#fff; padding:10px 6px; text-align:center; font-weight:600; }
+  td { padding:9px 6px; text-align:center; border-bottom:1px solid #edf1f2; }
+  tr:nth-child(even) td { background:#f8fafb; }
   .dot{display:inline-block;width:11px;height:11px;border-radius:50%}
-  .dot.g{background:#27ae60}.dot.r{background:#c0392b}
-  .plus{color:#27ae60;font-weight:700}.minus{color:#c0392b;font-weight:700}
+  .dot.g{background:#3c8f57}.dot.r{background:#b0463a}
+  .plus{color:#3c8f57;font-weight:700}.minus{color:#b0463a;font-weight:700}
 
-  .hint { background:#fff8e1; border:1px solid #ffe082; margin:16px; padding:14px 18px;
-          border-radius:8px; font-size:15px; line-height:1.9; color:#5d4d1a; }
-  .hint b{color:#b8860b}
+  .hint { background:#f6f8f9; border:1px solid #dbe3e5; margin:16px; padding:14px 18px;
+          border-radius:6px; font-size:15px; line-height:1.9; color:#3a4a4f; }
+  .hint b{color:#2b545b}
 </style>
 </head>
 <body>
