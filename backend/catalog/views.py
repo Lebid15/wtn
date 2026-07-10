@@ -6,6 +6,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from core.models import User
 from .models import Game, PriceGroup, Product, ProductPrice
 from .serializers import (
     GameDetailSerializer, GameSerializer, PriceGroupSerializer, ProductSerializer,
@@ -68,6 +69,75 @@ def price_matrix_view(request):
         "groups": [{"id": g.id, "name": g.name} for g in groups],
         "games": games,
     })
+
+
+def _dealer_row(u):
+    return {
+        "id": u.id,
+        "login_id": u.login_id,
+        "name": u.name,
+        "oyun_load_limit": str(u.oyun_load_limit),
+        "foreign_ip_allowed": u.foreign_ip_allowed,
+        "price_group": u.price_group_id,
+    }
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def dealer_prices_view(request):
+    """قائمة إعدادات أسعار الوكلاء (Bayi Fiyat Ayarları)."""
+    tenant = request.user.tenant
+    dealers = (
+        User.objects.filter(tenant=tenant, role=User.Role.BAYI)
+        .select_related("price_group").order_by("name")
+    )
+    return Response({
+        "groups": [
+            {"id": g.id, "name": g.name}
+            for g in PriceGroup.objects.filter(tenant=tenant).order_by("id")
+        ],
+        "dealers": [_dealer_row(u) for u in dealers],
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def dealer_price_update_view(request, dealer_id):
+    """تحديث إعدادات سعر وكيل واحد."""
+    try:
+        u = User.objects.get(pk=dealer_id, tenant=request.user.tenant, role=User.Role.BAYI)
+    except User.DoesNotExist:
+        return Response({"detail": "الوكيل غير موجود"}, status=404)
+
+    data = request.data
+    if "oyun_load_limit" in data:
+        try:
+            u.oyun_load_limit = Decimal(str(data["oyun_load_limit"]))
+        except (InvalidOperation, TypeError):
+            return Response({"detail": "حد غير صحيح"}, status=400)
+    if "foreign_ip_allowed" in data:
+        u.foreign_ip_allowed = bool(data["foreign_ip_allowed"])
+    if "price_group" in data:
+        gid = data["price_group"]
+        u.price_group = (
+            PriceGroup.objects.filter(pk=gid, tenant=request.user.tenant).first() if gid else None
+        )
+    u.save(update_fields=["oyun_load_limit", "foreign_ip_allowed", "price_group"])
+    return Response(_dealer_row(u))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def dealer_bulk_group_view(request):
+    """تعيين مجموعة أسعار لكل الوكلاء دفعة واحدة (Toplu Fiyat Grubu Ata)."""
+    gid = request.data.get("price_group")
+    group = PriceGroup.objects.filter(pk=gid, tenant=request.user.tenant).first() if gid else None
+    if gid and not group:
+        return Response({"detail": "المجموعة غير موجودة"}, status=404)
+    count = User.objects.filter(tenant=request.user.tenant, role=User.Role.BAYI).update(
+        price_group=group
+    )
+    return Response({"updated": count, "price_group": group.id if group else None})
 
 
 @api_view(["POST"])
