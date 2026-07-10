@@ -87,3 +87,19 @@ class Product(models.Model):
     def profit(self) -> Decimal:
         """الربح المرجعي = السعر الموصى − التكلفة."""
         return self.recommended_price - self.cost_price
+
+
+class ProductPrice(models.Model):
+    """سعر منتج لمجموعة أسعار معيّنة (خلية في مصفوفة Fiyat Grupları)."""
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="product_prices")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="group_prices")
+    price_group = models.ForeignKey(PriceGroup, on_delete=models.CASCADE, related_name="prices")
+    price = models.DecimalField(max_digits=12, decimal_places=2)  # سعر بالليرة لهذه المجموعة
+
+    class Meta:
+        db_table = "product_prices"
+        unique_together = ("product", "price_group")
+
+    def __str__(self):
+        return f"{self.product.name} @ {self.price_group.name} = {self.price}"

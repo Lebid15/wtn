@@ -1,7 +1,14 @@
 """DRF serializers للكتالوج."""
 from rest_framework import serializers
 
-from .models import Game, Product
+from .models import Game, PriceGroup, Product
+
+
+class PriceGroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PriceGroup
+        fields = ["id", "name", "dollar_rate", "created_at"]
+        read_only_fields = ["tenant", "created_at"]
 
 
 class ProductSerializer(serializers.ModelSerializer):
