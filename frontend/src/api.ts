@@ -46,6 +46,7 @@ export interface Game {
 export interface Product {
   id: number;
   game: number;
+  game_name: string;
   name: string;
   cost_price: string;
   recommended_price: string;
