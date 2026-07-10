@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     # local apps
     "core",
     "catalog",
+    "providers",
 ]
 
 MIDDLEWARE = [

@@ -59,6 +59,19 @@ export interface Product {
 export interface GameDetail extends Game {
   products: Product[];
 }
+export interface Provider {
+  id: number;
+  name: string;
+  type: string;
+  type_label: string;
+  status: string;
+  status_label: string;
+  real_balance: string;
+  balance: string;
+  debt: string;
+  loss_guard: boolean;
+  auto_update: boolean;
+}
 export interface Dealer {
   id: number;
   login_id: string;
