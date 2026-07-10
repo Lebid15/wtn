@@ -59,6 +59,26 @@ export interface Product {
 export interface GameDetail extends Game {
   products: Product[];
 }
+export interface Order {
+  id: number;
+  receipt_no: string;
+  dealer_name: string;
+  game_name: string;
+  product_name: string;
+  player_id: string;
+  customer_phone: string;
+  cost_price: string;
+  sell_price: string;
+  profit: string;
+  status: string;
+  status_label: string;
+  provider_name: string;
+  pin_result: string;
+  api_response: string;
+  balance_before: string;
+  balance_after: string;
+  created_at: string;
+}
 export interface Provider {
   id: number;
   name: string;

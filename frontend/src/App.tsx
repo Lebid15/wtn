@@ -9,6 +9,7 @@ import PinList from "./pages/PinList";
 import PriceGroups from "./pages/PriceGroups";
 import DealerPrices from "./pages/DealerPrices";
 import Providers from "./pages/Providers";
+import Orders from "./pages/Orders";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -32,7 +33,7 @@ export default function App() {
           {/* OyunPin */}
           <Route path="/oyunpin" element={<Protected><Games /></Protected>} />
           <Route path="/oyunpin/pin-list" element={<Protected><PinList /></Protected>} />
-          <Route path="/oyunpin/orders" element={P("متابعة الطلبات")} />
+          <Route path="/oyunpin/orders" element={<Protected><Orders /></Protected>} />
           <Route path="/oyunpin/price-groups" element={<Protected><PriceGroups /></Protected>} />
           <Route path="/oyunpin/dealer-prices" element={<Protected><DealerPrices /></Protected>} />
           <Route path="/oyunpin/pool" element={P("بنك البينات")} />
