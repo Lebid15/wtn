@@ -43,7 +43,10 @@ class LibraryProductViewSet(viewsets.ModelViewSet):
 
 
 def _tenant_row(t):
+    from django.utils import timezone
     dealers = User.objects.filter(tenant=t, role=User.Role.BAYI).count()
+    today = timezone.now().date()
+    days_left = (t.sub_expires_at - today).days if t.sub_expires_at else None
     return {
         "id": t.id,
         "name": t.name,
@@ -52,6 +55,13 @@ def _tenant_row(t):
         "theme": t.theme,
         "dealers": dealers,
         "created_at": t.created_at.strftime("%Y-%m-%d"),
+        "sub_plan": t.sub_plan,
+        "sub_plan_label": t.get_sub_plan_display(),
+        "sub_monthly_price": str(t.sub_monthly_price),
+        "sub_yearly_price": str(t.sub_yearly_price),
+        "sub_expires_at": t.sub_expires_at.strftime("%Y-%m-%d") if t.sub_expires_at else None,
+        "sub_active": bool(t.sub_expires_at and t.sub_expires_at >= today),
+        "sub_days_left": days_left,
     }
 
 
@@ -110,4 +120,51 @@ def tenant_status_view(request, tenant_id, action):
         return Response({"detail": "المستأجر غير موجود"}, status=404)
     t.status = Tenant.Status.SUSPENDED if action == "suspend" else Tenant.Status.ACTIVE
     t.save(update_fields=["status"])
+    return Response(_tenant_row(t))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsPlatformOwner])
+def tenant_subscription_view(request, tenant_id):
+    """اشتراك المستأجر: ضبط الأسعار (شهري/سنوي) وتفعيل/إلغاء خطة — لمالك المنصّة."""
+    from datetime import timedelta
+    from django.utils import timezone
+
+    try:
+        t = Tenant.objects.get(pk=tenant_id)
+    except Tenant.DoesNotExist:
+        return Response({"detail": "المستأجر غير موجود"}, status=404)
+
+    op = request.data.get("op", "prices")
+
+    if op == "prices":
+        try:
+            t.sub_monthly_price = Decimal(str(request.data.get("monthly_price", t.sub_monthly_price)))
+            t.sub_yearly_price = Decimal(str(request.data.get("yearly_price", t.sub_yearly_price)))
+        except Exception:
+            return Response({"detail": "أسعار غير صحيحة"}, status=400)
+        t.save(update_fields=["sub_monthly_price", "sub_yearly_price"])
+
+    elif op == "activate":
+        plan = request.data.get("plan")
+        if plan not in (Tenant.SubPlan.MONTHLY, Tenant.SubPlan.YEARLY):
+            return Response({"detail": "خطة غير معروفة"}, status=400)
+        today = timezone.now().date()
+        # التمديد من نهاية الاشتراك الحالي إن كان ساري المفعول، وإلا من اليوم
+        base = t.sub_expires_at if (t.sub_expires_at and t.sub_expires_at >= today) else today
+        days = 30 if plan == Tenant.SubPlan.MONTHLY else 365
+        t.sub_plan = plan
+        t.sub_started_at = today
+        t.sub_expires_at = base + timedelta(days=days)
+        t.save(update_fields=["sub_plan", "sub_started_at", "sub_expires_at"])
+
+    elif op == "cancel":
+        t.sub_plan = Tenant.SubPlan.NONE
+        t.sub_started_at = None
+        t.sub_expires_at = None
+        t.save(update_fields=["sub_plan", "sub_started_at", "sub_expires_at"])
+
+    else:
+        return Response({"detail": "عملية غير معروفة"}, status=400)
+
     return Response(_tenant_row(t))

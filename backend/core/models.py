@@ -38,6 +38,17 @@ class Tenant(models.Model):
     sms_api_key = models.CharField(max_length=200, blank=True, default="")
     sms_sender = models.CharField(max_length=60, blank=True, default="")
     sms_enabled = models.BooleanField(default=False)
+    # الاشتراك (يحدّده مالك المنصّة لكل متجر): سعر شهري/سنوي + الخطة الحالية ومدّتها
+    class SubPlan(models.TextChoices):
+        NONE = "none", "بلا اشتراك"
+        MONTHLY = "monthly", "شهري"
+        YEARLY = "yearly", "سنوي"
+
+    sub_monthly_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    sub_yearly_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    sub_plan = models.CharField(max_length=8, choices=SubPlan.choices, default=SubPlan.NONE)
+    sub_started_at = models.DateField(null=True, blank=True)
+    sub_expires_at = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -5,6 +5,9 @@ import { useAuth } from "../auth";
 interface Tenant {
   id: number; name: string; subdomain: string; status: string;
   theme: string; dealers: number; created_at: string;
+  sub_plan: string; sub_plan_label: string; sub_monthly_price: string;
+  sub_yearly_price: string; sub_expires_at: string | null;
+  sub_active: boolean; sub_days_left: number | null;
 }
 interface Stats { tenants: number; active: number; dealers: number }
 interface LibGame {
@@ -52,6 +55,7 @@ function TenantsTab() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [subFor, setSubFor] = useState<Tenant | null>(null);
 
   function load() {
     api.get("/platform/tenants/").then((r) => { setTenants(r.data.results); setStats(r.data.stats); });
@@ -80,7 +84,7 @@ function TenantsTab() {
       <div style={{ overflow: "hidden", borderRadius: 10, border: "1px solid #1e293b" }}>
         <table style={table}>
           <thead>
-            <tr>{["#", "الاسم", "النطاق الفرعي", "الثيم", "الوكلاء", "التاريخ", "الحالة", "إجراء"].map((h) => <th key={h} style={th}>{h}</th>)}</tr>
+            <tr>{["#", "الاسم", "النطاق الفرعي", "الوكلاء", "الاشتراك", "الحالة", "إجراء"].map((h) => <th key={h} style={th}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {tenants.map((t) => (
@@ -88,15 +92,23 @@ function TenantsTab() {
                 <td style={td}>{t.id}</td>
                 <td style={{ ...td, fontWeight: 700 }}>{t.name}</td>
                 <td style={{ ...td, direction: "ltr", color: "#7dd3fc" }}>{t.subdomain}.example.com</td>
-                <td style={td}>{t.theme}</td>
                 <td style={td}>{t.dealers}</td>
-                <td style={{ ...td, color: "#94a3b8" }}>{t.created_at}</td>
+                <td style={td}>
+                  {t.sub_active ? (
+                    <span style={{ color: "#4ade80", fontSize: 13 }}>
+                      {t.sub_plan_label} · {t.sub_days_left}ي
+                    </span>
+                  ) : (
+                    <span style={{ color: "#64748b", fontSize: 13 }}>بلا اشتراك</span>
+                  )}
+                </td>
                 <td style={td}>
                   <span style={{ color: t.status === "active" ? "#4ade80" : "#f87171", fontWeight: 700 }}>
                     ● {t.status === "active" ? "نشط" : "موقوف"}
                   </span>
                 </td>
-                <td style={td}>
+                <td style={{ ...td, whiteSpace: "nowrap" }}>
+                  <button style={subBtn} onClick={() => setSubFor(t)}>الاشتراك</button>
                   <button style={t.status === "active" ? suspendBtn : activateBtn} onClick={() => toggle(t)}>
                     {t.status === "active" ? "تعليق" : "تفعيل"}
                   </button>
@@ -107,6 +119,7 @@ function TenantsTab() {
         </table>
       </div>
       {showCreate && <CreateTenant onClose={() => setShowCreate(false)} onDone={() => { setShowCreate(false); load(); }} />}
+      {subFor && <SubscriptionModal tenant={subFor} onClose={() => setSubFor(null)} onDone={() => { setSubFor(null); load(); }} />}
     </>
   );
 }
@@ -257,6 +270,64 @@ function ManagePackages({ game, onClose }: { game: LibGame; onClose: () => void 
   );
 }
 
+function SubscriptionModal({ tenant, onClose, onDone }: { tenant: Tenant; onClose: () => void; onDone: () => void }) {
+  const [monthly, setMonthly] = useState(tenant.sub_monthly_price);
+  const [yearly, setYearly] = useState(tenant.sub_yearly_price);
+  const [t, setT] = useState(tenant);
+  const [busy, setBusy] = useState("");
+
+  async function call(body: any, tag: string) {
+    setBusy(tag);
+    try { const r = await api.post(`/platform/tenants/${tenant.id}/subscription/`, body); setT(r.data); }
+    finally { setBusy(""); }
+  }
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={{ ...modal, width: 460, color: "#0f172a" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ background: "#0f172a", color: "#e2e8f0", padding: "14px 18px", fontWeight: 700, fontSize: 16 }}>
+          اشتراك: {tenant.name}
+        </div>
+        <div style={{ padding: 20 }}>
+          <div style={{ background: t.sub_active ? "#e7f6ec" : "#f1f5f9", borderRadius: 8, padding: "12px 14px", marginBottom: 16, fontSize: 14 }}>
+            {t.sub_active
+              ? <>الخطة الحالية: <b>{t.sub_plan_label}</b> · تنتهي في <b>{t.sub_expires_at}</b> (متبقٍّ {t.sub_days_left} يوم)</>
+              : <span style={{ color: "#64748b" }}>لا يوجد اشتراك فعّال حالياً</span>}
+          </div>
+
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>أسعار هذا المتجر</div>
+          <div style={{ display: "flex", gap: 12, marginBottom: 6 }}>
+            <F label="السعر الشهري"><input style={inp} type="number" step="0.01" value={monthly} onChange={(e) => setMonthly(e.target.value)} /></F>
+            <F label="السعر السنوي"><input style={inp} type="number" step="0.01" value={yearly} onChange={(e) => setYearly(e.target.value)} /></F>
+          </div>
+          <button className="btn" style={{ background: "#475569", color: "#fff", height: 36, width: "100%" }}
+            disabled={busy === "prices"}
+            onClick={() => call({ op: "prices", monthly_price: monthly, yearly_price: yearly }, "prices")}>
+            {busy === "prices" ? "..." : "حفظ الأسعار"}
+          </button>
+
+          <div style={{ fontWeight: 700, margin: "18px 0 8px" }}>تفعيل / تجديد</div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="btn g" style={{ flex: 1, height: 40 }} disabled={busy === "monthly"}
+              onClick={() => call({ op: "activate", plan: "monthly" }, "monthly")}>
+              شهري (+30 يوم)
+            </button>
+            <button className="btn g" style={{ flex: 1, height: 40 }} disabled={busy === "yearly"}
+              onClick={() => call({ op: "activate", plan: "yearly" }, "yearly")}>
+              سنوي (+365 يوم)
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+            <button className="btn" style={{ flex: 1, height: 38, background: "#7f1d1d", color: "#fecaca" }} disabled={busy === "cancel"}
+              onClick={() => call({ op: "cancel" }, "cancel")}>إلغاء الاشتراك</button>
+            <button className="btn" style={{ flex: 1, height: 38, background: "#8a999e" }} onClick={onDone}>تم</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatCard({ label, value, icon }: { label: string; value: number; icon: string }) {
   return (
     <div style={{ flex: 1, background: "#1e293b", borderRadius: 12, padding: "18px 20px" }}>
@@ -331,6 +402,7 @@ const th: React.CSSProperties = { background: "#1e293b", color: "#94a3b8", paddi
 const td: React.CSSProperties = { padding: "12px 8px", textAlign: "center" };
 const addBtn: React.CSSProperties = { background: "#2563eb", color: "#fff", border: 0, padding: "8px 16px", borderRadius: 6, fontWeight: 600, cursor: "pointer" };
 const pkgBtn: React.CSSProperties = { background: "#1d4ed8", color: "#dbeafe", border: 0, padding: "5px 12px", borderRadius: 5, marginInlineEnd: 6, cursor: "pointer" };
+const subBtn: React.CSSProperties = { background: "#7c3aed", color: "#ede9fe", border: 0, padding: "5px 12px", borderRadius: 5, marginInlineEnd: 6, cursor: "pointer" };
 const suspendBtn: React.CSSProperties = { background: "#7f1d1d", color: "#fecaca", border: 0, padding: "5px 12px", borderRadius: 5, cursor: "pointer" };
 const activateBtn: React.CSSProperties = { background: "#14532d", color: "#bbf7d0", border: 0, padding: "5px 12px", borderRadius: 5, cursor: "pointer" };
 const overlay: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 };

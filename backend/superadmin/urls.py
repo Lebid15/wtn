@@ -10,5 +10,6 @@ router.register("library/products", views.LibraryProductViewSet, basename="libra
 
 urlpatterns = [
     path("tenants/", views.tenants_view, name="platform-tenants"),
+    path("tenants/<int:tenant_id>/subscription/", views.tenant_subscription_view, name="platform-tenant-subscription"),
     path("tenants/<int:tenant_id>/<str:action>/", views.tenant_status_view, name="platform-tenant-status"),
 ] + router.urls
