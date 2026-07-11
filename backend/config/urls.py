@@ -15,10 +15,23 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+from django.conf import settings
 from django.contrib import admin
-from django.urls import include, path
+from django.http import FileResponse, HttpResponse
+from django.urls import include, path, re_path
 
 from orders import views as order_views
+
+
+def spa_index(request):
+    """يقدّم SPA (index.html) لأي مسار واجهة — التوجيه يتم في المتصفح."""
+    index = settings.FRONTEND_DIST / "index.html"
+    if index.is_file():
+        return FileResponse(open(index, "rb"), content_type="text/html")
+    return HttpResponse(
+        "الواجهة غير مبنية بعد (frontend/dist). شغّل npm run build.",
+        content_type="text/plain; charset=utf-8",
+    )
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -37,4 +50,6 @@ urlpatterns = [
     path("api/payments/", include("payments.urls")),
     path("api/platform/", include("superadmin.urls")),
     path("api/agent/", include("agent.urls")),
+    # catch-all: أي مسار غير API/admin/أصول → SPA
+    re_path(r"^(?!api/|admin/|static/|assets/).*$", spa_index, name="spa"),
 ]

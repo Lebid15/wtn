@@ -1,0 +1,42 @@
+# Render Blueprint — نشر مجاني بخدمة واحدة (Django يقدّم الـ API + الواجهة) + Postgres.
+# الاستخدام: Render Dashboard → New → Blueprint → اختر هذا المستودع → Apply.
+databases:
+  - name: wtn-db
+    plan: free
+    databaseName: wtn_db
+    user: wtn
+
+services:
+  - type: web
+    name: wtn
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /login
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "0"
+      - key: ALLOWED_HOSTS
+        value: "*"
+      - key: DB_HOST
+        fromDatabase:
+          name: wtn-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: wtn-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: wtn-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: wtn-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: wtn-db
+          property: password

@@ -42,6 +42,13 @@ export interface Game {
   status_label: string;
   require_player_id: boolean;
   product_count: number;
+  dealer_note: string;
+  description: string;
+  kurulu_sale: boolean;
+  toplu_sale: boolean;
+  sms_template: string;
+  sort_order: number;
+  created_at: string;
 }
 export interface Product {
   id: number;
@@ -55,6 +62,10 @@ export interface Product {
   status: string;
   status_label: string;
   execution_type: string;
+  is_parcali: boolean;
+  description: string;
+  sort_order: number;
+  created_at: string;
 }
 export interface GameDetail extends Game {
   products: Product[];

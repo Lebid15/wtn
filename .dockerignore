@@ -1,0 +1,14 @@
+**/node_modules
+**/venv
+**/__pycache__
+**/*.pyc
+backend/staticfiles
+frontend/dist
+backend/db.sqlite3
+.git
+reference
+bigagent
+endagent
+docs
+scripts
+*.log
