@@ -194,6 +194,43 @@ def store_orders_view(request):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+def store_wallet_view(request):
+    """محفظة الوكيل نفسه + كشف حركاتها (Hesap Hareketleri الخاصة به)."""
+    wallet = getattr(request.user, "wallet", None)
+    if wallet is None:
+        return Response({"detail": "لا توجد محفظة"}, status=404)
+    txns = wallet.transactions.all()[:100]
+    return Response({
+        "balance": str(wallet.balance),
+        "credit_limit": str(wallet.credit_limit),
+        "available": str(wallet.balance - wallet.credit_limit),
+        "currency": wallet.currency,
+        "results": [{
+            "id": t.id, "type": t.type, "type_label": t.get_type_display(),
+            "amount": str(t.amount), "balance_after": str(t.balance_after),
+            "note": t.note, "created_at": t.created_at.strftime("%Y-%m-%d %H:%M"),
+        } for t in txns],
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def store_change_password_view(request):
+    """تغيير الوكيل كلمة سرّه بنفسه (Ayarlar)."""
+    user = request.user
+    current = request.data.get("current_password") or ""
+    new = request.data.get("new_password") or ""
+    if not user.check_password(current):
+        return Response({"detail": "كلمة السر الحالية غير صحيحة"}, status=400)
+    if len(new) < 5:
+        return Response({"detail": "كلمة السر الجديدة قصيرة (5 أحرف على الأقل)"}, status=400)
+    user.set_password(new)
+    user.save(update_fields=["password"])
+    return Response({"detail": "تم تغيير كلمة السر"})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def store_report_view(request):
     """تقرير إجماليات الوكيل نفسه (Oyun Pin Toplam Raporu) — مجمّع حسب المنتج."""
     user = request.user

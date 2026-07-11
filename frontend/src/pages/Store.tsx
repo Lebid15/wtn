@@ -10,12 +10,14 @@ interface Summary {
   orders: number; profit: string; sell: string; pending: number;
 }
 
-type Tab = "home" | "sell" | "orders" | "reports";
+type Tab = "home" | "sell" | "orders" | "reports" | "wallet" | "settings";
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "home", label: "الرئيسية", icon: "home" },
   { key: "sell", label: "البيع", icon: "cart" },
   { key: "orders", label: "طلباتي", icon: "chart" },
   { key: "reports", label: "تقاريري", icon: "excel" },
+  { key: "wallet", label: "محفظتي", icon: "wallet" },
+  { key: "settings", label: "إعداداتي", icon: "settings" },
 ];
 
 const money = (v: string | number) =>
@@ -68,6 +70,8 @@ export default function Store() {
         {tab === "sell" && <SellTab onBought={loadSummary} />}
         {tab === "orders" && <OrdersTab />}
         {tab === "reports" && <ReportsTab />}
+        {tab === "wallet" && <WalletTab />}
+        {tab === "settings" && <SettingsTab />}
       </div>
     </div>
   );
@@ -336,6 +340,126 @@ function ReportsTab() {
           ) : null}
         </table>
       </div>
+    </div>
+  );
+}
+
+/* ===== محفظتي (Hesap Hareketleri) ===== */
+function WalletTab() {
+  const [data, setData] = useState<any>(null);
+  useEffect(() => { api.get("/store/wallet/").then((r) => setData(r.data)); }, []);
+  if (!data) return <div style={{ padding: 20 }}>جارٍ التحميل...</div>;
+
+  const TYPE_COLOR: Record<string, string> = {
+    topup: "var(--ok)", manual_credit: "var(--ok)", refund: "var(--ok)",
+    order_debit: "var(--danger)", manual_debit: "var(--danger)", adjustment: "#3b82f6",
+  };
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
+        <Stat icon="wallet" label="رصيدي" value={money(data.balance) + " " + data.currency}
+          tone={Number(data.balance) < 0 ? "danger" : "primary"} />
+        <Stat icon="card" label="الحد الائتماني" value={money(data.credit_limit) + " " + data.currency} />
+        <Stat icon="dollar" label="المتاح للصرف" value={money(data.available) + " " + data.currency} />
+      </div>
+      <div style={{ fontWeight: 800, margin: "6px 2px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+        <Icon name="chart" size={18} />كشف الحركات
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={table}>
+          <thead>
+            <tr>
+              <th style={th}>النوع</th>
+              <th style={th}>المبلغ</th>
+              <th style={th}>الرصيد بعدها</th>
+              <th style={{ ...th, textAlign: "right", paddingInlineStart: 12 }}>ملاحظة</th>
+              <th style={th}>التاريخ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.results.length === 0 ? (
+              <tr><td colSpan={5} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>لا توجد حركات</td></tr>
+            ) : data.results.map((t: any) => (
+              <tr key={t.id}>
+                <td style={{ ...td, color: TYPE_COLOR[t.type] || "var(--text)", fontWeight: 700 }}>{t.type_label}</td>
+                <td style={{ ...td, color: Number(t.amount) < 0 ? "var(--danger)" : "var(--ok)", fontWeight: 700 }}>
+                  {money(t.amount)}
+                </td>
+                <td style={td}>{money(t.balance_after)}</td>
+                <td style={{ ...td, textAlign: "right", paddingInlineStart: 12, color: "var(--muted)" }}>{t.note || "—"}</td>
+                <td style={{ ...td, color: "var(--muted)", fontSize: 12 }}>{t.created_at}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 14 }}>
+        لشحن رصيدك تواصل مع صاحب المتجر — هو من يشحن محافظ الوكلاء.
+      </p>
+    </div>
+  );
+}
+
+/* ===== إعداداتي (تغيير كلمة السر) ===== */
+function SettingsTab() {
+  const { user } = useAuth();
+  const [cur, setCur] = useState("");
+  const [nw, setNw] = useState("");
+  const [nw2, setNw2] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    if (nw !== nw2) { setMsg({ ok: false, text: "كلمتا السر الجديدتان غير متطابقتين" }); return; }
+    setBusy(true);
+    try {
+      await api.post("/store/change-password/", { current_password: cur, new_password: nw });
+      setMsg({ ok: true, text: "تم تغيير كلمة السر بنجاح" });
+      setCur(""); setNw(""); setNw2("");
+    } catch (e: any) {
+      setMsg({ ok: false, text: e?.response?.data?.detail || "فشل تغيير كلمة السر" });
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+      <div style={{ ...announce, flex: "1 1 320px" }}>
+        <div style={{ fontWeight: 800, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+          <Icon name="user" size={18} />بياناتي
+        </div>
+        <Row label="الاسم" value={user?.name || "—"} />
+        <Row label="رقم الدخول" value={user?.login_id || "—"} />
+        <Row label="الدور" value={user?.role_label || "وكيل"} />
+      </div>
+      <form onSubmit={submit} style={{ ...announce, flex: "1 1 320px" }}>
+        <div style={{ fontWeight: 800, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+          <Icon name="settings" size={18} />تغيير كلمة السر
+        </div>
+        <label style={lbl}>كلمة السر الحالية</label>
+        <input style={inp} type="password" value={cur} onChange={(e) => setCur(e.target.value)} />
+        <label style={lbl}>كلمة السر الجديدة</label>
+        <input style={inp} type="password" value={nw} onChange={(e) => setNw(e.target.value)} />
+        <label style={lbl}>تأكيد كلمة السر الجديدة</label>
+        <input style={inp} type="password" value={nw2} onChange={(e) => setNw2(e.target.value)} />
+        {msg && (
+          <div style={{ ...errBox, ...(msg.ok ? { background: "#e7f6ec", borderColor: "#b6e0c4", color: "var(--ok)" } : {}) }}>
+            {msg.text}
+          </div>
+        )}
+        <button className="btn g" style={{ width: "100%", height: 40, marginTop: 16 }} disabled={busy}>
+          {busy ? "جارٍ..." : "حفظ"}
+        </button>
+      </form>
+    </div>
+  );
+}
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eef1f2" }}>
+      <span style={{ color: "var(--muted)", fontSize: 14 }}>{label}</span>
+      <b style={{ fontSize: 14 }}>{value}</b>
     </div>
   );
 }
