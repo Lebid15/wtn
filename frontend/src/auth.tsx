@@ -7,7 +7,15 @@ interface AuthCtx {
   login: (loginId: string, password: string, totp?: string) => Promise<LoginResult>;
   logout: () => void;
 }
-type LoginResult = { ok: true } | { requireTotp: true } | { ok: false; error: string };
+type LoginResult = { ok: true; role: string } | { requireTotp: true } | { ok: false; error: string };
+
+// الصفحة الرئيسية لكل دور
+export function roleHome(role?: string): string {
+  if (role === "platform_owner") return "/platform";
+  if (role === "ana_bayi") return "/bigagent";
+  if (role === "bayi") return "/store";
+  return "/dealers"; // tenant_admin
+}
 
 const Ctx = createContext<AuthCtx>(null!);
 export const useAuth = () => useContext(Ctx);
@@ -41,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("access", r.data.tokens.access);
       localStorage.setItem("refresh", r.data.tokens.refresh);
       setUser(r.data.user);
-      return { ok: true };
+      return { ok: true, role: r.data.user.role };
     } catch (e: any) {
       return { ok: false, error: e?.response?.data?.detail || "فشل الاتصال بالخادم" };
     }

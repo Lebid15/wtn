@@ -85,11 +85,9 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     class Role(models.TextChoices):
         PLATFORM_OWNER = "platform_owner", "مالك المنصّة"
-        TENANT_ADMIN = "tenant_admin", "أدمن المستأجر"
-        ANA_BAYI = "ana_bayi", "وكيل رئيسي"
+        TENANT_ADMIN = "tenant_admin", "صاحب المتجر"
+        ANA_BAYI = "ana_bayi", "وكيل كبير"
         BAYI = "bayi", "وكيل"
-        ALT_BAYI = "alt_bayi", "وكيل فرعي"
-        CUSTOMER = "customer", "عميل"
 
     class Status(models.TextChoices):
         ACTIVE = "active", "نشط"

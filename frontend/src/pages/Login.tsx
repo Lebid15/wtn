@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../auth";
+import { useAuth, roleHome } from "../auth";
 
 export default function Login() {
   const { login } = useAuth();
@@ -22,7 +22,7 @@ export default function Login() {
       setNeedTotp(true);
       setError("");
     } else if ("ok" in res && res.ok) {
-      nav("/dealers");
+      nav(roleHome(res.role));
     } else if ("error" in res) {
       setError(res.error);
     }

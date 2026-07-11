@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { AuthProvider, useAuth } from "./auth";
+import { AuthProvider, useAuth, roleHome } from "./auth";
 import AdminLayout from "./layout/AdminLayout";
 import Login from "./pages/Login";
 import Dealers from "./pages/Dealers";
@@ -21,25 +21,26 @@ import Platform from "./pages/Platform";
 import Ledger from "./pages/Ledger";
 import SmsSettings from "./pages/SmsSettings";
 import DealerReport from "./pages/DealerReport";
+import BigAgent from "./pages/BigAgent";
 
-function Protected({ children }: { children: React.ReactNode }) {
+// حارس صلاحيات: يمنع الوصول لغير المصرّح ويوجّه كل دور للوحته
+function Guard({ children, roles, bare }:
+  { children: React.ReactNode; roles?: string[]; bare?: boolean }) {
   const { user, loading } = useAuth();
   if (loading) return <div style={{ padding: 40, textAlign: "center" }}>جارٍ التحميل...</div>;
   if (!user) return <Navigate to="/login" replace />;
-  return <AdminLayout>{children}</AdminLayout>;
+  if (roles && !roles.includes(user.role)) return <Navigate to={roleHome(user.role)} replace />;
+  return bare ? <>{children}</> : <AdminLayout>{children}</AdminLayout>;
 }
 
-function BareProtected({ children }: { children: React.ReactNode }) {
+// صفحات لوحة الأدمن → لصاحب المتجر فقط
+const Admin = (el: React.ReactNode) => <Guard roles={["tenant_admin"]}>{el}</Guard>;
+
+function RoleHomeRedirect() {
   const { user, loading } = useAuth();
-  if (loading) return <div style={{ padding: 40, textAlign: "center" }}>جارٍ التحميل...</div>;
-  if (!user) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+  if (loading) return null;
+  return <Navigate to={user ? roleHome(user.role) : "/login"} replace />;
 }
-
-function Placeholder({ title }: { title: string }) {
-  return <div style={{ padding: 40, fontSize: 18, color: "var(--muted)" }}>{title} — قريباً</div>;
-}
-const P = (title: string) => <Protected><Placeholder title={title} /></Protected>;
 
 export default function App() {
   return (
@@ -47,34 +48,37 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/store" element={<BareProtected><Store /></BareProtected>} />
-          <Route path="/platform" element={<BareProtected><Platform /></BareProtected>} />
 
-          {/* OyunPin */}
-          <Route path="/oyunpin" element={<Protected><Games /></Protected>} />
-          <Route path="/oyunpin/pin-list" element={<Protected><PinList /></Protected>} />
-          <Route path="/oyunpin/orders" element={<Protected><Orders /></Protected>} />
-          <Route path="/oyunpin/price-groups" element={<Protected><PriceGroups /></Protected>} />
-          <Route path="/oyunpin/dealer-prices" element={<Protected><DealerPrices /></Protected>} />
-          <Route path="/oyunpin/pool" element={<Protected><Pool /></Protected>} />
-          <Route path="/oyunpin/providers" element={<Protected><Providers /></Protected>} />
-          <Route path="/oyunpin/:id" element={<Protected><GameDetail /></Protected>} />
+          {/* لوحات مستقلة (بحسب الدور) */}
+          <Route path="/platform" element={<Guard roles={["platform_owner"]} bare><Platform /></Guard>} />
+          <Route path="/bigagent" element={<Guard roles={["ana_bayi"]} bare><BigAgent /></Guard>} />
+          <Route path="/store" element={<Guard roles={["bayi", "ana_bayi"]} bare><Store /></Guard>} />
+
+          {/* OyunPin (صاحب المتجر) */}
+          <Route path="/oyunpin" element={Admin(<Games />)} />
+          <Route path="/oyunpin/pin-list" element={Admin(<PinList />)} />
+          <Route path="/oyunpin/orders" element={Admin(<Orders />)} />
+          <Route path="/oyunpin/price-groups" element={Admin(<PriceGroups />)} />
+          <Route path="/oyunpin/dealer-prices" element={Admin(<DealerPrices />)} />
+          <Route path="/oyunpin/pool" element={Admin(<Pool />)} />
+          <Route path="/oyunpin/providers" element={Admin(<Providers />)} />
+          <Route path="/oyunpin/:id" element={Admin(<GameDetail />)} />
 
           {/* Ayarlar */}
-          <Route path="/dealers" element={<Protected><Dealers /></Protected>} />
-          <Route path="/ayarlar/payments" element={<Protected><PaymentTracking /></Protected>} />
-          <Route path="/ayarlar/accounts" element={<Protected><Accounts /></Protected>} />
-          <Route path="/ayarlar/ledger" element={<Protected><Ledger /></Protected>} />
-          <Route path="/ayarlar/groups" element={<Protected><DealerGroups /></Protected>} />
-          <Route path="/ayarlar/site" element={<Protected><SiteSettings /></Protected>} />
-          <Route path="/ayarlar/sms" element={<Protected><SmsSettings /></Protected>} />
+          <Route path="/dealers" element={Admin(<Dealers />)} />
+          <Route path="/ayarlar/payments" element={Admin(<PaymentTracking />)} />
+          <Route path="/ayarlar/accounts" element={Admin(<Accounts />)} />
+          <Route path="/ayarlar/ledger" element={Admin(<Ledger />)} />
+          <Route path="/ayarlar/groups" element={Admin(<DealerGroups />)} />
+          <Route path="/ayarlar/site" element={Admin(<SiteSettings />)} />
+          <Route path="/ayarlar/sms" element={Admin(<SmsSettings />)} />
 
           {/* Raporlar */}
-          <Route path="/reports" element={<Protected><Reports /></Protected>} />
-          <Route path="/reports/profits" element={<Protected><DealerReport title="تقرير الأرباح (حسب الوكيل)" highlight="profit" /></Protected>} />
-          <Route path="/reports/dealers" element={<Protected><DealerReport title="كشف الوكلاء" highlight="sell" /></Protected>} />
+          <Route path="/reports" element={Admin(<Reports />)} />
+          <Route path="/reports/profits" element={Admin(<DealerReport title="تقرير الأرباح (حسب الوكيل)" highlight="profit" />)} />
+          <Route path="/reports/dealers" element={Admin(<DealerReport title="كشف الوكلاء" highlight="sell" />)} />
 
-          <Route path="*" element={<Navigate to="/dealers" replace />} />
+          <Route path="*" element={<RoleHomeRedirect />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
