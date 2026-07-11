@@ -18,6 +18,7 @@ const ALERTS = ["chat", "games", "api", "user", "warning", "card"];
 const SUBNAV_OYUNPIN = [
   { label: "متابعة الطلبات", to: "/oyunpin/orders" },
   { label: "قائمة الألعاب", to: "/oyunpin" },
+  { label: "المكتبة العالمية", to: "/oyunpin/library" },
   { label: "قائمة المنتجات", to: "/oyunpin/pin-list" },
   { label: "مجموعات الأسعار", to: "/oyunpin/price-groups" },
   { label: "أسعار الوكلاء", to: "/oyunpin/dealer-prices" },

@@ -4,6 +4,7 @@ import AdminLayout from "./layout/AdminLayout";
 import Login from "./pages/Login";
 import Dealers from "./pages/Dealers";
 import Games from "./pages/Games";
+import Library from "./pages/Library";
 import GameDetail from "./pages/GameDetail";
 import PinList from "./pages/PinList";
 import PriceGroups from "./pages/PriceGroups";
@@ -56,6 +57,7 @@ export default function App() {
 
           {/* OyunPin (صاحب المتجر) */}
           <Route path="/oyunpin" element={Admin(<Games />)} />
+          <Route path="/oyunpin/library" element={Admin(<Library />)} />
           <Route path="/oyunpin/pin-list" element={Admin(<PinList />)} />
           <Route path="/oyunpin/orders" element={Admin(<Orders />)} />
           <Route path="/oyunpin/price-groups" element={Admin(<PriceGroups />)} />
