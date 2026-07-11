@@ -103,6 +103,29 @@ def orders_view(request):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+def report_dealers_view(request):
+    """تقرير مجمّع حسب الوكيل (كشف الوكلاء / تقرير الأرباح)."""
+    qs = _filtered_orders(request)
+    rows = (
+        qs.values("dealer__name")
+        .annotate(count=Count("id"), sell=Sum("sell_price"), profit=Sum("profit"))
+        .order_by("-profit")
+    )
+    results = [{
+        "dealer": r["dealer__name"],
+        "count": r["count"],
+        "sell": str(r["sell"] or 0),
+        "profit": str(r["profit"] or 0),
+    } for r in rows]
+    totals = qs.aggregate(count=Count("id"), sell=Sum("sell_price"), profit=Sum("profit"))
+    return Response({
+        "results": results,
+        "totals": {k: str(v or 0) for k, v in totals.items()},
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def store_catalog_view(request):
     """كتالوج المتجر: الألعاب النشطة ومنتجاتها بسعر المشتري (سعر مجموعته)."""
     from catalog.models import Game

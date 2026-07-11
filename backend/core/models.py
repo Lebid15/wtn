@@ -32,6 +32,11 @@ class Tenant(models.Model):
     phone = models.CharField(max_length=40, blank=True, default="")         # Telefon
     homepage_text = models.TextField(blank=True, default="")                # Anasayfa Orta Metin
     footer_html = models.TextField(blank=True, default="")                  # Sayfa Altı Metin
+    # إعدادات SMS (Sms Servisleri)
+    sms_provider = models.CharField(max_length=60, blank=True, default="")
+    sms_api_key = models.CharField(max_length=200, blank=True, default="")
+    sms_sender = models.CharField(max_length=60, blank=True, default="")
+    sms_enabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -34,6 +34,14 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
         ]
 
 
+class SmsSettingsSerializer(serializers.ModelSerializer):
+    """إعدادات SMS (Sms Servisleri)."""
+
+    class Meta:
+        model = Tenant
+        fields = ["sms_provider", "sms_api_key", "sms_sender", "sms_enabled"]
+
+
 class WalletSerializer(serializers.ModelSerializer):
     available = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
 

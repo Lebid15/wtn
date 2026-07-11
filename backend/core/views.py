@@ -11,7 +11,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from . import services
 from .models import DealerGroup, User, Wallet, WalletTransaction
 from .serializers import (
-    DealerGroupSerializer, LoginSerializer, SiteSettingsSerializer, UserSerializer,
+    DealerGroupSerializer, LoginSerializer, SiteSettingsSerializer,
+    SmsSettingsSerializer, UserSerializer,
 )
 
 
@@ -95,6 +96,48 @@ def site_settings_view(request):
         return Response(serializer.data)
 
     return Response(SiteSettingsSerializer(tenant).data)
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([IsAuthenticated])
+def sms_settings_view(request):
+    """قراءة/تحديث إعدادات SMS للمستأجر الحالي."""
+    tenant = request.user.tenant
+    if tenant is None:
+        return Response({"detail": "لا يوجد مستأجر"}, status=400)
+    if request.method == "PUT":
+        s = SmsSettingsSerializer(tenant, data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+        s.save()
+        return Response(s.data)
+    return Response(SmsSettingsSerializer(tenant).data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def ledger_view(request):
+    """حركات الحسابات (Hesap Hareketleri): كل حركات المحافظ في المستأجر."""
+    qs = WalletTransaction.objects.filter(tenant=request.user.tenant).select_related(
+        "wallet__user"
+    )
+    dealer = request.query_params.get("dealer")
+    if dealer:
+        qs = qs.filter(wallet__user_id=dealer)
+    txn_type = request.query_params.get("type")
+    if txn_type and txn_type != "all":
+        qs = qs.filter(type=txn_type)
+    rows = [{
+        "id": t.id,
+        "dealer_name": t.wallet.user.name,
+        "type": t.type,
+        "type_label": t.get_type_display(),
+        "amount": str(t.amount),
+        "balance_before": str(t.balance_before),
+        "balance_after": str(t.balance_after),
+        "note": t.note,
+        "created_at": t.created_at.strftime("%Y-%m-%d %H:%M"),
+    } for t in qs[:300]]
+    return Response({"count": qs.count(), "results": rows})
 
 
 @api_view(["GET"])

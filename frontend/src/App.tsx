@@ -18,6 +18,9 @@ import Reports from "./pages/Reports";
 import DealerGroups from "./pages/DealerGroups";
 import Store from "./pages/Store";
 import Platform from "./pages/Platform";
+import Ledger from "./pages/Ledger";
+import SmsSettings from "./pages/SmsSettings";
+import DealerReport from "./pages/DealerReport";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -61,15 +64,15 @@ export default function App() {
           <Route path="/dealers" element={<Protected><Dealers /></Protected>} />
           <Route path="/ayarlar/payments" element={<Protected><PaymentTracking /></Protected>} />
           <Route path="/ayarlar/accounts" element={<Protected><Accounts /></Protected>} />
-          <Route path="/ayarlar/ledger" element={P("حركات الحسابات")} />
+          <Route path="/ayarlar/ledger" element={<Protected><Ledger /></Protected>} />
           <Route path="/ayarlar/groups" element={<Protected><DealerGroups /></Protected>} />
           <Route path="/ayarlar/site" element={<Protected><SiteSettings /></Protected>} />
-          <Route path="/ayarlar/sms" element={P("إعدادات SMS")} />
+          <Route path="/ayarlar/sms" element={<Protected><SmsSettings /></Protected>} />
 
           {/* Raporlar */}
           <Route path="/reports" element={<Protected><Reports /></Protected>} />
-          <Route path="/reports/profits" element={P("تقرير الأرباح")} />
-          <Route path="/reports/dealers" element={P("كشف الوكلاء")} />
+          <Route path="/reports/profits" element={<Protected><DealerReport title="تقرير الأرباح (حسب الوكيل)" highlight="profit" /></Protected>} />
+          <Route path="/reports/dealers" element={<Protected><DealerReport title="كشف الوكلاء" highlight="sell" /></Protected>} />
 
           <Route path="*" element={<Navigate to="/dealers" replace />} />
         </Routes>
