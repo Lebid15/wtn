@@ -20,6 +20,7 @@ class Tenant(models.Model):
     subdomain = models.SlugField(max_length=63, unique=True)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.TRIAL)
     theme = models.CharField(max_length=20, default="teal")  # teal | blue | orange | custom
+    font = models.CharField(max_length=20, default="cairo")  # cairo | tajawal
     theme_color = models.CharField(max_length=9, blank=True, default="")  # لون مخصّص #RRGGBB
     logo_url = models.CharField(max_length=300, blank=True, default="")
     default_locale = models.CharField(max_length=5, default="ar")

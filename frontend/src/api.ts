@@ -100,7 +100,10 @@ export interface Dealer {
   credit_limit: string;
   currency: string;
   status: string;
+  country: string;
   group: string;
+  shopping: boolean;
   oyun: boolean;
+  active: boolean;
   children_count: number;
 }

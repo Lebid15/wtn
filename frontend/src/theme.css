@@ -32,12 +32,16 @@
   --row-alt: #f8fafb;
 }
 
+/* ===== الخط (Cairo افتراضي · Tajawal خيار) ===== */
+:root { --font: "Cairo", "Segoe UI", Tahoma, Arial, sans-serif; }
+:root[data-font="tajawal"] { --font: "Tajawal", "Segoe UI", Tahoma, Arial, sans-serif; }
+
 /* ===== قاعدة عامة + تصميم غير متجاوب ===== */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: "Segoe UI", Tahoma, Arial, "Noto Sans Arabic", sans-serif;
+  font-family: var(--font);
   -webkit-font-smoothing: antialiased;
 }
 body {

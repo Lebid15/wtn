@@ -1,17 +1,18 @@
 import { type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
+import Icon from "../components/Icon";
 
 // أقسام القائمة الرئيسية (مطابقة للمرجع؛ Fatura/Kontor مستبعدان)
 const MAIN_TABS = [
-  { key: "home", label: "🏠", to: "/dealers" },
-  { key: "oyunpin", label: "الألعاب", to: "/oyunpin" },
-  { key: "ayarlar", label: "الإعدادات", to: "/dealers" },
-  { key: "raporlar", label: "التقارير", to: "/reports" },
+  { key: "home", label: "الرئيسية", icon: "home", to: "/dealers" },
+  { key: "oyunpin", label: "الألعاب", icon: "games", to: "/oyunpin" },
+  { key: "ayarlar", label: "الإعدادات", icon: "settings", to: "/dealers" },
+  { key: "raporlar", label: "التقارير", icon: "chart", to: "/reports" },
 ];
 
 // أيقونات التنبيهات (يمين) — مطابقة لروح المرجع
-const ALERTS = ["💬", "🎮", "🔌", "👤", "⚠️", "💳"];
+const ALERTS = ["chat", "games", "api", "user", "warning", "card"];
 
 // القوائم الفرعية لكل قسم (تتغيّر حسب التبويب النشط) — مطابقة لتبويبات المرجع
 const SUBNAV_OYUNPIN = [
@@ -71,20 +72,26 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                   ...(active ? tabActive : {}),
                 }}
               >
+                <Icon name={t.icon} size={17} style={{ marginInlineEnd: 7 }} />
                 {t.label}
               </Link>
             );
           })}
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ ...alertIco, background: "var(--danger)" }}>1</span>
+          <span style={{ ...alertIco, background: "var(--danger)", position: "relative" }}>
+            <Icon name="bell" size={16} />
+            <span style={badgeDot}>1</span>
+          </span>
           {ALERTS.map((a, i) => (
-            <span key={i} style={alertIco}>{a}</span>
+            <span key={i} style={alertIco}><Icon name={a} size={16} /></span>
           ))}
           <span style={{ color: "#fff", fontSize: 13, marginInlineStart: 8 }}>
             {user?.name}
           </span>
-          <button onClick={logout} style={logoutBtn}>خروج آمن ⏻</button>
+          <button onClick={logout} style={logoutBtn}>
+            <Icon name="logout" size={15} style={{ marginInlineEnd: 5 }} />خروج آمن
+          </button>
         </div>
       </div>
 
@@ -145,6 +152,8 @@ const alertIco: React.CSSProperties = {
   fontSize: 15,
 };
 const logoutBtn: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
   background: "transparent",
   border: "1px solid rgba(255,255,255,.4)",
   color: "#f2fafb",
@@ -153,6 +162,21 @@ const logoutBtn: React.CSSProperties = {
   borderRadius: 4,
   padding: "0 10px",
   marginInlineStart: 6,
+};
+const badgeDot: React.CSSProperties = {
+  position: "absolute",
+  top: -5,
+  insetInlineEnd: -5,
+  background: "#fff",
+  color: "var(--danger)",
+  fontSize: 10,
+  fontWeight: 700,
+  width: 15,
+  height: 15,
+  borderRadius: "50%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
 };
 const subnav: React.CSSProperties = {
   display: "flex",

@@ -156,6 +156,7 @@ def dealers_view(request):
     rows = []
     for u in qs:
         wallet = getattr(u, "wallet", None)
+        mods = u.modules or {}
         rows.append({
             "id": u.id,
             "login_id": u.login_id,
@@ -164,8 +165,11 @@ def dealers_view(request):
             "credit_limit": str(wallet.credit_limit) if wallet else "0.00",
             "currency": wallet.currency if wallet else "TRY",
             "status": u.status,
-            "group": u.modules.get("group", "") if u.modules else "",
-            "oyun": bool(u.modules.get("oyun")) if u.modules else False,
+            "country": u.country,
+            "group": mods.get("group", ""),
+            "shopping": mods.get("shopping", True),   # Alışveriş
+            "oyun": mods.get("oyun", True),           # لعبة OyunPin
+            "active": u.status == User.Status.ACTIVE,  # Aktif
             "children_count": u.children.count(),
         })
     return Response({"count": len(rows), "results": rows})

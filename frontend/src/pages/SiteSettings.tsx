@@ -2,10 +2,15 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 
 interface Settings {
-  theme: string; theme_color: string; logo_url: string; default_locale: string;
+  theme: string; font: string; theme_color: string; logo_url: string; default_locale: string;
   founded_year: string; short_name: string; full_name: string; address: string;
   email: string; phone: string; homepage_text: string; footer_html: string;
 }
+
+const FONTS = [
+  { key: "cairo", label: "Cairo — القاهرة" },
+  { key: "tajawal", label: "Tajawal — تجوّل" },
+];
 
 const THEMES = [
   { key: "teal", label: "أخضر مزرق", color: "#3a6b73" },
@@ -26,8 +31,9 @@ export default function SiteSettings() {
 
   function set<K extends keyof Settings>(k: K, v: Settings[K]) {
     setS((p) => (p ? { ...p, [k]: v } : p));
-    // معاينة حيّة للثيم
+    // معاينة حيّة للثيم والخط
     if (k === "theme") document.documentElement.setAttribute("data-theme", v as string);
+    if (k === "font") document.documentElement.setAttribute("data-font", v as string);
   }
 
   async function save() {
@@ -36,7 +42,8 @@ export default function SiteSettings() {
     try {
       await api.put("/settings/site/", s);
       document.documentElement.setAttribute("data-theme", s!.theme);
-      setMsg("تم حفظ الإعدادات وتطبيق الثيم ✅");
+      document.documentElement.setAttribute("data-font", s!.font);
+      setMsg("تم حفظ الإعدادات وتطبيق الثيم والخط ✅");
     } finally {
       setSaving(false);
     }
@@ -65,6 +72,23 @@ export default function SiteSettings() {
                   }}>
                   <span style={{ width: 18, height: 18, borderRadius: "50%", background: t.color }} />
                   {t.label}
+                </button>
+              ))}
+            </div>
+          </Row>
+
+          {/* اختيار الخط — معاينة حيّة */}
+          <Row label="خط الموقع">
+            <div style={{ display: "flex", gap: 10 }}>
+              {FONTS.map((ft) => (
+                <button key={ft.key} type="button" onClick={() => set("font", ft.key)}
+                  style={{
+                    padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 15,
+                    fontFamily: ft.key === "tajawal" ? "Tajawal, sans-serif" : "Cairo, sans-serif",
+                    border: s.font === ft.key ? "2px solid var(--primary-dark)" : "1px solid var(--border)",
+                    background: s.font === ft.key ? "#f2f5f6" : "#fff",
+                  }}>
+                  {ft.label}
                 </button>
               ))}
             </div>

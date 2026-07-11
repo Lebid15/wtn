@@ -27,10 +27,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  // تطبيق ثيم المستأجر على الصفحة
+  // تطبيق ثيم وخط المستأجر على الصفحة
   useEffect(() => {
     const theme = user?.tenant?.theme || "teal";
     document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.setAttribute("data-font", (user?.tenant as any)?.font || "cairo");
   }, [user]);
 
   async function login(loginId: string, password: string, totp?: string): Promise<LoginResult> {
