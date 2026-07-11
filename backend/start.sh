@@ -22,8 +22,9 @@ if not Product.objects.exists():
 else:
     print("catalog seeds skipped (data already present)")
 
-# المكتبة العالمية idempotent — تُشغَّل دائماً لتُضيف أي ألعاب مكتبة جديدة
+# المكتبة العالمية + عرض التنفيذ التلقائي idempotent — تُشغَّل دائماً
 subprocess.run(["python", "manage.py", "seed_library"], check=False)
+subprocess.run(["python", "manage.py", "seed_auto"], check=False)
 PY
 
 exec gunicorn config.wsgi:application \

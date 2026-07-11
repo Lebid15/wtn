@@ -227,15 +227,16 @@ function OrdersTab() {
               <th style={th}>التكلفة</th>
               <th style={th}>البيع</th>
               <th style={th}>الربح</th>
+              <th style={th}>الكود / PIN</th>
               <th style={th}>الحالة</th>
               <th style={th}>التاريخ</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
+              <tr><td colSpan={9} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={8} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>لا توجد طلبات بعد</td></tr>
+              <tr><td colSpan={9} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>لا توجد طلبات بعد</td></tr>
             ) : rows.map((o) => (
               <tr key={o.id}>
                 <td style={td}>{o.receipt_no}</td>
@@ -246,6 +247,7 @@ function OrdersTab() {
                 <td style={td}>{money(o.cost_price)}</td>
                 <td style={td}>{money(o.sell_price)}</td>
                 <td style={{ ...td, color: "var(--ok)", fontWeight: 700 }}>{money(o.profit)}</td>
+                <td style={{ ...td, direction: "ltr", fontFamily: "monospace", fontSize: 12 }}>{o.pin_result || "—"}</td>
                 <td style={td}>
                   <span style={{
                     display: "inline-block", width: 10, height: 10, borderRadius: "50%",
@@ -475,7 +477,7 @@ function BuyModal({ product, requirePlayer, onClose, onBought }:
   { product: SProduct; requirePlayer: boolean; onClose: () => void; onBought: () => void }) {
   const [playerId, setPlayerId] = useState("");
   const [phone, setPhone] = useState("");
-  const [done, setDone] = useState<string | null>(null);
+  const [done, setDone] = useState<any | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -486,7 +488,7 @@ function BuyModal({ product, requirePlayer, onClose, onBought }:
       const r = await api.post("/store/buy/", {
         product: product.id, player_id: playerId, customer_phone: phone,
       });
-      setDone(r.data.receipt_no);
+      setDone(r.data);
       onBought();
     } catch (e: any) {
       setErr(e?.response?.data?.detail || "فشل الشراء");
@@ -502,9 +504,21 @@ function BuyModal({ product, requirePlayer, onClose, onBought }:
         <div style={{ padding: 20 }}>
           {done ? (
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 42 }}>✅</div>
-              <p style={{ margin: "10px 0", fontSize: 16 }}>تم إنشاء الطلب بنجاح!</p>
-              <p style={{ color: "var(--muted)" }}>رقم الطلب: <b>{done}</b></p>
+              <div style={{ fontSize: 42 }}>{done.status === "success" ? "✅" : "🕓"}</div>
+              <p style={{ margin: "10px 0", fontSize: 16 }}>
+                {done.status === "success" ? "تم التنفيذ بنجاح!" : "تم إنشاء الطلب!"}
+              </p>
+              <p style={{ color: "var(--muted)" }}>رقم الطلب: <b>{done.receipt_no}</b></p>
+              {done.pin_result ? (
+                <div style={{ marginTop: 12, background: "#e7f6ec", border: "1px solid #b6e0c4", borderRadius: 8, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>الكود / PIN</div>
+                  <b style={{ fontSize: 18, letterSpacing: 1, color: "var(--ok)", direction: "ltr", display: "block" }}>{done.pin_result}</b>
+                </div>
+              ) : (
+                <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 8 }}>
+                  {done.status_label} — ستظهر النتيجة في "طلباتي".
+                </p>
+              )}
               <button type="button" className="btn" style={{ marginTop: 14 }} onClick={onClose}>إغلاق</button>
             </div>
           ) : (
