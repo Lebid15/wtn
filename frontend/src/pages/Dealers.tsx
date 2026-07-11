@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Dealer } from "../api";
 import WalletModal from "../components/WalletModal";
+import DealerCreateModal from "../components/DealerCreateModal";
 import Icon from "../components/Icon";
 
 const FLAG: Record<string, string> = { SY: "🇸🇾", TR: "🇹🇷", SA: "🇸🇦", IQ: "🇮🇶" };
@@ -10,6 +11,7 @@ export default function Dealers() {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<{ dealer: Dealer; action: "topup" | "deduct" } | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   function load(search = "") {
     setLoading(true);
@@ -40,7 +42,7 @@ export default function Dealers() {
           </span>
         </div>
         <button className="btn" onClick={() => load(q)}>بحث</button>
-        <button className="btn g"><Icon name="plus" size={15} style={ib} />إضافة وكيل</button>
+        <button className="btn g" onClick={() => setCreateOpen(true)}><Icon name="plus" size={15} style={ib} />إضافة وكيل</button>
         <button className="btn"><Icon name="excel" size={15} style={ib} />تصدير Excel</button>
         <button className="btn r" onClick={() => { setQ(""); load(""); }}>إزالة الفلتر</button>
         <span style={{ marginInlineStart: "auto", color: "var(--muted)", fontSize: 14 }}>
@@ -119,6 +121,12 @@ export default function Dealers() {
         <WalletModal dealer={modal.dealer} action={modal.action}
           onClose={() => setModal(null)}
           onDone={(balance) => updateBalance(modal.dealer.id, balance)} />
+      )}
+
+      {createOpen && (
+        <DealerCreateModal
+          onClose={() => setCreateOpen(false)}
+          onDone={() => { setCreateOpen(false); load(q); }} />
       )}
     </div>
   );

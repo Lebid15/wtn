@@ -140,10 +140,61 @@ def ledger_view(request):
     return Response({"count": qs.count(), "results": rows})
 
 
-@api_view(["GET"])
+def _create_dealer(request):
+    """إنشاء وكيل (Bayi) جديد تحت المستأجر الحالي — يقابل زر "Bayi Ekle"."""
+    tenant = request.user.tenant
+    if tenant is None:
+        return Response({"detail": "لا يوجد مستأجر"}, status=400)
+
+    data = request.data
+    login_id = (data.get("login_id") or "").strip()
+    name = (data.get("name") or "").strip()
+    password = data.get("password") or ""
+    if not login_id or not name or not password:
+        return Response(
+            {"detail": "الاسم ورقم الدخول وكلمة السر مطلوبة"}, status=400
+        )
+    if User.objects.filter(login_id=login_id).exists():
+        return Response({"detail": "رقم الدخول مستخدم مسبقاً"}, status=400)
+
+    try:
+        credit_limit = Decimal(str(data.get("credit_limit") or "0"))
+    except (InvalidOperation, TypeError):
+        return Response({"detail": "الحد الائتماني غير صحيح"}, status=400)
+
+    country = (data.get("country") or "SY").strip()[:2] or "SY"
+    group = (data.get("group") or "").strip()
+
+    from django.db import transaction as db_transaction
+
+    with db_transaction.atomic():
+        u = User(
+            tenant=tenant,
+            role=User.Role.BAYI,
+            login_id=login_id,
+            name=name,
+            country=country,
+            status=User.Status.ACTIVE,
+            modules={"oyun": True, "shopping": True, "group": group},
+        )
+        u.set_password(password)
+        u.save()
+        Wallet.objects.create(
+            tenant=tenant, user=u, balance=Decimal("0"), credit_limit=credit_limit
+        )
+
+    return Response(
+        {"id": u.id, "login_id": u.login_id, "name": u.name},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def dealers_view(request):
-    """قائمة الوكلاء (Bayi Listesi) للمستأجر الحالي — مع فلتر بحث."""
+    """قائمة الوكلاء (Bayi Listesi) للمستأجر الحالي + إنشاء وكيل جديد (Bayi Ekle)."""
+    if request.method == "POST":
+        return _create_dealer(request)
     qs = (
         User.objects.filter(tenant=request.user.tenant, role=User.Role.BAYI)
         .select_related("wallet")
