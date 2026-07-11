@@ -173,6 +173,46 @@ def store_buy_view(request):
     return Response(OrderSerializer(order).data, status=http.HTTP_201_CREATED)
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def store_orders_view(request):
+    """طلبات الوكيل نفسه فقط (Pin Takip الخاصة به) — معزولة عن باقي الوكلاء."""
+    qs = Order.objects.filter(
+        tenant=request.user.tenant, dealer=request.user
+    ).select_related("game", "product", "provider").order_by("-created_at")
+    status_filter = request.query_params.get("status")
+    if status_filter and status_filter != "all":
+        qs = qs.filter(status=status_filter)
+    search = request.query_params.get("q", "").strip()
+    if search:
+        qs = qs.filter(receipt_no__icontains=search)
+    return Response({
+        "count": qs.count(),
+        "results": OrderSerializer(qs[:200], many=True).data,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def store_summary_view(request):
+    """ملخّص لوحة الوكيل: رصيده + عدد طلباته الناجحة + أرباحه (من طلباته هو)."""
+    user = request.user
+    wallet = getattr(user, "wallet", None)
+    mine = Order.objects.filter(tenant=user.tenant, dealer=user)
+    agg = mine.filter(status=Order.Status.SUCCESS).aggregate(
+        count=Count("id"), profit=Sum("profit"), sell=Sum("sell_price")
+    )
+    return Response({
+        "balance": str(wallet.balance) if wallet else "0.00",
+        "credit_limit": str(wallet.credit_limit) if wallet else "0.00",
+        "currency": wallet.currency if wallet else "TRY",
+        "orders": agg["count"] or 0,
+        "profit": str(agg["profit"] or 0),
+        "sell": str(agg["sell"] or 0),
+        "pending": mine.filter(status=Order.Status.PENDING).count(),
+    })
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def order_execute_view(request, order_id):
