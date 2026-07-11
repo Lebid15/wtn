@@ -21,6 +21,9 @@ if not Product.objects.exists():
         subprocess.run(["python", "manage.py", cmd], check=False)
 else:
     print("catalog seeds skipped (data already present)")
+
+# المكتبة العالمية idempotent — تُشغَّل دائماً لتُضيف أي ألعاب مكتبة جديدة
+subprocess.run(["python", "manage.py", "seed_library"], check=False)
 PY
 
 exec gunicorn config.wsgi:application \

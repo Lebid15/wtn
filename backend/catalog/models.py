@@ -2,10 +2,15 @@
 نماذج الكتالوج: الألعاب (Oyunlar) + المنتجات (Ürünler/Pinler) + مجموعات الأسعار.
 مبني على docs/DATABASE_SCHEMA.md (أقسام د + هـ).
 """
+import uuid
 from decimal import Decimal
 from django.db import models
 
 from core.models import Tenant
+
+
+def _uuid_hex() -> str:
+    return uuid.uuid4().hex
 
 
 class Game(models.Model):
@@ -26,6 +31,10 @@ class Game(models.Model):
     toplu_sale = models.BooleanField(default=False)   # Toplu Satış — بيع بالكمية
     sms_template = models.TextField(blank=True, default="")  # Sms Şablonu
     sort_order = models.PositiveIntegerField(default=0)  # ترتيب العرض (drag & drop)
+    # رابط منطقي بمنتج المكتبة العالمية الذي استُورد منه (نصّ، لمنع التكرار)
+    master_library_uuid = models.CharField(
+        max_length=64, blank=True, default="", db_index=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -121,3 +130,52 @@ class ProductPrice(models.Model):
 
     def __str__(self):
         return f"{self.product.name} @ {self.price_group.name} = {self.price}"
+
+
+# ─────────── المكتبة العالمية (Global Library) — يحرّرها مالك المنصّة فقط ───────────
+class LibraryGame(models.Model):
+    """قالب لعبة عالمي مشترك — يستطيع أي صاحب متجر استيراده مع باقاته."""
+
+    uuid = models.CharField(max_length=64, unique=True, editable=False, default=_uuid_hex)
+    name = models.CharField(max_length=120)
+    image_url = models.CharField(max_length=300, blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    require_player_id = models.BooleanField(default=False)
+    kurulu_sale = models.BooleanField(default=True)
+    toplu_sale = models.BooleanField(default=False)
+    sms_template = models.TextField(blank=True, default="")
+    sort_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "library_games"
+        ordering = ["sort_order", "id"]
+
+    def __str__(self):
+        return f"[Library] {self.name}"
+
+
+class LibraryProduct(models.Model):
+    """باقة تحت لعبة عالمية (تُطابق Product عند الاستيراد)."""
+
+    uuid = models.CharField(max_length=64, unique=True, editable=False, default=_uuid_hex)
+    game = models.ForeignKey(LibraryGame, on_delete=models.CASCADE, related_name="products")
+    name = models.CharField(max_length=120)
+    suggested_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    suggested_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    kupur = models.CharField(max_length=60, blank=True, default="")
+    is_parcali = models.BooleanField(default=False)
+    execution_type = models.CharField(
+        max_length=8, choices=Product.Execution.choices, default=Product.Execution.AUTO
+    )
+    description = models.CharField(max_length=255, blank=True, default="")
+    sort_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True, db_index=True)
+
+    class Meta:
+        db_table = "library_products"
+        ordering = ["sort_order", "id"]
+
+    def __str__(self):
+        return f"[Library] {self.game.name} — {self.name}"

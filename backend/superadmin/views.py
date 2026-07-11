@@ -1,12 +1,16 @@
-"""API لوحة المنصّة (SuperAdmin): إدارة المستأجرين — لمالك المنصّة فقط."""
+"""API لوحة المنصّة (SuperAdmin): إدارة المستأجرين + المكتبة العالمية — لمالك المنصّة فقط."""
 from decimal import Decimal
 
 from django.db import transaction
-from rest_framework import status as http
+from rest_framework import status as http, viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
+from catalog.models import LibraryGame, LibraryProduct
+from catalog.serializers import (
+    LibraryGameDetailSerializer, LibraryGameSerializer, LibraryProductSerializer,
+)
 from core.models import Tenant, User, Wallet
 
 
@@ -16,6 +20,26 @@ class IsPlatformOwner(BasePermission):
 
     def has_permission(self, request, view):
         return bool(request.user and request.user.role == User.Role.PLATFORM_OWNER)
+
+
+class LibraryGameViewSet(viewsets.ModelViewSet):
+    """CRUD ألعاب المكتبة العالمية — لمالك المنصّة فقط."""
+    permission_classes = [IsAuthenticated, IsPlatformOwner]
+    queryset = LibraryGame.objects.all()
+
+    def get_serializer_class(self):
+        return LibraryGameDetailSerializer if self.action == "retrieve" else LibraryGameSerializer
+
+
+class LibraryProductViewSet(viewsets.ModelViewSet):
+    """CRUD باقات المكتبة العالمية — لمالك المنصّة فقط."""
+    permission_classes = [IsAuthenticated, IsPlatformOwner]
+    serializer_class = LibraryProductSerializer
+
+    def get_queryset(self):
+        qs = LibraryProduct.objects.all()
+        game = self.request.query_params.get("game")
+        return qs.filter(game_id=game) if game else qs
 
 
 def _tenant_row(t):

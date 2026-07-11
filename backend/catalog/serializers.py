@@ -1,7 +1,7 @@
 """DRF serializers للكتالوج."""
 from rest_framework import serializers
 
-from .models import Game, PriceGroup, Product
+from .models import Game, LibraryGame, LibraryProduct, PriceGroup, Product
 
 
 class PriceGroupSerializer(serializers.ModelSerializer):
@@ -47,3 +47,34 @@ class GameDetailSerializer(GameSerializer):
 
     class Meta(GameSerializer.Meta):
         fields = GameSerializer.Meta.fields + ["products"]
+
+
+# ─────────── المكتبة العالمية ───────────
+class LibraryProductSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LibraryProduct
+        fields = [
+            "id", "uuid", "game", "name", "suggested_cost", "suggested_price",
+            "kupur", "is_parcali", "execution_type", "description", "sort_order", "is_active",
+        ]
+        read_only_fields = ["uuid"]
+
+
+class LibraryGameSerializer(serializers.ModelSerializer):
+    product_count = serializers.IntegerField(source="products.count", read_only=True)
+
+    class Meta:
+        model = LibraryGame
+        fields = [
+            "id", "uuid", "name", "image_url", "description", "require_player_id",
+            "kurulu_sale", "toplu_sale", "sms_template", "sort_order", "is_active",
+            "product_count", "created_at",
+        ]
+        read_only_fields = ["uuid", "created_at"]
+
+
+class LibraryGameDetailSerializer(LibraryGameSerializer):
+    products = LibraryProductSerializer(many=True, read_only=True)
+
+    class Meta(LibraryGameSerializer.Meta):
+        fields = LibraryGameSerializer.Meta.fields + ["products"]

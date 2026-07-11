@@ -7,7 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from core.models import User
-from .models import Game, PriceGroup, Product, ProductPrice
+from django.db import transaction
+from .models import Game, LibraryGame, PriceGroup, Product, ProductPrice
 from .serializers import (
     GameDetailSerializer, GameSerializer, PriceGroupSerializer, ProductSerializer,
 )
@@ -186,3 +187,93 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.user.tenant)
+
+
+def _require_tenant_admin(request):
+    u = request.user
+    return u.role == User.Role.TENANT_ADMIN and u.tenant_id is not None
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def library_browse_view(request):
+    """تصفّح المكتبة العالمية لصاحب المتجر — مع علامة "مستورَد" لكل لعبة."""
+    if not _require_tenant_admin(request):
+        return Response({"detail": "مخصّص لصاحب المتجر"}, status=403)
+    imported = set(
+        Game.objects.filter(tenant=request.user.tenant)
+        .exclude(master_library_uuid="")
+        .values_list("master_library_uuid", flat=True)
+    )
+    rows = []
+    for g in LibraryGame.objects.filter(is_active=True).prefetch_related("products"):
+        active_products = [p for p in g.products.all() if p.is_active]
+        rows.append({
+            "id": g.id,
+            "uuid": g.uuid,
+            "name": g.name,
+            "image_url": g.image_url,
+            "description": g.description,
+            "require_player_id": g.require_player_id,
+            "product_count": len(active_products),
+            "products": [{
+                "name": p.name, "suggested_cost": str(p.suggested_cost),
+                "suggested_price": str(p.suggested_price), "kupur": p.kupur,
+            } for p in active_products],
+            "is_imported": g.uuid in imported,
+        })
+    return Response({"count": len(rows), "results": rows})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def library_import_view(request, library_game_id):
+    """استيراد لعبة عالمية + كل باقاتها الفعّالة إلى متجر صاحب المتجر (نسخ snapshot)."""
+    if not _require_tenant_admin(request):
+        return Response({"detail": "مخصّص لصاحب المتجر"}, status=403)
+    tenant = request.user.tenant
+
+    # (1) snapshot من المكتبة العالمية
+    try:
+        lib = LibraryGame.objects.prefetch_related("products").get(
+            pk=library_game_id, is_active=True
+        )
+    except LibraryGame.DoesNotExist:
+        return Response({"detail": "غير موجود", "code": "not_found"}, status=404)
+
+    # (2) منع الاستيراد المكرر عبر uuid المصدر
+    if Game.objects.filter(tenant=tenant, master_library_uuid=lib.uuid).exists():
+        return Response(
+            {"detail": "مستورَد مسبقاً", "code": "already_imported"}, status=400
+        )
+
+    packages = [p for p in lib.products.all() if p.is_active]
+
+    # (3) نسخ (clone) داخل معاملة ذرّية
+    with transaction.atomic():
+        last = Game.objects.filter(tenant=tenant).order_by("-sort_order").first()
+        game = Game.objects.create(
+            tenant=tenant,
+            name=lib.name,
+            image_url=lib.image_url,
+            description=lib.description,
+            require_player_id=lib.require_player_id,
+            kurulu_sale=lib.kurulu_sale,
+            toplu_sale=lib.toplu_sale,
+            sms_template=lib.sms_template,
+            master_library_uuid=lib.uuid,   # الرابط المنطقي بالمصدر
+            sort_order=(last.sort_order + 1) if last else 0,
+        )
+        for i, p in enumerate(packages):
+            Product.objects.create(
+                tenant=tenant, game=game, name=p.name,
+                cost_price=p.suggested_cost, recommended_price=p.suggested_price,
+                kupur=p.kupur, is_parcali=p.is_parcali,
+                execution_type=p.execution_type, description=p.description,
+                sort_order=i,
+            )
+
+    return Response(
+        GameDetailSerializer(game).data | {"imported_products": len(packages)},
+        status=201,
+    )
