@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Provider } from "../api";
+import Icon from "../components/Icon";
 
 export default function Providers() {
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -65,7 +66,10 @@ export default function Providers() {
                 {money(p.debt)}
               </td>
               <td style={td}>
-                <span style={{ letterSpacing: 3 }}>⚙ ✏ 💳 📊</span>
+                <div style={{ display: "flex", gap: 4, justifyContent: "center", color: "var(--muted)" }}>
+                  <Icon name="settings" size={15} /><Icon name="edit" size={15} />
+                  <Icon name="card" size={15} /><Icon name="chart" size={15} />
+                </div>
               </td>
             </tr>
           ))}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import Icon from "../components/Icon";
 
 interface Account {
   id: number; method: string; method_label: string; title: string;
@@ -53,7 +54,11 @@ export default function Accounts() {
               <td style={td}><Dot on={a.status === "active"} /></td>
               <td style={td}><Dot on={a.notification_enabled} /></td>
               <td style={{ ...td, color: "var(--muted)" }}>▲ ▼</td>
-              <td style={td}>✏ ❌</td>
+              <td style={td}>
+                <div style={{ display: "flex", gap: 4, justifyContent: "center", color: "var(--muted)" }}>
+                  <Icon name="edit" size={15} color="var(--primary)" /><Icon name="trash" size={15} color="var(--danger)" />
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>

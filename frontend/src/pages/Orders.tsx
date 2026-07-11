@@ -1,5 +1,11 @@
 import { Fragment, useEffect, useState } from "react";
 import { api, type Order } from "../api";
+import Icon from "../components/Icon";
+
+const STATUS_ICON: Record<string, string> = {
+  pending: "calendar", processing: "refresh", success: "check",
+  cancelled: "x", stuck: "warning",
+};
 
 const FILTERS = [
   { key: "all", label: "الكل" },
@@ -59,18 +65,22 @@ export default function Orders() {
       <table style={table}>
         <thead>
           <tr>
+            <th style={{ ...th, width: 34 }}><input type="checkbox" /></th>
+            <th style={{ ...th, width: 40 }}>اللعبة</th>
             {["رقم الفاتورة", "الوكيل", "المنتج", "العميل/اللاعب", "التكلفة", "البيع",
-              "الربح", "الحالة", "المزوّد", "إجراء"].map((h) => <th key={h} style={th}>{h}</th>)}
+              "الربح", "الحالة", "المزوّد", "الانتظار", "إجراء"].map((h) => <th key={h} style={th}>{h}</th>)}
           </tr>
         </thead>
         <tbody>
           {loading ? (
-            <tr><td colSpan={10} style={{ ...td, padding: 26 }}>جارٍ التحميل...</td></tr>
+            <tr><td colSpan={12} style={{ ...td, padding: 26 }}>جارٍ التحميل...</td></tr>
           ) : orders.length === 0 ? (
-            <tr><td colSpan={10} style={{ ...td, padding: 26 }}>لا توجد طلبات</td></tr>
+            <tr><td colSpan={12} style={{ ...td, padding: 26 }}>لا توجد طلبات</td></tr>
           ) : orders.map((o, i) => (
             <Fragment key={o.id}>
               <tr style={{ background: i % 2 ? "var(--row-alt)" : "#fff" }}>
+                <td style={td}><input type="checkbox" /></td>
+                <td style={td}><Icon name="games" size={16} color="var(--primary)" /></td>
                 <td style={{ ...td, cursor: "pointer", color: "var(--primary-dark)", fontWeight: 600 }}
                   onClick={() => setExpanded(expanded === o.id ? null : o.id)}>
                   {o.receipt_no}
@@ -85,21 +95,28 @@ export default function Orders() {
                 <td style={{ ...td, fontWeight: 600 }}>{money(o.sell_price)}</td>
                 <td style={{ ...td, color: "var(--ok)", fontWeight: 600 }}>{money(o.profit)}</td>
                 <td style={td}>
-                  <span style={{ color: STATUS_COLOR[o.status], fontWeight: 700 }}>● {o.status_label}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: STATUS_COLOR[o.status], fontWeight: 700 }}>
+                    <Icon name={STATUS_ICON[o.status] || "calendar"} size={15} />{o.status_label}
+                  </span>
                 </td>
                 <td style={{ ...td, fontSize: 13 }}>{o.provider_name || "—"}</td>
+                <td style={{ ...td, fontSize: 12, color: "var(--muted)" }}>{o.created_at.split(" ")[1] || "—"}</td>
                 <td style={td}>
                   {o.status === "pending" || o.status === "stuck" ? (
-                    <>
-                      <button className="btn g" style={miniBtn} onClick={() => act(o.id, "execute")}>تنفيذ</button>{" "}
-                      <button className="btn r" style={miniBtn} onClick={() => act(o.id, "cancel")}>إلغاء</button>
-                    </>
+                    <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                      <button className="btn g" style={miniBtn} onClick={() => act(o.id, "execute")}>
+                        <Icon name="check" size={13} style={{ marginInlineEnd: 3 }} />تنفيذ
+                      </button>
+                      <button className="btn r" style={miniBtn} onClick={() => act(o.id, "cancel")}>
+                        <Icon name="x" size={13} style={{ marginInlineEnd: 3 }} />إلغاء
+                      </button>
+                    </div>
                   ) : "—"}
                 </td>
               </tr>
               {expanded === o.id && (
                 <tr>
-                  <td colSpan={10} style={detailCell}>
+                  <td colSpan={12} style={detailCell}>
                     <b>تفاصيل الطلب:</b>{" "}
                     التاريخ: {o.created_at} · الرصيد قبل: {money(o.balance_before)} → بعد: {money(o.balance_after)}
                     {o.pin_result && <> · <b style={{ color: "var(--ok)" }}>PIN: {o.pin_result}</b></>}
@@ -125,7 +142,7 @@ const th: React.CSSProperties = {
 const td: React.CSSProperties = {
   padding: "8px 6px", textAlign: "center", borderBottom: "1px solid #edf1f2",
 };
-const miniBtn: React.CSSProperties = { height: 26, padding: "0 10px", fontSize: 12 };
+const miniBtn: React.CSSProperties = { height: 26, padding: "0 10px", fontSize: 12, display: "inline-flex", alignItems: "center" };
 const detailCell: React.CSSProperties = {
   padding: "10px 16px", background: "#f6f8f9", borderBottom: "2px solid var(--primary)",
   fontSize: 13, textAlign: "right", color: "var(--text)",

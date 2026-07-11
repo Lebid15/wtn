@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import Icon from "../components/Icon";
 
 interface Pool {
   id: number; name: string; description: string; provider_name: string;
@@ -82,7 +83,11 @@ export default function Pool() {
                   {p.status_label}
                 </span>
               </td>
-              <td style={td}>✏ 🔧</td>
+              <td style={td}>
+                <div style={{ display: "flex", gap: 4, justifyContent: "center", color: "var(--muted)" }}>
+                  <Icon name="edit" size={15} /><Icon name="wrench" size={15} />
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
