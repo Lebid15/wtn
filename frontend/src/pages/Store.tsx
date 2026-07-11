@@ -10,11 +10,12 @@ interface Summary {
   orders: number; profit: string; sell: string; pending: number;
 }
 
-type Tab = "home" | "sell" | "orders";
+type Tab = "home" | "sell" | "orders" | "reports";
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "home", label: "الرئيسية", icon: "home" },
   { key: "sell", label: "البيع", icon: "cart" },
   { key: "orders", label: "طلباتي", icon: "chart" },
+  { key: "reports", label: "تقاريري", icon: "excel" },
 ];
 
 const money = (v: string | number) =>
@@ -66,6 +67,7 @@ export default function Store() {
         {tab === "home" && <HomeTab summary={summary} onSell={() => setTab("sell")} />}
         {tab === "sell" && <SellTab onBought={loadSummary} />}
         {tab === "orders" && <OrdersTab />}
+        {tab === "reports" && <ReportsTab />}
       </div>
     </div>
   );
@@ -250,6 +252,94 @@ function OrdersTab() {
   );
 }
 
+/* ===== تقاريري (Oyun Pin Toplam Raporu) ===== */
+function ReportsTab() {
+  const [data, setData] = useState<any>(null);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [inclCancelled, setInclCancelled] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  function load() {
+    setLoading(true);
+    const params: any = {};
+    if (from) params.date_from = from;
+    if (to) params.date_to = to;
+    if (inclCancelled) params.include_cancelled = 1;
+    api.get("/store/report/", { params })
+      .then((r) => setData(r.data)).finally(() => setLoading(false));
+  }
+  useEffect(load, []);
+
+  const t = data?.totals;
+  return (
+    <div>
+      <div style={filterBar}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <label style={{ fontSize: 13, color: "var(--muted)" }}>من</label>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ height: 34 }} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <label style={{ fontSize: 13, color: "var(--muted)" }}>إلى</label>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ height: 34 }} />
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--muted)" }}>
+          <input type="checkbox" checked={inclCancelled} onChange={(e) => setInclCancelled(e.target.checked)} />
+          تضمين الملغاة
+        </label>
+        <button className="btn g" onClick={load}>
+          <Icon name="filter" size={14} style={{ marginInlineEnd: 5 }} />تصفية
+        </button>
+        <button className="btn" onClick={() => { setFrom(""); setTo(""); setInclCancelled(false); setTimeout(load, 0); }}>
+          إزالة الفلتر
+        </button>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={table}>
+          <thead>
+            <tr>
+              <th style={{ ...th, textAlign: "right", paddingInlineStart: 12 }}>اللعبة</th>
+              <th style={{ ...th, textAlign: "right", paddingInlineStart: 12 }}>الباقة</th>
+              <th style={th}>العدد</th>
+              <th style={th}>التكلفة</th>
+              <th style={th}>المبيعات</th>
+              <th style={th}>الربح</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
+            ) : !data?.results?.length ? (
+              <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>لا توجد بيانات في هذه الفترة</td></tr>
+            ) : data.results.map((r: any, i: number) => (
+              <tr key={i}>
+                <td style={{ ...td, textAlign: "right", paddingInlineStart: 12, fontWeight: 700 }}>{r.game}</td>
+                <td style={{ ...td, textAlign: "right", paddingInlineStart: 12 }}>{r.product}</td>
+                <td style={td}>{r.count}</td>
+                <td style={td}>{money(r.cost)}</td>
+                <td style={td}>{money(r.sell)}</td>
+                <td style={{ ...td, color: "var(--ok)", fontWeight: 700 }}>{money(r.profit)}</td>
+              </tr>
+            ))}
+          </tbody>
+          {t && data?.results?.length ? (
+            <tfoot>
+              <tr style={{ background: "#eef4f4", fontWeight: 800 }}>
+                <td style={{ ...td, textAlign: "right", paddingInlineStart: 12 }}>الإجمالي — {data.products} منتج</td>
+                <td style={td}></td>
+                <td style={td}>{t.count}</td>
+                <td style={td}>{money(t.cost)}</td>
+                <td style={td}>{money(t.sell)}</td>
+                <td style={{ ...td, color: "var(--ok)" }}>{money(t.profit)}</td>
+              </tr>
+            </tfoot>
+          ) : null}
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function BuyModal({ product, requirePlayer, onClose, onBought }:
   { product: SProduct; requirePlayer: boolean; onClose: () => void; onBought: () => void }) {
   const [playerId, setPlayerId] = useState("");
@@ -357,6 +447,11 @@ const pkgCard: React.CSSProperties = {
 };
 const backBtn: React.CSSProperties = {
   background: "#fff", border: "1px solid var(--border)", padding: "7px 14px", borderRadius: 6, cursor: "pointer",
+};
+const filterBar: React.CSSProperties = {
+  display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap",
+  background: "#fff", padding: "12px 16px", borderRadius: 8, marginBottom: 14,
+  boxShadow: "0 2px 8px rgba(0,0,0,.06)",
 };
 const table: React.CSSProperties = {
   width: "100%", borderCollapse: "collapse", background: "#fff", fontSize: 13,

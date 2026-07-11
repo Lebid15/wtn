@@ -26,6 +26,7 @@ urlpatterns = [
     path("api/store/buy/", order_views.store_buy_view, name="store-buy"),
     path("api/store/orders/", order_views.store_orders_view, name="store-orders"),
     path("api/store/summary/", order_views.store_summary_view, name="store-summary"),
+    path("api/store/report/", order_views.store_report_view, name="store-report"),
     path("api/", include("core.urls")),
     path("api/catalog/", include("catalog.urls")),
     path("api/providers/", include("providers.urls")),

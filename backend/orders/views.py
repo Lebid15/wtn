@@ -194,6 +194,39 @@ def store_orders_view(request):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+def store_report_view(request):
+    """تقرير إجماليات الوكيل نفسه (Oyun Pin Toplam Raporu) — مجمّع حسب المنتج."""
+    user = request.user
+    qs = Order.objects.filter(tenant=user.tenant, dealer=user)
+    p = request.query_params
+    if not p.get("include_cancelled"):
+        qs = qs.exclude(status=Order.Status.CANCELLED)
+    if p.get("date_from"):
+        qs = qs.filter(created_at__date__gte=p["date_from"])
+    if p.get("date_to"):
+        qs = qs.filter(created_at__date__lte=p["date_to"])
+    rows = (
+        qs.values("game__name", "product__name")
+        .annotate(count=Count("id"), cost=Sum("cost_price"),
+                  sell=Sum("sell_price"), profit=Sum("profit"))
+        .order_by("game__name", "-count")
+    )
+    results = [{
+        "game": r["game__name"], "product": r["product__name"],
+        "count": r["count"], "cost": str(r["cost"] or 0),
+        "sell": str(r["sell"] or 0), "profit": str(r["profit"] or 0),
+    } for r in rows]
+    totals = qs.aggregate(count=Count("id"), cost=Sum("cost_price"),
+                          sell=Sum("sell_price"), profit=Sum("profit"))
+    return Response({
+        "results": results,
+        "products": len(results),
+        "totals": {k: str(v or 0) for k, v in totals.items()},
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def store_summary_view(request):
     """ملخّص لوحة الوكيل: رصيده + عدد طلباته الناجحة + أرباحه (من طلباته هو)."""
     user = request.user
