@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from core import services as wallet_services
 from core.models import User, WalletTransaction
-from catalog.models import Product, ProductPrice
+from catalog.models import AgentMargin, Product, ProductPrice
 from .models import Order
 
 
@@ -23,14 +23,28 @@ def _gen_receipt_no() -> str:
 
 
 def resolve_sell_price(dealer: User, product: Product) -> Decimal:
-    """السعر النهائي للوكيل: سعر مجموعته إن وُجد، وإلا السعر الموصى."""
+    """
+    السعر النهائي للمشتري:
+    1) سعر مجموعته (يحدّده صاحب المتجر) وإلا السعر الموصى.
+    2) إن كان المشتري دكاناً تابعاً لوكيل كبير، يُضاف هامش الوكيل الكبير للمنتج.
+    """
+    base = product.recommended_price
     if dealer.price_group_id:
         pp = ProductPrice.objects.filter(
             product=product, price_group_id=dealer.price_group_id
         ).first()
         if pp:
-            return pp.price
-    return product.recommended_price
+            base = pp.price
+
+    # هامش الوكيل الكبير (إن كان الدكان تابعاً له)
+    if dealer.parent_id and getattr(dealer.parent, "role", None) == User.Role.ANA_BAYI:
+        margin = AgentMargin.objects.filter(
+            agent_id=dealer.parent_id, product=product
+        ).first()
+        if margin and margin.margin_percent:
+            base = base * (Decimal("1") + margin.margin_percent / Decimal("100"))
+
+    return base.quantize(Decimal("0.01"))
 
 
 @transaction.atomic

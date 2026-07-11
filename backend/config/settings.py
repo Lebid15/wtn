@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "pool",
     "payments",
     "superadmin",
+    "agent",
 ]
 
 MIDDLEWARE = [

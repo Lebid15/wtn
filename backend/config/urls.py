@@ -31,4 +31,5 @@ urlpatterns = [
     path("api/pool/", include("pool.urls")),
     path("api/payments/", include("payments.urls")),
     path("api/platform/", include("superadmin.urls")),
+    path("api/agent/", include("agent.urls")),
 ]

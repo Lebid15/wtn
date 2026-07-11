@@ -89,6 +89,24 @@ class Product(models.Model):
         return self.recommended_price - self.cost_price
 
 
+class AgentMargin(models.Model):
+    """هامش الوكيل الكبير على منتج (نسبته % فوق سعره لدكاكينه)."""
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="agent_margins")
+    agent = models.ForeignKey(
+        "core.User", on_delete=models.CASCADE, related_name="margins"
+    )  # الوكيل الكبير
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="agent_margins")
+    margin_percent = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("0"))
+
+    class Meta:
+        db_table = "agent_margins"
+        unique_together = ("agent", "product")
+
+    def __str__(self):
+        return f"{self.agent.name} +{self.margin_percent}% على {self.product.name}"
+
+
 class ProductPrice(models.Model):
     """سعر منتج لمجموعة أسعار معيّنة (خلية في مصفوفة Fiyat Grupları)."""
 
