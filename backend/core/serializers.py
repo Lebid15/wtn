@@ -10,6 +10,18 @@ class TenantSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "subdomain", "status", "theme", "theme_color", "logo_url"]
 
 
+class SiteSettingsSerializer(serializers.ModelSerializer):
+    """إعدادات الموقع (Web Site Ayarları) القابلة للتعديل."""
+
+    class Meta:
+        model = Tenant
+        fields = [
+            "theme", "theme_color", "logo_url", "default_locale",
+            "founded_year", "short_name", "full_name", "address",
+            "email", "phone", "homepage_text", "footer_html",
+        ]
+
+
 class WalletSerializer(serializers.ModelSerializer):
     available = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
 

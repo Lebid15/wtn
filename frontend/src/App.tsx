@@ -11,6 +11,7 @@ import DealerPrices from "./pages/DealerPrices";
 import Providers from "./pages/Providers";
 import Orders from "./pages/Orders";
 import Pool from "./pages/Pool";
+import SiteSettings from "./pages/SiteSettings";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -47,7 +48,7 @@ export default function App() {
           <Route path="/ayarlar/accounts" element={P("حساباتي")} />
           <Route path="/ayarlar/ledger" element={P("حركات الحسابات")} />
           <Route path="/ayarlar/groups" element={P("مجموعات الوكلاء")} />
-          <Route path="/ayarlar/site" element={P("إعدادات الموقع")} />
+          <Route path="/ayarlar/site" element={<Protected><SiteSettings /></Protected>} />
           <Route path="/ayarlar/sms" element={P("إعدادات SMS")} />
 
           {/* Raporlar */}

@@ -23,6 +23,15 @@ class Tenant(models.Model):
     theme_color = models.CharField(max_length=9, blank=True, default="")  # لون مخصّص #RRGGBB
     logo_url = models.CharField(max_length=300, blank=True, default="")
     default_locale = models.CharField(max_length=5, default="ar")
+    # إعدادات الموقع (Web Site Ayarları)
+    founded_year = models.CharField(max_length=8, blank=True, default="")   # Kuruluş Yılı
+    short_name = models.CharField(max_length=60, blank=True, default="")    # Kısa İsim / Logo
+    full_name = models.CharField(max_length=120, blank=True, default="")    # Tam İsim
+    address = models.CharField(max_length=255, blank=True, default="")      # Adres
+    email = models.CharField(max_length=120, blank=True, default="")        # E-Posta
+    phone = models.CharField(max_length=40, blank=True, default="")         # Telefon
+    homepage_text = models.TextField(blank=True, default="")                # Anasayfa Orta Metin
+    footer_html = models.TextField(blank=True, default="")                  # Sayfa Altı Metin
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

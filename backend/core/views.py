@@ -10,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from . import services
 from .models import User, Wallet, WalletTransaction
-from .serializers import LoginSerializer, UserSerializer
+from .serializers import LoginSerializer, SiteSettingsSerializer, UserSerializer
 
 
 def _tokens_for(user: User) -> dict:
@@ -64,6 +64,23 @@ def login_view(request):
 def me_view(request):
     """معلومات المستخدم الحالي (للواجهة بعد الدخول)."""
     return Response(UserSerializer(request.user).data)
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([IsAuthenticated])
+def site_settings_view(request):
+    """قراءة/تحديث إعدادات موقع المستأجر الحالي (Web Site Ayarları)."""
+    tenant = request.user.tenant
+    if tenant is None:
+        return Response({"detail": "لا يوجد مستأجر"}, status=400)
+
+    if request.method == "PUT":
+        serializer = SiteSettingsSerializer(tenant, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    return Response(SiteSettingsSerializer(tenant).data)
 
 
 @api_view(["GET"])
