@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "providers",
     "orders",
     "pool",
+    "payments",
 ]
 
 MIDDLEWARE = [
