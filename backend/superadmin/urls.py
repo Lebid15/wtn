@@ -12,4 +12,6 @@ urlpatterns = [
     path("tenants/", views.tenants_view, name="platform-tenants"),
     path("tenants/<int:tenant_id>/subscription/", views.tenant_subscription_view, name="platform-tenant-subscription"),
     path("tenants/<int:tenant_id>/<str:action>/", views.tenant_status_view, name="platform-tenant-status"),
+    path("invoices/", views.invoices_view, name="platform-invoices"),
+    path("invoices/<int:invoice_id>/<str:action>/", views.invoice_status_view, name="platform-invoice-status"),
 ] + router.urls

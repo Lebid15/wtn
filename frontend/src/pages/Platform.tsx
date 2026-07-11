@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
+import Tickets from "../components/Tickets";
 
 interface Tenant {
   id: number; name: string; subdomain: string; status: string;
@@ -19,7 +20,7 @@ interface LibProduct {
   suggested_price: string; kupur: string;
 }
 
-type Tab = "tenants" | "library";
+type Tab = "tenants" | "library" | "invoices" | "messages";
 
 export default function Platform() {
   const { user, logout } = useAuth();
@@ -41,10 +42,19 @@ export default function Platform() {
       <div style={subnav}>
         <button onClick={() => setTab("tenants")} style={{ ...tabBtn, ...(tab === "tenants" ? tabActive : {}) }}>🏢 المستأجرون</button>
         <button onClick={() => setTab("library")} style={{ ...tabBtn, ...(tab === "library" ? tabActive : {}) }}>🌐 المنتجات العالمية</button>
+        <button onClick={() => setTab("invoices")} style={{ ...tabBtn, ...(tab === "invoices" ? tabActive : {}) }}>🧾 الفواتير</button>
+        <button onClick={() => setTab("messages")} style={{ ...tabBtn, ...(tab === "messages" ? tabActive : {}) }}>💬 الرسائل</button>
       </div>
 
       <div style={{ maxWidth: 1150, margin: "0 auto", padding: 24 }}>
-        {tab === "tenants" ? <TenantsTab /> : <LibraryTab />}
+        {tab === "tenants" && <TenantsTab />}
+        {tab === "library" && <LibraryTab />}
+        {tab === "invoices" && <BillingTab />}
+        {tab === "messages" && (
+          <div style={{ background: "#fff", borderRadius: 12, padding: 20 }}>
+            <Tickets canCreate={false} title="رسائل المتاجر" />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -267,6 +277,74 @@ function ManagePackages({ game, onClose }: { game: LibGame; onClose: () => void 
         </div>
       </div>
     </div>
+  );
+}
+
+/* ===== الفواتير ===== */
+function BillingTab() {
+  const [rows, setRows] = useState<any[]>([]);
+  const [totals, setTotals] = useState<any>(null);
+  const [filter, setFilter] = useState("all");
+
+  function load() {
+    const params: any = {};
+    if (filter !== "all") params.status = filter;
+    api.get("/platform/invoices/", { params }).then((r) => { setRows(r.data.results); setTotals(r.data.totals); });
+  }
+  useEffect(load, [filter]);
+
+  async function mark(inv: any) {
+    const action = inv.status === "paid" ? "unpaid" : "paid";
+    await api.post(`/platform/invoices/${inv.id}/${action}/`, {});
+    load();
+  }
+
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+        <h2 style={{ fontSize: 18 }}>فواتير الاشتراكات</h2>
+        <select value={filter} onChange={(e) => setFilter(e.target.value)} style={{ height: 34 }}>
+          <option value="all">الكل</option>
+          <option value="unpaid">غير مدفوعة</option>
+          <option value="paid">مدفوعة</option>
+        </select>
+        {totals && (
+          <span style={{ marginInlineStart: "auto", color: "#94a3b8", fontSize: 14 }}>
+            {totals.count} فاتورة · غير مدفوعة: {totals.unpaid} · الإجمالي: {totals.total_amount}
+          </span>
+        )}
+      </div>
+      <div style={{ overflow: "hidden", borderRadius: 10, border: "1px solid #1e293b" }}>
+        <table style={table}>
+          <thead>
+            <tr>{["#", "المتجر", "الخطة", "المبلغ", "الفترة", "الحالة", "إجراء"].map((h) => <th key={h} style={th}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={7} style={{ ...td, color: "#64748b", padding: 24 }}>لا فواتير — تُنشأ عند تفعيل اشتراك.</td></tr>
+            ) : rows.map((i) => (
+              <tr key={i.id} style={{ borderTop: "1px solid #1e293b" }}>
+                <td style={td}>{i.id}</td>
+                <td style={{ ...td, fontWeight: 700 }}>{i.tenant_name}</td>
+                <td style={td}>{i.plan_label}</td>
+                <td style={{ ...td, color: "#7dd3fc", fontWeight: 700 }}>{i.amount}</td>
+                <td style={{ ...td, color: "#94a3b8", fontSize: 12, direction: "ltr" }}>{i.period_start} → {i.period_end}</td>
+                <td style={td}>
+                  <span style={{ color: i.status === "paid" ? "#4ade80" : "#f87171", fontWeight: 700 }}>
+                    ● {i.status_label}
+                  </span>
+                </td>
+                <td style={td}>
+                  <button style={i.status === "paid" ? suspendBtn : activateBtn} onClick={() => mark(i)}>
+                    {i.status === "paid" ? "إلغاء الدفع" : "تعليم مدفوعة"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 

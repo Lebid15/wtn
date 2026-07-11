@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import Icon from "../components/Icon";
+import Tickets from "../components/Tickets";
 
 interface SProduct { id: number; name: string; price: string; require_player_id: boolean }
 interface SGame { id: number; name: string; image_url: string; require_player_id: boolean; products: SProduct[] }
@@ -11,13 +12,14 @@ interface Summary {
   orders: number; profit: string; sell: string; pending: number;
 }
 
-type Tab = "home" | "sell" | "orders" | "reports" | "wallet" | "settings";
+type Tab = "home" | "sell" | "orders" | "reports" | "wallet" | "support" | "settings";
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "home", label: "الرئيسية", icon: "home" },
   { key: "sell", label: "البيع", icon: "cart" },
   { key: "orders", label: "طلباتي", icon: "chart" },
   { key: "reports", label: "تقاريري", icon: "excel" },
   { key: "wallet", label: "محفظتي", icon: "wallet" },
+  { key: "support", label: "الدعم", icon: "chat" },
   { key: "settings", label: "إعداداتي", icon: "settings" },
 ];
 
@@ -29,11 +31,20 @@ export default function Store() {
   const nav = useNavigate();
   const [tab, setTab] = useState<Tab>("home");
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [unread, setUnread] = useState(0);
 
   function loadSummary() {
     api.get("/store/summary/").then((r) => setSummary(r.data)).catch(() => {});
   }
   useEffect(loadSummary, []);
+
+  // تحديث لحظي (polling) لعدّاد الرسائل غير المقروءة
+  useEffect(() => {
+    const poll = () => api.get("/tickets/unread-count/").then((r) => setUnread(r.data.unread)).catch(() => {});
+    poll();
+    const id = setInterval(poll, 15000);
+    return () => clearInterval(id);
+  }, [tab]);
 
   const balance = summary?.balance ?? user?.wallet?.balance ?? "0";
   const currency = summary?.currency ?? user?.wallet?.currency ?? "";
@@ -68,6 +79,9 @@ export default function Store() {
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{ ...tabBtn, ...(tab === t.key ? tabActive : {}) }}>
             <Icon name={t.icon} size={16} style={{ marginInlineEnd: 6 }} />{t.label}
+            {t.key === "support" && unread > 0 && (
+              <span style={{ background: "var(--danger)", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 9, padding: "1px 6px", marginInlineStart: 5 }}>{unread}</span>
+            )}
           </button>
         ))}
       </div>
@@ -78,6 +92,7 @@ export default function Store() {
         {tab === "orders" && <OrdersTab />}
         {tab === "reports" && <ReportsTab />}
         {tab === "wallet" && <WalletTab />}
+        {tab === "support" && <Tickets title="الدعم / مراسلة الإدارة" />}
         {tab === "settings" && <SettingsTab />}
       </div>
     </div>

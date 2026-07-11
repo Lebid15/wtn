@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from . import services
-from .models import DealerGroup, User, Wallet, WalletTransaction
+from .models import DealerGroup, Invoice, User, Wallet, WalletTransaction
 from .serializers import (
     DealerGroupSerializer, LoginSerializer, SiteSettingsSerializer,
     SmsSettingsSerializer, UserSerializer,
@@ -289,3 +289,28 @@ def wallet_transactions_view(request, dealer_id):
             "created_at": t.created_at.strftime("%Y-%m-%d %H:%M"),
         } for t in txns],
     })
+
+
+def _invoice_row(inv):
+    return {
+        "id": inv.id,
+        "tenant_name": inv.tenant.name,
+        "plan": inv.plan,
+        "plan_label": "سنوي" if inv.plan == "yearly" else "شهري",
+        "amount": str(inv.amount),
+        "period_start": inv.period_start.strftime("%Y-%m-%d"),
+        "period_end": inv.period_end.strftime("%Y-%m-%d"),
+        "status": inv.status,
+        "status_label": inv.get_status_display(),
+        "created_at": inv.created_at.strftime("%Y-%m-%d"),
+    }
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_invoices_view(request):
+    """فواتير اشتراك المستأجر الحالي (يراها صاحب المتجر)."""
+    if request.user.tenant_id is None:
+        return Response({"count": 0, "results": []})
+    qs = Invoice.objects.filter(tenant=request.user.tenant).select_related("tenant")
+    return Response({"count": qs.count(), "results": [_invoice_row(i) for i in qs]})

@@ -2,7 +2,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from . import views
+from . import tickets, views
 
 router = DefaultRouter()
 router.register("dealer-groups", views.DealerGroupViewSet, basename="dealer-group")
@@ -16,4 +16,12 @@ urlpatterns = [
     path("dealers/", views.dealers_view, name="dealers"),
     path("dealers/<int:dealer_id>/transactions/", views.wallet_transactions_view, name="wallet-txns"),
     path("dealers/<int:dealer_id>/<str:action>/", views.wallet_operation_view, name="wallet-op"),
+    # التذاكر / الرسائل
+    path("tickets/", tickets.tickets_view, name="tickets"),
+    path("tickets/unread-count/", tickets.unread_count_view, name="tickets-unread"),
+    path("tickets/<int:ticket_id>/", tickets.ticket_thread_view, name="ticket-thread"),
+    path("tickets/<int:ticket_id>/reply/", tickets.ticket_reply_view, name="ticket-reply"),
+    path("tickets/<int:ticket_id>/close/", tickets.ticket_close_view, name="ticket-close"),
+    # فواتير المستأجر الحالي
+    path("invoices/", views.my_invoices_view, name="my-invoices"),
 ] + router.urls

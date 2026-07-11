@@ -204,3 +204,72 @@ class WalletTransaction(models.Model):
 
     def __str__(self):
         return f"{self.type} {self.amount} → {self.balance_after}"
+
+
+# ─────────────────────────── التذاكر / الرسائل ───────────────────────────
+class Ticket(models.Model):
+    """تذكرة دعم/رسالة: من مستخدم إلى إدارة متجره أو إلى مالك المنصّة."""
+
+    class Target(models.TextChoices):
+        ADMIN = "admin", "إدارة المتجر"       # وكيل → صاحب المتجر
+        PLATFORM = "platform", "مالك المنصّة"  # صاحب المتجر → المنصّة
+
+    class Status(models.TextChoices):
+        OPEN = "open", "مفتوحة"
+        CLOSED = "closed", "مغلقة"
+
+    tenant = models.ForeignKey(Tenant, null=True, blank=True, on_delete=models.CASCADE, related_name="tickets")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="tickets")
+    target = models.CharField(max_length=10, choices=Target.choices, default=Target.ADMIN)
+    subject = models.CharField(max_length=200)
+    status = models.CharField(max_length=8, choices=Status.choices, default=Status.OPEN)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "tickets"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"[{self.get_target_display()}] {self.subject}"
+
+
+class TicketMessage(models.Model):
+    """رسالة داخل تذكرة."""
+
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="messages")
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="ticket_messages")
+    body = models.TextField()
+    read_by_other = models.BooleanField(default=False)  # هل قرأها الطرف الآخر؟
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "ticket_messages"
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.sender.name}: {self.body[:30]}"
+
+
+# ─────────────────────────── الفوترة (المنصّة ↔ المستأجرون) ───────────────────────────
+class Invoice(models.Model):
+    """فاتورة اشتراك يصدرها مالك المنصّة لمستأجر عند التفعيل/التجديد."""
+
+    class Status(models.TextChoices):
+        UNPAID = "unpaid", "غير مدفوعة"
+        PAID = "paid", "مدفوعة"
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="invoices")
+    plan = models.CharField(max_length=8)  # monthly | yearly
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    period_start = models.DateField()
+    period_end = models.DateField()
+    status = models.CharField(max_length=8, choices=Status.choices, default=Status.UNPAID)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "invoices"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"فاتورة {self.tenant.name} — {self.amount}"

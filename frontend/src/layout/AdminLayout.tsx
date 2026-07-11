@@ -33,6 +33,8 @@ const SUBNAV_AYARLAR = [
   { label: "مجموعات الوكلاء", to: "/ayarlar/groups" },
   { label: "إعدادات الموقع", to: "/ayarlar/site" },
   { label: "إعدادات SMS", to: "/ayarlar/sms" },
+  { label: "الرسائل", to: "/ayarlar/support" },
+  { label: "فواتير الاشتراك", to: "/ayarlar/invoices" },
 ];
 const SUBNAV_RAPORLAR = [
   { label: "تقرير الطلبات", to: "/reports" },

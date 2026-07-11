@@ -11,7 +11,8 @@ from catalog.models import LibraryGame, LibraryProduct
 from catalog.serializers import (
     LibraryGameDetailSerializer, LibraryGameSerializer, LibraryProductSerializer,
 )
-from core.models import Tenant, User, Wallet
+from core.models import Invoice, Tenant, User, Wallet
+from core.views import _invoice_row
 
 
 class IsPlatformOwner(BasePermission):
@@ -157,6 +158,12 @@ def tenant_subscription_view(request, tenant_id):
         t.sub_started_at = today
         t.sub_expires_at = base + timedelta(days=days)
         t.save(update_fields=["sub_plan", "sub_started_at", "sub_expires_at"])
+        # فاتورة اشتراك عن الفترة المُضافة
+        amount = t.sub_monthly_price if plan == Tenant.SubPlan.MONTHLY else t.sub_yearly_price
+        Invoice.objects.create(
+            tenant=t, plan=plan, amount=amount,
+            period_start=base, period_end=t.sub_expires_at,
+        )
 
     elif op == "cancel":
         t.sub_plan = Tenant.SubPlan.NONE
@@ -168,3 +175,35 @@ def tenant_subscription_view(request, tenant_id):
         return Response({"detail": "عملية غير معروفة"}, status=400)
 
     return Response(_tenant_row(t))
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsPlatformOwner])
+def invoices_view(request):
+    """كل فواتير الاشتراكات — لمالك المنصّة، مع فلتر حالة."""
+    qs = Invoice.objects.select_related("tenant").all()
+    st = request.query_params.get("status")
+    if st in ("paid", "unpaid"):
+        qs = qs.filter(status=st)
+    rows = [_invoice_row(i) for i in qs]
+    totals = {
+        "count": len(rows),
+        "unpaid": sum(1 for i in qs if i.status == Invoice.Status.UNPAID),
+        "total_amount": str(sum((i.amount for i in qs), Decimal("0"))),
+    }
+    return Response({"results": rows, "totals": totals})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsPlatformOwner])
+def invoice_status_view(request, invoice_id, action):
+    """تعليم فاتورة مدفوعة/غير مدفوعة."""
+    if action not in ("paid", "unpaid"):
+        return Response({"detail": "إجراء غير معروف"}, status=400)
+    try:
+        inv = Invoice.objects.select_related("tenant").get(pk=invoice_id)
+    except Invoice.DoesNotExist:
+        return Response({"detail": "الفاتورة غير موجودة"}, status=404)
+    inv.status = Invoice.Status.PAID if action == "paid" else Invoice.Status.UNPAID
+    inv.save(update_fields=["status"])
+    return Response(_invoice_row(inv))

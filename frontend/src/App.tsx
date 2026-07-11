@@ -5,6 +5,8 @@ import Login from "./pages/Login";
 import Dealers from "./pages/Dealers";
 import Games from "./pages/Games";
 import Library from "./pages/Library";
+import Support from "./pages/Support";
+import MyInvoices from "./pages/MyInvoices";
 import GameDetail from "./pages/GameDetail";
 import PinList from "./pages/PinList";
 import PriceGroups from "./pages/PriceGroups";
@@ -74,6 +76,8 @@ export default function App() {
           <Route path="/ayarlar/groups" element={Admin(<DealerGroups />)} />
           <Route path="/ayarlar/site" element={Admin(<SiteSettings />)} />
           <Route path="/ayarlar/sms" element={Admin(<SmsSettings />)} />
+          <Route path="/ayarlar/support" element={Admin(<Support />)} />
+          <Route path="/ayarlar/invoices" element={Admin(<MyInvoices />)} />
 
           {/* Raporlar */}
           <Route path="/reports" element={Admin(<Reports />)} />
