@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { api } from "../api";
+import Icon from "../components/Icon";
 
 interface Cell { price: string; custom: boolean }
 interface MatrixProduct {
@@ -58,11 +59,11 @@ export default function PriceGroups() {
 
       {/* شريط الأدوات */}
       <div style={toolbar}>
-        <button className="btn g" onClick={createGroup}>➕ إنشاء مجموعة أسعار</button>
-        <button className="btn">💱 تعديل سعر الصرف</button>
-        <button className="btn">📊 تسعير جماعي</button>
-        <button className="btn">🔄 تحديث التكاليف</button>
-        <button className="btn r">🗑 حذف مجموعة</button>
+        <button className="btn g" onClick={createGroup}><Icon name="plus" size={15} style={ib} />إنشاء مجموعة أسعار</button>
+        <button className="btn"><Icon name="dollar" size={15} style={ib} />تعديل سعر الصرف</button>
+        <button className="btn"><Icon name="chart" size={15} style={ib} />تسعير جماعي</button>
+        <button className="btn"><Icon name="refresh" size={15} style={ib} />تحديث التكاليف</button>
+        <button className="btn r"><Icon name="trash" size={15} style={ib} />حذف مجموعة</button>
       </div>
       <div style={note}>
         اضغط على أي خلية سعر لتعديلها. الخلية <b style={{ color: "var(--primary-dark)" }}>الملوّنة</b> = سعر
@@ -123,6 +124,7 @@ export default function PriceGroups() {
   );
 }
 
+const ib: React.CSSProperties = { marginInlineEnd: 5 };
 const toolbar: React.CSSProperties = {
   display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10,
 };

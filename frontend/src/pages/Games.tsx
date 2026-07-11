@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Game } from "../api";
+import Icon from "../components/Icon";
 
 export default function Games() {
   const [games, setGames] = useState<Game[]>([]);
@@ -17,7 +18,7 @@ export default function Games() {
     <div style={{ padding: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
         <h2 style={{ fontSize: 20, color: "var(--primary-dark)" }}>قائمة الألعاب</h2>
-        <button className="btn g">➕ إضافة لعبة</button>
+        <button className="btn g"><Icon name="plus" size={15} style={{ marginInlineEnd: 5 }} />إضافة لعبة</button>
         <span style={{ color: "var(--muted)", fontSize: 14 }}>({games.length} لعبة)</span>
       </div>
       <div style={hint}>

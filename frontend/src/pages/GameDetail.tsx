@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, type GameDetail as GameDetailType, type Product } from "../api";
+import Icon from "../components/Icon";
 
 export default function GameDetail() {
   const { id } = useParams();
@@ -125,7 +126,7 @@ export default function GameDetail() {
               <input style={{ width: 90 }} value={newP.kupur}
                 onChange={(e) => setNewP({ ...newP, kupur: e.target.value })} />
             </Field>
-            <button className="btn g" style={{ height: 32 }}>➕ إضافة</button>
+            <button className="btn g" style={{ height: 32 }}><Icon name="plus" size={14} style={{ marginInlineEnd: 4 }} />إضافة</button>
           </form>
 
           {/* جدول المنتجات */}
@@ -151,7 +152,11 @@ export default function GameDetail() {
                     <td style={td}>{p.status_label}</td>
                     <td style={td}>{p.is_parcali ? "نعم" : "لا"}</td>
                     <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{(p as any).created_at}</td>
-                    <td style={td}>⚙ ✏</td>
+                    <td style={td}>
+                      <div style={{ display: "flex", gap: 4, justifyContent: "center", color: "var(--muted)" }}>
+                        <Icon name="edit" size={15} color="var(--primary)" /><Icon name="settings" size={15} />
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}

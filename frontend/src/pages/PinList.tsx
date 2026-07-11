@@ -1,13 +1,18 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { api, type Product } from "../api";
+import { api, type Product, type Provider } from "../api";
 
 export default function PinList() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get("/catalog/products/").then((r) => setProducts(r.data)).finally(() => setLoading(false));
+    Promise.all([
+      api.get("/catalog/products/"),
+      api.get("/providers/", { params: { status: "active" } }),
+    ]).then(([pr, pv]) => { setProducts(pr.data); setProviders(pv.data); })
+      .finally(() => setLoading(false));
   }, []);
 
   // تجميع المنتجات حسب اللعبة (رؤوس صفراء)
@@ -37,6 +42,7 @@ export default function PinList() {
       <table style={table}>
         <thead>
           <tr>
+            <th style={{ ...th, width: 34 }}><input type="checkbox" /></th>
             <th style={{ ...th, width: 60 }}>ID</th>
             <th style={{ ...th, textAlign: "right", paddingInlineStart: 12 }}>اسم المنتج</th>
             <th style={th}>التكلفة</th>
@@ -50,10 +56,11 @@ export default function PinList() {
           {grouped.map(([game, items]) => (
             <Fragment key={game}>
               <tr>
-                <td colSpan={7} style={groupHead}>{game}</td>
+                <td colSpan={8} style={groupHead}>{game}</td>
               </tr>
               {items.map((p, i) => (
                 <tr key={p.id} style={{ background: i % 2 ? "var(--row-alt)" : "#fff" }}>
+                  <td style={td}><input type="checkbox" /></td>
                   <td style={{ ...td, color: "var(--muted)" }}>{p.id}</td>
                   <td style={{ ...td, textAlign: "right", paddingInlineStart: 12, fontWeight: 600 }}>
                     {p.status === "active" && <span style={{ color: "var(--ok)" }}>✔ </span>}
@@ -61,9 +68,9 @@ export default function PinList() {
                   </td>
                   <td style={td}>{money(p.cost_price)}</td>
                   <td style={td}>{money(p.recommended_price)}</td>
-                  <td style={td}><ApiSelect /></td>
-                  <td style={td}><ApiSelect fallback /></td>
-                  <td style={td}><ApiSelect fallback /></td>
+                  <td style={td}><ApiSelect providers={providers} /></td>
+                  <td style={td}><ApiSelect providers={providers} fallback /></td>
+                  <td style={td}><ApiSelect providers={providers} fallback /></td>
                 </tr>
               ))}
             </Fragment>
@@ -72,17 +79,18 @@ export default function PinList() {
       </table>
 
       <div style={note}>
-        ملاحظة: أعمدة الـ API (توجيه بثلاثة مستويات: رئيسي + بديلين) ستُفعّل عند بناء
-        قسم <b>مزوّدي API</b> — حالياً معطّلة كعنصر نائب مطابق للمرجع.
+        توجيه بثلاثة مستويات: يُرسل الطلب للمزوّد الرئيسي، وعند فشله يُجرّب البديل الأول
+        ثم الثاني تلقائياً. المزوّدون تُدارون من قسم <b>مزوّدي API</b>.
       </div>
     </div>
   );
 }
 
-function ApiSelect({ fallback = false }: { fallback?: boolean }) {
+function ApiSelect({ providers, fallback = false }: { providers: Provider[]; fallback?: boolean }) {
   return (
-    <select disabled style={{ width: 150, opacity: 0.6 }}>
-      <option>{fallback ? "بديل مغلق" : "— اختر —"}</option>
+    <select style={{ width: 150 }} defaultValue="">
+      <option value="">{fallback ? "بديل مغلق" : "— اختر —"}</option>
+      {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
     </select>
   );
 }

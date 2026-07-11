@@ -48,9 +48,9 @@ export default function Pool() {
           <input style={{ width: 240 }} value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })} />
         </div>
-        <button className="btn g" style={{ height: 32 }}>➕ إضافة</button>
-        <button type="button" className="btn">📤 إرسال/استلام بينات</button>
-        <button type="button" className="btn">📋 بيناتي</button>
+        <button className="btn g" style={{ height: 32 }}><Icon name="plus" size={15} style={{ marginInlineEnd: 5 }} />إضافة</button>
+        <button type="button" className="btn"><Icon name="refresh" size={15} style={{ marginInlineEnd: 5 }} />إرسال/استلام بينات</button>
+        <button type="button" className="btn"><Icon name="chart" size={15} style={{ marginInlineEnd: 5 }} />بيناتي</button>
       </form>
 
       {/* جدول المجموعات */}

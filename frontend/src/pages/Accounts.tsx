@@ -29,8 +29,8 @@ export default function Accounts() {
     <div style={{ padding: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
         <h2 style={{ fontSize: 20, color: "var(--primary-dark)" }}>حساباتي (البنوك والمحافظ)</h2>
-        <button className="btn g">➕ إضافة حساب</button>
-        <button className="btn">💱 تحديث الأرصدة</button>
+        <button className="btn g"><Icon name="plus" size={15} style={{ marginInlineEnd: 5 }} />إضافة حساب</button>
+        <button className="btn"><Icon name="refresh" size={15} style={{ marginInlineEnd: 5 }} />تحديث الأرصدة</button>
       </div>
 
       <table style={table}>

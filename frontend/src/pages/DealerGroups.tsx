@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import Icon from "../components/Icon";
 
 interface Group { id: number; name: string; dealer_count: number }
 
@@ -36,7 +37,7 @@ export default function DealerGroups() {
     <div style={{ padding: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
         <h2 style={{ fontSize: 20, color: "var(--primary-dark)" }}>مجموعات الوكلاء (Bayi Grupları)</h2>
-        <button className="btn g" onClick={addGroup}>➕ إضافة مجموعة</button>
+        <button className="btn g" onClick={addGroup}><Icon name="plus" size={15} style={{ marginInlineEnd: 5 }} />إضافة مجموعة</button>
       </div>
 
       <table style={table}>

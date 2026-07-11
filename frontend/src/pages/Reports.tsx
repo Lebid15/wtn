@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Dealer, type Game } from "../api";
+import Icon from "../components/Icon";
 
 interface Row { game: string; count: number; cost: string; sell: string; profit: string }
 interface Totals { count: string; cost: string; sell: string; profit: string }
@@ -70,8 +71,8 @@ export default function Reports() {
         <Field label="إلى تاريخ">
           <input type="date" value={filters.date_to} onChange={(e) => setFilters({ ...filters, date_to: e.target.value })} />
         </Field>
-        <button className="btn" onClick={run}>🔍 عرض التقرير</button>
-        <button className="btn g" onClick={exportCsv}>📊 تصدير Excel</button>
+        <button className="btn" onClick={run}><Icon name="search" size={15} style={{ marginInlineEnd: 5 }} />عرض التقرير</button>
+        <button className="btn g" onClick={exportCsv}><Icon name="excel" size={15} style={{ marginInlineEnd: 5 }} />تصدير Excel</button>
         <button className="btn r" onClick={clear}>إزالة الفلاتر</button>
       </div>
 
