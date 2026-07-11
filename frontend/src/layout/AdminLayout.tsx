@@ -13,11 +13,36 @@ const MAIN_TABS = [
 // أيقونات التنبيهات (يمين) — مطابقة لروح المرجع
 const ALERTS = ["💬", "🎮", "🔌", "👤", "⚠️", "💳"];
 
-// قائمة الإعدادات الفرعية (Ayarlar)
-const SUBNAV = [
-  "متابعة الدفع", "حساباتي", "حركات الحسابات", "قائمة الوكلاء",
-  "مجموعات الوكلاء", "إعدادات الموقع", "إعدادات SMS",
+// القوائم الفرعية لكل قسم (تتغيّر حسب التبويب النشط) — مطابقة لتبويبات المرجع
+const SUBNAV_OYUNPIN = [
+  { label: "متابعة الطلبات", to: "/oyunpin/orders" },
+  { label: "قائمة الألعاب", to: "/oyunpin" },
+  { label: "قائمة المنتجات", to: "/oyunpin/pin-list" },
+  { label: "مجموعات الأسعار", to: "/oyunpin/price-groups" },
+  { label: "أسعار الوكلاء", to: "/oyunpin/dealer-prices" },
+  { label: "بنك البينات", to: "/oyunpin/pool" },
+  { label: "مزوّدو API", to: "/oyunpin/providers" },
 ];
+const SUBNAV_AYARLAR = [
+  { label: "متابعة الدفع", to: "/ayarlar/payments" },
+  { label: "حساباتي", to: "/ayarlar/accounts" },
+  { label: "حركات الحسابات", to: "/ayarlar/ledger" },
+  { label: "قائمة الوكلاء", to: "/dealers" },
+  { label: "مجموعات الوكلاء", to: "/ayarlar/groups" },
+  { label: "إعدادات الموقع", to: "/ayarlar/site" },
+  { label: "إعدادات SMS", to: "/ayarlar/sms" },
+];
+const SUBNAV_RAPORLAR = [
+  { label: "تقرير الطلبات", to: "/reports" },
+  { label: "تقرير الأرباح", to: "/reports/profits" },
+  { label: "كشف الوكلاء", to: "/reports/dealers" },
+];
+
+function subnavFor(path: string) {
+  if (path.startsWith("/oyunpin")) return SUBNAV_OYUNPIN;
+  if (path.startsWith("/reports")) return SUBNAV_RAPORLAR;
+  return SUBNAV_AYARLAR; // /dealers + /ayarlar
+}
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -29,8 +54,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <div style={topbar}>
         <div style={{ display: "flex", gap: 1 }}>
           {MAIN_TABS.map((t) => {
-            const active = loc.pathname === t.to && t.key !== "home";
             const home = t.key === "home";
+            const section =
+              (t.key === "oyunpin" && loc.pathname.startsWith("/oyunpin")) ||
+              (t.key === "raporlar" && loc.pathname.startsWith("/reports")) ||
+              (t.key === "ayarlar" &&
+                (loc.pathname === "/dealers" || loc.pathname.startsWith("/ayarlar")));
+            const active = section && !home;
             return (
               <Link
                 key={t.key}
@@ -58,16 +88,16 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      {/* ===== Sub-nav ===== */}
+      {/* ===== Sub-nav (تتغيّر حسب القسم) ===== */}
       <div style={subnav}>
-        {SUBNAV.map((s, i) => (
-          <a
-            key={i}
-            style={{ ...subLink, ...(s === "قائمة الوكلاء" ? subActive : {}) }}
-          >
-            {s}
-          </a>
-        ))}
+        {subnavFor(loc.pathname).map((s) => {
+          const active = loc.pathname === s.to;
+          return (
+            <Link key={s.to} to={s.to} style={{ ...subLink, ...(active ? subActive : {}) }}>
+              {s.label}
+            </Link>
+          );
+        })}
       </div>
 
       {/* ===== المحتوى ===== */}

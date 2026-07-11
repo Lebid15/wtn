@@ -1,4 +1,6 @@
-"""API views للقلب: تسجيل الدخول (JWT + 2FA)، معلومات المستخدم الحالي."""
+"""API views للقلب: تسجيل الدخول (JWT + 2FA)، المستخدم، الوكلاء، المحفظة."""
+from decimal import Decimal, InvalidOperation
+
 import pyotp
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -6,7 +8,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User
+from . import services
+from .models import User, Wallet, WalletTransaction
 from .serializers import LoginSerializer, UserSerializer
 
 
@@ -92,3 +95,68 @@ def dealers_view(request):
             "children_count": u.children.count(),
         })
     return Response({"count": len(rows), "results": rows})
+
+
+def _get_dealer_wallet(request, dealer_id):
+    """يجلب محفظة وكيل ضمن نفس المستأجر (عزل)."""
+    return Wallet.objects.select_related("user").get(
+        user_id=dealer_id, tenant=request.user.tenant
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def wallet_operation_view(request, dealer_id, action):
+    """شحن/خصم رصيد وكيل (Finans İşlem +/−)."""
+    if action not in ("topup", "deduct"):
+        return Response({"detail": "عملية غير معروفة"}, status=400)
+    try:
+        wallet = _get_dealer_wallet(request, dealer_id)
+    except Wallet.DoesNotExist:
+        return Response({"detail": "الوكيل غير موجود"}, status=404)
+
+    try:
+        amount = Decimal(str(request.data.get("amount", "")))
+    except (InvalidOperation, TypeError):
+        return Response({"detail": "مبلغ غير صحيح"}, status=400)
+
+    note = request.data.get("note", "")
+    fn = services.topup if action == "topup" else services.deduct
+    try:
+        txn = fn(wallet.id, amount, created_by=request.user, note=note)
+    except services.WalletError as e:
+        return Response({"detail": str(e)}, status=400)
+
+    wallet.refresh_from_db()
+    return Response({
+        "balance": str(wallet.balance),
+        "transaction": {
+            "id": txn.id, "type": txn.type, "amount": str(txn.amount),
+            "balance_after": str(txn.balance_after),
+        },
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def wallet_transactions_view(request, dealer_id):
+    """كشف حركات محفظة وكيل (Hesap Hareketleri)."""
+    try:
+        wallet = _get_dealer_wallet(request, dealer_id)
+    except Wallet.DoesNotExist:
+        return Response({"detail": "الوكيل غير موجود"}, status=404)
+
+    txns = wallet.transactions.all()[:100]
+    return Response({
+        "dealer": {"id": wallet.user_id, "name": wallet.user.name,
+                   "balance": str(wallet.balance), "currency": wallet.currency},
+        "results": [{
+            "id": t.id,
+            "type": t.type,
+            "type_label": t.get_type_display(),
+            "amount": str(t.amount),
+            "balance_after": str(t.balance_after),
+            "note": t.note,
+            "created_at": t.created_at.strftime("%Y-%m-%d %H:%M"),
+        } for t in txns],
+    })

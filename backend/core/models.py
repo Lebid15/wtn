@@ -83,6 +83,13 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     country = models.CharField(max_length=2, default="SY")
     foreign_ip_allowed = models.BooleanField(default=False)  # Bayi Yurt Dışı Ip İzin
+    oyun_load_limit = models.DecimalField(  # Bayi Oyun Yükleme Limiti
+        max_digits=12, decimal_places=2, default=Decimal("10000")
+    )
+    price_group = models.ForeignKey(  # مجموعة أسعار الوكيل (Fiyat Grubu)
+        "catalog.PriceGroup", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="dealers",
+    )
 
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
     modules = models.JSONField(default=dict, blank=True)  # تفعيل الموديولات (النقاط الملوّنة)
