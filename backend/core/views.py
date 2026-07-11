@@ -2,15 +2,29 @@
 from decimal import Decimal, InvalidOperation
 
 import pyotp
-from rest_framework import status
+from rest_framework import status, viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from . import services
-from .models import User, Wallet, WalletTransaction
-from .serializers import LoginSerializer, SiteSettingsSerializer, UserSerializer
+from .models import DealerGroup, User, Wallet, WalletTransaction
+from .serializers import (
+    DealerGroupSerializer, LoginSerializer, SiteSettingsSerializer, UserSerializer,
+)
+
+
+class DealerGroupViewSet(viewsets.ModelViewSet):
+    """CRUD مجموعات الوكلاء (Bayi Grupları)."""
+    serializer_class = DealerGroupSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return DealerGroup.objects.filter(tenant=self.request.user.tenant)
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.user.tenant)
 
 
 def _tokens_for(user: User) -> dict:

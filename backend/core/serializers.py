@@ -1,7 +1,19 @@
 """DRF serializers للقلب."""
 from rest_framework import serializers
 
-from .models import Tenant, User, Wallet
+from .models import DealerGroup, Tenant, User, Wallet
+
+
+class DealerGroupSerializer(serializers.ModelSerializer):
+    dealer_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DealerGroup
+        fields = ["id", "name", "dealer_count"]
+        read_only_fields = ["tenant"]
+
+    def get_dealer_count(self, obj):
+        return 0  # سيُربط بالوكلاء لاحقاً
 
 
 class TenantSerializer(serializers.ModelSerializer):

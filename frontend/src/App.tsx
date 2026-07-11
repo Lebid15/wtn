@@ -15,6 +15,7 @@ import SiteSettings from "./pages/SiteSettings";
 import Accounts from "./pages/Accounts";
 import PaymentTracking from "./pages/PaymentTracking";
 import Reports from "./pages/Reports";
+import DealerGroups from "./pages/DealerGroups";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -50,7 +51,7 @@ export default function App() {
           <Route path="/ayarlar/payments" element={<Protected><PaymentTracking /></Protected>} />
           <Route path="/ayarlar/accounts" element={<Protected><Accounts /></Protected>} />
           <Route path="/ayarlar/ledger" element={P("حركات الحسابات")} />
-          <Route path="/ayarlar/groups" element={P("مجموعات الوكلاء")} />
+          <Route path="/ayarlar/groups" element={<Protected><DealerGroups /></Protected>} />
           <Route path="/ayarlar/site" element={<Protected><SiteSettings /></Protected>} />
           <Route path="/ayarlar/sms" element={P("إعدادات SMS")} />
 
