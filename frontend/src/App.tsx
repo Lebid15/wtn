@@ -10,6 +10,7 @@ import PriceGroups from "./pages/PriceGroups";
 import DealerPrices from "./pages/DealerPrices";
 import Providers from "./pages/Providers";
 import Orders from "./pages/Orders";
+import Pool from "./pages/Pool";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -36,7 +37,7 @@ export default function App() {
           <Route path="/oyunpin/orders" element={<Protected><Orders /></Protected>} />
           <Route path="/oyunpin/price-groups" element={<Protected><PriceGroups /></Protected>} />
           <Route path="/oyunpin/dealer-prices" element={<Protected><DealerPrices /></Protected>} />
-          <Route path="/oyunpin/pool" element={P("بنك البينات")} />
+          <Route path="/oyunpin/pool" element={<Protected><Pool /></Protected>} />
           <Route path="/oyunpin/providers" element={<Protected><Providers /></Protected>} />
           <Route path="/oyunpin/:id" element={<Protected><GameDetail /></Protected>} />
 

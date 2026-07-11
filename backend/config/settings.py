@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "catalog",
     "providers",
     "orders",
+    "pool",
 ]
 
 MIDDLEWARE = [
