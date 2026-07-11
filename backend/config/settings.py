@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "orders",
     "pool",
     "payments",
+    "superadmin",
 ]
 
 MIDDLEWARE = [

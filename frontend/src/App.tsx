@@ -17,6 +17,7 @@ import PaymentTracking from "./pages/PaymentTracking";
 import Reports from "./pages/Reports";
 import DealerGroups from "./pages/DealerGroups";
 import Store from "./pages/Store";
+import Platform from "./pages/Platform";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -44,6 +45,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/store" element={<BareProtected><Store /></BareProtected>} />
+          <Route path="/platform" element={<BareProtected><Platform /></BareProtected>} />
 
           {/* OyunPin */}
           <Route path="/oyunpin" element={<Protected><Games /></Protected>} />
