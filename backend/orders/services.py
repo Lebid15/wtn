@@ -101,6 +101,47 @@ def execute_order(order: Order, *, provider=None, pin="") -> Order:
     return order
 
 
+def dispatch_order(order: Order) -> Order:
+    """
+    التنفيذ التلقائي: يستدعي محوّل المزوّد ويطبّق النتيجة على الطلب.
+    يُستدعى بعد إنشاء الطلب (خارج معاملة الإنشاء، لأنه قد يتصل بالشبكة).
+    - success → ناجح + PIN.  - processing → قيد التنفيذ.  - failed → عالق.
+    لا يُسترجع المبلغ آلياً عند الفشل؛ يتركه للأدمن (إلغاء = استرجاع).
+    """
+    from providers.adapters.registry import adapter_for
+
+    provider = order.product.provider
+    adapter = adapter_for(provider)
+    if adapter is None:
+        return order  # يدوي أو بلا مزوّد — يبقى قيد الانتظار
+
+    try:
+        result = adapter.place_order(order, provider.config or {})
+    except Exception as e:  # أي خطأ غير متوقّع في المحوّل → عالق، لا يكسر الطلب
+        order.status = Order.Status.STUCK
+        order.provider = provider
+        order.api_response = f"خطأ محوّل: {e}"[:1000]
+        order.save(update_fields=["status", "provider", "api_response"])
+        return order
+
+    order.provider = provider
+    order.api_response = (result.note or "")[:1000]
+    if result.external_ref:
+        order.api_response = f"{order.api_response} · ref={result.external_ref}"[:1000]
+
+    if result.status == "success":
+        order.status = Order.Status.SUCCESS
+        order.pin_result = result.pin or ""
+        order.approved_at = timezone.now()
+    elif result.status == "processing":
+        order.status = Order.Status.PROCESSING
+    else:
+        order.status = Order.Status.STUCK
+
+    order.save(update_fields=["status", "provider", "pin_result", "api_response", "approved_at"])
+    return order
+
+
 @transaction.atomic
 def cancel_order(order: Order) -> Order:
     """إلغاء الطلب: يسترجع المبلغ لمحفظة الوكيل."""

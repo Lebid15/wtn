@@ -82,6 +82,7 @@ def orders_view(request):
             )
         except services.OrderError as e:
             return Response({"detail": str(e)}, status=http.HTTP_400_BAD_REQUEST)
+        _maybe_auto_execute(order)
         return Response(OrderSerializer(order).data, status=http.HTTP_201_CREATED)
 
     # GET: قائمة + فلاتر
@@ -170,7 +171,14 @@ def store_buy_view(request):
         )
     except services.OrderError as e:
         return Response({"detail": str(e)}, status=http.HTTP_400_BAD_REQUEST)
+    _maybe_auto_execute(order)
     return Response(OrderSerializer(order).data, status=http.HTTP_201_CREATED)
+
+
+def _maybe_auto_execute(order):
+    """ينفّذ الطلب آلياً إن كان منتجه تلقائياً وله مزوّد (بعد الإنشاء والالتزام)."""
+    if order.product.execution_type == Product.Execution.AUTO and order.product.provider_id:
+        services.dispatch_order(order)
 
 
 @api_view(["GET"])

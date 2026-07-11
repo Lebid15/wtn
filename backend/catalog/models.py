@@ -81,6 +81,12 @@ class Product(models.Model):
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
     is_parcali = models.BooleanField(default=False)  # يُقسّم لطلبات فرعية
     execution_type = models.CharField(max_length=8, choices=Execution.choices, default=Execution.AUTO)
+    # التنفيذ التلقائي: المزوّد ومعرّف الباقة لديه (ZNET oyun / Barakat package_id / بنك بينات)
+    provider = models.ForeignKey(
+        "providers.Provider", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="products",
+    )
+    provider_package_id = models.CharField(max_length=120, blank=True, default="")
     description = models.CharField(max_length=255, blank=True, default="")
     sort_order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
