@@ -14,6 +14,7 @@ import Pool from "./pages/Pool";
 import SiteSettings from "./pages/SiteSettings";
 import Accounts from "./pages/Accounts";
 import PaymentTracking from "./pages/PaymentTracking";
+import Reports from "./pages/Reports";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -54,7 +55,7 @@ export default function App() {
           <Route path="/ayarlar/sms" element={P("إعدادات SMS")} />
 
           {/* Raporlar */}
-          <Route path="/reports" element={P("تقرير الطلبات")} />
+          <Route path="/reports" element={<Protected><Reports /></Protected>} />
           <Route path="/reports/profits" element={P("تقرير الأرباح")} />
           <Route path="/reports/dealers" element={P("كشف الوكلاء")} />
 

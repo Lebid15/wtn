@@ -1,4 +1,5 @@
-"""API للطلبات (Takip): قائمة + إنشاء + تنفيذ + إلغاء."""
+"""API للطلبات (Takip): قائمة + إنشاء + تنفيذ + إلغاء + تقارير."""
+from django.db.models import Count, Sum
 from rest_framework import status as http
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -10,6 +11,53 @@ from providers.models import Provider
 from . import services
 from .models import Order
 from .serializers import OrderSerializer
+
+
+def _filtered_orders(request):
+    """طلبات المستأجر بعد تطبيق فلاتر التقرير (وكيل/لعبة/منتج/تاريخ/حالة)."""
+    qs = Order.objects.filter(tenant=request.user.tenant)
+    p = request.query_params
+    if p.get("dealer"):
+        qs = qs.filter(dealer_id=p["dealer"])
+    if p.get("game"):
+        qs = qs.filter(game_id=p["game"])
+    if p.get("product"):
+        qs = qs.filter(product_id=p["product"])
+    if p.get("date_from"):
+        qs = qs.filter(created_at__date__gte=p["date_from"])
+    if p.get("date_to"):
+        qs = qs.filter(created_at__date__lte=p["date_to"])
+    # التقارير تحسب الطلبات الناجحة فقط افتراضياً (Olumsuz işlemler dahil edilmez)
+    status = p.get("status", "success")
+    if status and status != "all":
+        qs = qs.filter(status=status)
+    return qs
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def report_summary_view(request):
+    """تقرير مجمّع حسب اللعبة (Oyun Pin Toplam Raporu)."""
+    qs = _filtered_orders(request)
+    rows = (
+        qs.values("game__name")
+        .annotate(count=Count("id"), cost=Sum("cost_price"),
+                  sell=Sum("sell_price"), profit=Sum("profit"))
+        .order_by("-count")
+    )
+    results = [{
+        "game": r["game__name"],
+        "count": r["count"],
+        "cost": str(r["cost"] or 0),
+        "sell": str(r["sell"] or 0),
+        "profit": str(r["profit"] or 0),
+    } for r in rows]
+    totals = qs.aggregate(count=Count("id"), cost=Sum("cost_price"),
+                          sell=Sum("sell_price"), profit=Sum("profit"))
+    return Response({
+        "results": results,
+        "totals": {k: str(v or 0) for k, v in totals.items()},
+    })
 
 
 @api_view(["GET", "POST"])
