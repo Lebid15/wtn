@@ -16,12 +16,20 @@ import Accounts from "./pages/Accounts";
 import PaymentTracking from "./pages/PaymentTracking";
 import Reports from "./pages/Reports";
 import DealerGroups from "./pages/DealerGroups";
+import Store from "./pages/Store";
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <div style={{ padding: 40, textAlign: "center" }}>جارٍ التحميل...</div>;
   if (!user) return <Navigate to="/login" replace />;
   return <AdminLayout>{children}</AdminLayout>;
+}
+
+function BareProtected({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div style={{ padding: 40, textAlign: "center" }}>جارٍ التحميل...</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  return <>{children}</>;
 }
 
 function Placeholder({ title }: { title: string }) {
@@ -35,6 +43,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/store" element={<BareProtected><Store /></BareProtected>} />
 
           {/* OyunPin */}
           <Route path="/oyunpin" element={<Protected><Games /></Protected>} />

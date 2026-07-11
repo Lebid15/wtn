@@ -101,6 +101,55 @@ def orders_view(request):
     })
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def store_catalog_view(request):
+    """كتالوج المتجر: الألعاب النشطة ومنتجاتها بسعر المشتري (سعر مجموعته)."""
+    from catalog.models import Game
+
+    user = request.user
+    games = Game.objects.filter(
+        tenant=user.tenant, status=Game.Status.ACTIVE
+    ).prefetch_related("products").order_by("sort_order")
+    result = []
+    for g in games:
+        products = []
+        for p in g.products.filter(status=Product.Status.ACTIVE):
+            products.append({
+                "id": p.id,
+                "name": p.name,
+                "price": str(services.resolve_sell_price(user, p)),
+                "require_player_id": g.require_player_id,
+            })
+        if products:
+            result.append({
+                "id": g.id, "name": g.name, "image_url": g.image_url,
+                "require_player_id": g.require_player_id, "products": products,
+            })
+    return Response({"games": result})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def store_buy_view(request):
+    """شراء من المتجر: ينشئ طلباً للمستخدم الحالي (يخصم محفظته)."""
+    try:
+        product = Product.objects.select_related("game").get(
+            pk=request.data.get("product"), tenant=request.user.tenant
+        )
+    except Product.DoesNotExist:
+        return Response({"detail": "المنتج غير موجود"}, status=404)
+    try:
+        order = services.create_order(
+            request.user, product,
+            player_id=request.data.get("player_id", ""),
+            customer_phone=request.data.get("customer_phone", ""),
+        )
+    except services.OrderError as e:
+        return Response({"detail": str(e)}, status=http.HTTP_400_BAD_REQUEST)
+    return Response(OrderSerializer(order).data, status=http.HTTP_201_CREATED)
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def order_execute_view(request, order_id):

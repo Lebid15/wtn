@@ -18,8 +18,12 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from orders import views as order_views
+
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/store/catalog/", order_views.store_catalog_view, name="store-catalog"),
+    path("api/store/buy/", order_views.store_buy_view, name="store-buy"),
     path("api/", include("core.urls")),
     path("api/catalog/", include("catalog.urls")),
     path("api/providers/", include("providers.urls")),
