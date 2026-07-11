@@ -195,6 +195,16 @@ wtn/
   تعديل مضمّن (inline) + حذف.
 - **اختبار:** إنشاء 3 مجموعات عبر API + عرضها ✅.
 
+#### [المرجع] مواصفات API المزوّدين الخارجيين
+- حُفظت في `docs/integrations/PROVIDER_API_SPEC.md` (من المالك).
+- تغطّي 3 مزوّدين: **ZNET** (مصادقة query: kod/sifre) · **Barakat/Apstore**
+  (header api-token) · **Internal** (header api-token + X-Tenant-Host).
+- لكل مزوّد: get_balance · list_products · place_order · fetch_status —
+  مع الـ endpoints وصيغ الرد وخرائط الحالات.
+- **الاستخدام:** ستُبنى منها **محوّلات (adapters)** فعلية في موديول providers
+  لتنفيذ الطلبات تلقائياً (حقل `Provider.config` يخزّن المصادقة/الـ base_url).
+  حالياً التنفيذ يدوي؛ لاحقاً نضيف التنفيذ التلقائي عبر هذه المحوّلات + Celery.
+
 ### حالة الجلسة 1
 ✅ نظام شغّال end-to-end: دخول (JWT) → لوحة مطابقة → قائمة وكلاء → محفظة
 (شحن/خصم + حماية ائتمانية + دفتر أستاذ) → **كتالوج ألعاب ومنتجات بأسعار وأرباح**.
