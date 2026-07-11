@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import Icon from "../components/Icon";
@@ -25,6 +26,7 @@ const money = (v: string | number) =>
 
 export default function Store() {
   const { user, logout } = useAuth();
+  const nav = useNavigate();
   const [tab, setTab] = useState<Tab>("home");
   const [summary, setSummary] = useState<Summary | null>(null);
 
@@ -49,6 +51,11 @@ export default function Store() {
           <span style={walletChip}>
             الرصيد: <b style={{ color: Number(balance) < 0 ? "#ffd0cb" : "#fff" }}>{money(balance)}</b> {currency}
           </span>
+          {user?.role === "ana_bayi" && (
+            <button onClick={() => nav("/bigagent")} style={linkBtn}>
+              <Icon name="building" size={14} style={{ marginInlineEnd: 5 }} />لوحة الوكيل الكبير
+            </button>
+          )}
           <button onClick={logout} style={linkBtn}>
             <Icon name="logout" size={14} style={{ marginInlineEnd: 5 }} />خروج آمن
           </button>
