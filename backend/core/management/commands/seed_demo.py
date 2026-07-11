@@ -67,3 +67,33 @@ class Command(BaseCommand):
                         note="رصيد افتتاحي تجريبي",
                     )
         self.stdout.write(self.style.SUCCESS(f"تم إنشاء {len(DEMO_DEALERS)} وكلاء."))
+
+        # الوكيل الكبير (ana_bayi) + دكان تابع له — لعرض لوحة /bigagent
+        big, created = User.objects.get_or_create(
+            login_id="5552222222",
+            defaults=dict(
+                tenant=tenant, role=User.Role.ANA_BAYI, name="الوكيل الكبير",
+                status=User.Status.ACTIVE, modules={"oyun": True},
+            ),
+        )
+        if created:
+            big.set_password("big123")
+            big.save()
+            Wallet.objects.create(tenant=tenant, user=big, balance=Decimal("5000"))
+        self.stdout.write(f"وكيل كبير: {big.login_id} / big123")
+
+        shop, created = User.objects.get_or_create(
+            login_id="7770000001",
+            defaults=dict(
+                tenant=tenant, role=User.Role.BAYI, parent=big, name="دكان سمير",
+                status=User.Status.ACTIVE, modules={"oyun": True},
+            ),
+        )
+        if created:
+            shop.set_password("shop123")
+            shop.save()
+            Wallet.objects.create(tenant=tenant, user=shop, balance=Decimal("1000"))
+        elif shop.parent_id != big.id:
+            shop.parent = big
+            shop.save(update_fields=["parent"])
+        self.stdout.write(f"دكان تحت الوكيل الكبير: {shop.login_id} / shop123")

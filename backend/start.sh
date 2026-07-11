@@ -4,19 +4,23 @@ set -e
 
 python manage.py migrate --noinput
 
-# البذور تُزرع فقط إن كانت القاعدة فارغة (لا تتكرر عند كل نشر).
+# البذور: seed_demo متسامح (get_or_create) فيُشغَّل دائماً ليُنشئ أي حسابات ناقصة
+# (مثل الوكيل الكبير)؛ أما بذور الكتالوج الثقيلة فتُزرع مرّة واحدة فقط (قاعدة فارغة).
 python - <<'PY'
 import os, django, subprocess
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
-from core.models import Tenant
-if not Tenant.objects.exists():
-    for cmd in ["seed_demo", "seed_catalog", "seed_providers",
+from catalog.models import Product
+
+subprocess.run(["python", "manage.py", "seed_demo"], check=False)
+
+if not Product.objects.exists():
+    for cmd in ["seed_catalog", "seed_providers",
                 "seed_pools", "seed_payments", "seed_platform"]:
         print(f"seeding: {cmd}")
         subprocess.run(["python", "manage.py", cmd], check=False)
 else:
-    print("seed skipped (data already present)")
+    print("catalog seeds skipped (data already present)")
 PY
 
 exec gunicorn config.wsgi:application \
