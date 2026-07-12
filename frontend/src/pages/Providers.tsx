@@ -97,14 +97,17 @@ export default function Providers() {
 }
 
 const table: React.CSSProperties = {
-  width: "100%", borderCollapse: "collapse", background: "#fff", fontSize: 14,
+  width: "100%", borderCollapse: "collapse", background: "var(--surface)", fontSize: 13.5,
 };
 const th: React.CSSProperties = {
-  background: "var(--th-bg)", color: "#fff", padding: "10px 6px",
-  textAlign: "center", fontWeight: 600,
+  background: "var(--surface-2)", color: "var(--text)", padding: "11px 10px",
+  textAlign: "center", fontWeight: 800, fontSize: 12.5, whiteSpace: "nowrap",
+  border: "1px solid var(--border)", borderTop: 0,
 };
 const td: React.CSSProperties = {
-  padding: "9px 6px", textAlign: "center", borderBottom: "1px solid #edf1f2",
+  padding: 10, textAlign: "center", whiteSpace: "nowrap", verticalAlign: "middle",
+  background: "var(--surface)", border: "1px solid var(--border)",
+  borderBottom: "3px solid var(--row-sep)",
 };
 const note: React.CSSProperties = {
   background: "#f6f8f9", border: "1px solid #dbe3e5", color: "var(--muted)",

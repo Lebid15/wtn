@@ -614,15 +614,17 @@ const filterBar: React.CSSProperties = {
   boxShadow: "0 2px 8px rgba(0,0,0,.06)",
 };
 const table: React.CSSProperties = {
-  width: "100%", borderCollapse: "collapse", background: "#fff", fontSize: 13,
-  boxShadow: "0 2px 8px rgba(0,0,0,.06)", borderRadius: 8, overflow: "hidden",
+  width: "100%", borderCollapse: "collapse", background: "var(--surface)", fontSize: 13.5,
 };
 const th: React.CSSProperties = {
-  background: "var(--primary-dark)", color: "#fff", padding: "10px 8px", fontWeight: 600,
-  fontSize: 12, textAlign: "center", whiteSpace: "nowrap",
+  background: "var(--surface-2)", color: "var(--text)", padding: "11px 10px",
+  textAlign: "center", fontWeight: 800, fontSize: 12.5, whiteSpace: "nowrap",
+  border: "1px solid var(--border)", borderTop: 0,
 };
 const td: React.CSSProperties = {
-  padding: "9px 8px", textAlign: "center", borderBottom: "1px solid #eef1f2", whiteSpace: "nowrap",
+  padding: 10, textAlign: "center", whiteSpace: "nowrap", verticalAlign: "middle",
+  background: "var(--surface)", border: "1px solid var(--border)",
+  borderBottom: "3px solid var(--row-sep)",
 };
 const overlay: React.CSSProperties = {
   position: "fixed", inset: 0, background: "rgba(0,0,0,.45)",

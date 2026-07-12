@@ -214,6 +214,16 @@ const statCard: React.CSSProperties = {
   flex: 1, minWidth: 200, background: "#fff", borderRadius: 12, padding: "20px 22px",
   boxShadow: "0 2px 8px rgba(0,0,0,.05)",
 };
-const table: React.CSSProperties = { width: "100%", borderCollapse: "collapse", background: "#fff", fontSize: 14 };
-const th: React.CSSProperties = { background: "var(--th-bg)", color: "#fff", padding: "10px 6px", textAlign: "center", fontWeight: 600 };
-const td: React.CSSProperties = { padding: "9px 6px", textAlign: "center", borderBottom: "1px solid #edf1f2" };
+const table: React.CSSProperties = {
+  width: "100%", borderCollapse: "collapse", background: "var(--surface)", fontSize: 13.5,
+};
+const th: React.CSSProperties = {
+  background: "var(--surface-2)", color: "var(--text)", padding: "11px 10px",
+  textAlign: "center", fontWeight: 800, fontSize: 12.5, whiteSpace: "nowrap",
+  border: "1px solid var(--border)", borderTop: 0,
+};
+const td: React.CSSProperties = {
+  padding: 10, textAlign: "center", whiteSpace: "nowrap", verticalAlign: "middle",
+  background: "var(--surface)", border: "1px solid var(--border)",
+  borderBottom: "3px solid var(--row-sep)",
+};
