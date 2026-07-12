@@ -14,6 +14,7 @@
     --topbar: #3a6b73; --topbar-soft: rgba(255,255,255,.16);
     --ok: #1f8a4c; --ok-tint: #e7f4ec; --debt: #d6335a; --debt-tint: #fbe9ee; --warn: #c1692a;
     --announce: #3f8f86; --announce-2: #357a77; --ticker: #b23a48;
+    --row-sep: #dbecd2; --info: #2b6cb8;
     --shadow: 0 1px 2px rgba(20,40,45,.04), 0 8px 24px rgba(20,40,45,.06);
     --radius: 14px;
   }
@@ -24,6 +25,7 @@
       --primary-strong:#5eead4; --primary-tint:#16302b; --topbar:#0f2b2e; --topbar-soft:rgba(255,255,255,.14);
       --ok:#34d399; --ok-tint:#14312a; --debt:#fb7185; --debt-tint:#34181f; --warn:#f59e0b;
       --announce:#164e4a; --announce-2:#0f3b39; --ticker:#e05265;
+      --row-sep:#22362b; --info:#7ab3ff;
       --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
     }
   }
@@ -33,6 +35,7 @@
     --primary-strong:#2b545b; --primary-tint:#e9f0f0; --topbar:#3a6b73; --topbar-soft:rgba(255,255,255,.16);
     --ok:#1f8a4c; --ok-tint:#e7f4ec; --debt:#d6335a; --debt-tint:#fbe9ee; --warn:#c1692a;
     --announce:#3f8f86; --announce-2:#357a77; --ticker:#b23a48;
+    --row-sep:#dbecd2; --info:#2b6cb8;
     --shadow:0 1px 2px rgba(20,40,45,.04),0 8px 24px rgba(20,40,45,.06);
   }
   :root[data-theme="dark"] {
@@ -41,6 +44,7 @@
     --primary-strong:#5eead4; --primary-tint:#16302b; --topbar:#0f2b2e; --topbar-soft:rgba(255,255,255,.14);
     --ok:#34d399; --ok-tint:#14312a; --debt:#fb7185; --debt-tint:#34181f; --warn:#f59e0b;
     --announce:#164e4a; --announce-2:#0f3b39; --ticker:#e05265;
+      --row-sep:#22362b; --info:#7ab3ff;
     --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
   }
 
@@ -103,7 +107,7 @@
   .announce.is-empty { background: var(--surface-2); border-bottom: 1px solid var(--border); }
   .announce.is-empty .announce-main { visibility: hidden; }
   .announce-main {
-    display: flex; align-items: center; gap: 12px; max-width: 1180px; margin: 0 auto;
+    display: flex; align-items: center; gap: 12px; max-width: 1320px; margin: 0 auto;
     padding: 10px 22px; width: 100%;
   }
   .announce-tag {
@@ -129,7 +133,7 @@
   @media (prefers-reduced-motion: reduce) { .ticker-inner { animation: none; } }
 
   /* ============ Content ============ */
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 22px 40px; }
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 24px 22px 40px; }
   .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
   .head .eyebrow { color: var(--primary-strong); font-size: 12px; font-weight: 700; letter-spacing: .08em; }
   .head h1 { margin: 4px 0 2px; font-size: 23px; font-weight: 800; letter-spacing: -.01em; }
@@ -182,21 +186,51 @@
   .count { color: var(--muted); font-size: 13px; }
   .count b { color: var(--ink); }
 
-  /* ============ Table ============ */
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
-  .table-scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; }
-  thead th {
-    position: sticky; top: 0; background: var(--surface-2); color: var(--muted);
-    font-size: 11.5px; font-weight: 700; letter-spacing: .03em; text-align: center;
-    padding: 13px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  /* ============ نمط الجدول المعتمد (grid) — يُعمَّم لاحقاً على كل جداول المشروع ============
+     مستوحى من المرجع: حدود شبكية واضحة بين الأعمدة + فاصل أخضر فاتح مميّز بين الصفوف. */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 22px; }
+  .card-title {
+    display: flex; align-items: center; gap: 9px; padding: 13px 16px;
+    font-weight: 800; font-size: 15px; color: var(--ink);
+    background: var(--surface-2); border-bottom: 1px solid var(--border);
   }
-  thead th.start { text-align: start; padding-inline-start: 20px; }
-  tbody td { padding: 12px 10px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
-  tbody tr { transition: background .12s; }
-  tbody tr:nth-child(even) { background: var(--surface-2); }
-  tbody tr:hover { background: var(--primary-tint); }
-  tbody tr:last-child td { border-bottom: 0; }
+  .card-title .ico { color: var(--primary); }
+  .table-scroll { overflow-x: auto; }
+  table.grid { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.grid thead th {
+    background: var(--surface-2); color: var(--ink); font-size: 12.5px; font-weight: 800;
+    text-align: center; padding: 11px 10px; white-space: nowrap;
+    border: 1px solid var(--border); border-top: 0;
+  }
+  table.grid tbody td {
+    padding: 10px; text-align: center; white-space: nowrap; vertical-align: middle;
+    background: var(--surface); border: 1px solid var(--border);
+    transition: background .12s;
+  }
+  table.grid th:first-child, table.grid td:first-child { border-inline-start: 0; }
+  table.grid th:last-child,  table.grid td:last-child  { border-inline-end: 0; }
+  /* الفاصل المميّز بين الصفوف (مثل المرجع) */
+  table.grid tbody tr { border-bottom: 3px solid var(--row-sep); }
+  table.grid tbody tr:last-child { border-bottom: 0; }
+  table.grid tbody tr:hover td { background: var(--primary-tint); }
+  .cell-start { text-align: start !important; padding-inline-start: 14px !important; }
+  table.grid input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; }
+  /* أيقونة اللعبة */
+  .gicon {
+    width: 36px; height: 36px; border-radius: 8px; display: inline-flex;
+    align-items: center; justify-content: center; color: #fff; font-weight: 800;
+    font-size: 12px; letter-spacing: .02em; box-shadow: inset 0 -8px 14px rgba(0,0,0,.18);
+  }
+  /* أعمدة الأموال بالنمط المرجعي: شراء أزرق · بيع غامق · ربح أخضر */
+  .buy    { color: var(--info); font-weight: 700; }
+  .sell   { color: var(--ink);  font-weight: 700; }
+  .profit { color: var(--ok);   font-weight: 700; }
+  /* نقطة الحالة */
+  .stdot { display: inline-block; width: 13px; height: 13px; border-radius: 50%; box-shadow: inset 0 -2px 3px rgba(0,0,0,.25); }
+  .stdot.ok { background: #35c245; }
+  .stdot.wait { background: #e8b013; }
+  .stdot.err { background: #dd4444; }
+  .waitlbl { color: var(--muted); font-size: 12.5px; }
   .bid { color: var(--faint); font-size: 12.5px; }
   .dealer { text-align: start; padding-inline-start: 20px; }
   .dealer .name { font-weight: 700; color: var(--ink); }
@@ -295,7 +329,7 @@
         <p>إدارة أرصدة الوكلاء وحدودهم الائتمانية وحالتهم — نموذج تصميم للمراجعة.</p>
       </div>
       <div style="display:flex; align-items:center; gap:10px">
-        <span class="ver">نسخة المعاينة · v6</span>
+        <span class="ver">نسخة المعاينة · v7</span>
         <button class="theme-btn" id="themeBtn" aria-label="تبديل المظهر">
           <span id="themeIco"></span><span id="themeTxt">داكن</span>
         </button>
@@ -339,12 +373,14 @@
     </div>
 
     <div class="card">
+      <div class="card-title"><span class="ico" data-i="users"></span> قائمة الوكلاء</div>
       <div class="table-scroll">
-        <table>
+        <table class="grid">
           <thead>
             <tr>
+              <th><input type="checkbox" title="تحديد الكل"></th>
               <th>الرقم</th>
-              <th class="start">اسم الوكيل</th>
+              <th class="cell-start">اسم الوكيل</th>
               <th>الرصيد</th>
               <th>الحد الائتماني</th>
               <th>الحالة</th>
@@ -354,6 +390,33 @@
             </tr>
           </thead>
           <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== نفس نمط الجدول مطبَّق على "متابعة الطلبات" (كما في المرجع) لإثبات قابليته للتعميم ===== -->
+    <div class="card">
+      <div class="card-title"><span class="ico" data-i="chart"></span> متابعة الطلبات — نفس النمط المعتمد</div>
+      <div class="table-scroll">
+        <table class="grid">
+          <thead>
+            <tr>
+              <th><input type="checkbox" title="تحديد الكل"></th>
+              <th>اللعبة</th>
+              <th>رقم الفيش</th>
+              <th>الوكيل</th>
+              <th class="cell-start">اسم المنتج</th>
+              <th>هاتف الزبون / معرّف اللاعب</th>
+              <th>الشراء</th>
+              <th>البيع</th>
+              <th>الربح</th>
+              <th>الحالة</th>
+              <th>طباعة / SMS</th>
+              <th>API</th>
+              <th>الانتظار</th>
+            </tr>
+          </thead>
+          <tbody id="orderRows"></tbody>
         </table>
       </div>
     </div>
@@ -383,6 +446,8 @@
     edit:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
     logout:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>',
     mega:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>',
+    print:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>',
+    sms:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>',
     moon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
     sun:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
   };
@@ -405,12 +470,13 @@
   function render(list) {
     const rows = document.getElementById('rows');
     document.getElementById('count').innerHTML = 'العدد: <b>' + list.length + '</b>';
-    if (!list.length) { rows.innerHTML = '<tr><td colspan="8" class="empty">لا يوجد وكلاء مطابقون.</td></tr>'; return; }
+    if (!list.length) { rows.innerHTML = '<tr><td colspan="9" class="empty">لا يوجد وكلاء مطابقون.</td></tr>'; return; }
     rows.innerHTML = list.map(d => {
       const cls = d.bal < 0 ? 'neg' : (d.bal > 0 ? 'pos' : 'zero');
       return `<tr>
+        <td><input type="checkbox"></td>
         <td class="bid num">${d.bid}</td>
-        <td class="dealer">
+        <td class="dealer cell-start">
           <div class="name">${d.name} ${d.kids ? `<span class="kids">(${d.kids})</span>` : ''}</div>
           <div class="sub">آخر دخول: اليوم</div>
         </td>
@@ -468,6 +534,36 @@
   document.getElementById('announceClose').addEventListener('click', () => {
     document.getElementById('announce').classList.add('is-empty');
   });
+
+  // ===== جدول متابعة الطلبات (بيانات تجريبية بنفس بنية المرجع) =====
+  const ORDERS = [
+    { g:'SO',  gc:'#101418,#2c343d', fis:'159362', bayi:'ابو سلمى',       prod:'somatch 20.000',   tel:'5525593340', pid:'7290334',  buy:118.90,  sell:124.31,  win:5.41,  st:'ok',   api:'barakat',  wait:'مكتمل' },
+    { g:'SO',  gc:'#101418,#2c343d', fis:'159361', bayi:'ابو سلمى',       prod:'somatch 20.000',   tel:'5525593340', pid:'7290334',  buy:118.90,  sell:124.31,  win:5.41,  st:'ok',   api:'barakat',  wait:'مكتمل' },
+    { g:'SO',  gc:'#101418,#2c343d', fis:'159360', bayi:'ابو سلمى',       prod:'somatch 100.000',  tel:'5525593340', pid:'7290334',  buy:594.50,  sell:604.90,  win:10.40, st:'ok',   api:'barakat',  wait:'مكتمل' },
+    { g:'SS',  gc:'#5b21b6,#8b5cf6', fis:'159359', bayi:'ابو ليمار ازمير', prod:'SoulStar 200.000', tel:'5383817895', pid:'86941118', buy:1004.75, sell:1017.72, win:12.97, st:'ok',   api:'Ap4Store', wait:'مكتمل' },
+    { g:'SS',  gc:'#5b21b6,#8b5cf6', fis:'159358', bayi:'ابو ليمار ازمير', prod:'SoulStar 100.000', tel:'5383817895', pid:'74041172', buy:502.37,  sell:508.86,  win:6.49,  st:'ok',   api:'Ap4Store', wait:'مكتمل' },
+    { g:'HV',  gc:'#b45309,#f59e0b', fis:'159357', bayi:'وكالة الخال',     prod:'Hiya 5.000',       tel:'5387940718', pid:'—',        buy:249.09,  sell:264.22,  win:15.13, st:'wait', api:'Tweetpin', wait:'قيد المعالجة' },
+  ];
+  document.getElementById('orderRows').innerHTML = ORDERS.map(o => `<tr>
+    <td><input type="checkbox"></td>
+    <td><span class="gicon" style="background:linear-gradient(135deg,${o.gc})">${o.g}</span></td>
+    <td class="num">${o.fis}</td>
+    <td>${o.bayi}</td>
+    <td class="cell-start">${o.prod}</td>
+    <td class="num" style="line-height:1.35">${o.tel}<br><span style="color:var(--faint)">${o.pid}</span></td>
+    <td class="buy num">${money(o.buy)} ل.ت</td>
+    <td class="sell num">${money(o.sell)} ل.ت</td>
+    <td class="profit num">${money(o.win)} ل.ت</td>
+    <td><span class="stdot ${o.st}"></span></td>
+    <td>
+      <div class="actions">
+        <button class="iconbtn info" title="طباعة">${I.print}</button>
+        <button class="iconbtn up" title="إرسال SMS">${I.sms}</button>
+      </div>
+    </td>
+    <td style="color:var(--muted)">${o.api}</td>
+    <td class="waitlbl">${o.wait}</td>
+  </tr>`).join('');
 
   apply();
 </script>
