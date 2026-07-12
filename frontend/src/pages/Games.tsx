@@ -72,12 +72,12 @@ const grid: React.CSSProperties = {
   gap: 16,
 };
 const card: React.CSSProperties = {
-  background: "#fff",
+  background: "var(--surface)",
   border: "1px solid var(--border)",
-  borderRadius: 10,
+  borderRadius: "var(--radius)",
   padding: 16,
   textAlign: "center",
-  boxShadow: "0 1px 3px rgba(0,0,0,.05)",
+  boxShadow: "var(--shadow-soft)",
 };
 const thumb: React.CSSProperties = {
   height: 120,

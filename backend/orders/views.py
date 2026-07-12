@@ -1,4 +1,6 @@
 """API للطلبات (Takip): قائمة + إنشاء + تنفيذ + إلغاء + تقارير."""
+from decimal import Decimal, InvalidOperation
+
 from django.db.models import Count, Sum
 from rest_framework import status as http
 from rest_framework.decorators import api_view, permission_classes
@@ -85,16 +87,35 @@ def orders_view(request):
         _maybe_auto_execute(order)
         return Response(OrderSerializer(order).data, status=http.HTTP_201_CREATED)
 
-    # GET: قائمة + فلاتر
+    # GET: قائمة + فلاتر (كل فلاتر لوحة المرجع: لعبة/منتج/وكيل/API/فيش/هاتف/مبلغ/تاريخ/لاعب)
     qs = Order.objects.filter(tenant=tenant).select_related(
         "dealer", "game", "product", "provider"
     )
-    status_filter = request.query_params.get("status")
+    p = request.query_params
+    status_filter = p.get("status")
     if status_filter and status_filter != "all":
         qs = qs.filter(status=status_filter)
-    search = request.query_params.get("q", "").strip()
-    if search:
-        qs = qs.filter(receipt_no__icontains=search)
+    if p.get("q", "").strip():
+        qs = qs.filter(receipt_no__icontains=p["q"].strip())
+    for param, field in (("game", "game_id"), ("product", "product_id"),
+                         ("dealer", "dealer_id"), ("provider", "provider_id")):
+        if p.get(param):
+            qs = qs.filter(**{field: p[param]})
+    if p.get("phone", "").strip():
+        qs = qs.filter(customer_phone__icontains=p["phone"].strip())
+    if p.get("player", "").strip():
+        qs = qs.filter(player_id__icontains=p["player"].strip())
+    try:
+        if p.get("min"):
+            qs = qs.filter(sell_price__gte=Decimal(p["min"]))
+        if p.get("max"):
+            qs = qs.filter(sell_price__lte=Decimal(p["max"]))
+    except InvalidOperation:
+        pass
+    if p.get("date_from"):
+        qs = qs.filter(created_at__date__gte=p["date_from"])
+    if p.get("date_to"):
+        qs = qs.filter(created_at__date__lte=p["date_to"])
 
     return Response({
         "count": qs.count(),
