@@ -207,3 +207,16 @@ def invoice_status_view(request, invoice_id, action):
     inv.status = Invoice.Status.PAID if action == "paid" else Invoice.Status.UNPAID
     inv.save(update_fields=["status"])
     return Response(_invoice_row(inv))
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([IsAuthenticated, IsPlatformOwner])
+def platform_announcement_view(request):
+    """كتابة/تعديل إعلان المنصّة (يظهر لكل أصحاب المتاجر) — لمالك المنصّة."""
+    from core.models import PlatformAnnouncement
+    a = PlatformAnnouncement.get()
+    if request.method == "PUT":
+        a.message = (request.data.get("message") or "").strip()
+        a.ticker = (request.data.get("ticker") or "").strip()
+        a.save(update_fields=["message", "ticker", "updated_at"])
+    return Response({"message": a.message, "ticker": a.ticker})

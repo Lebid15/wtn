@@ -20,7 +20,7 @@ interface LibProduct {
   suggested_price: string; kupur: string;
 }
 
-type Tab = "tenants" | "library" | "invoices" | "messages";
+type Tab = "tenants" | "library" | "invoices" | "messages" | "announce";
 
 export default function Platform() {
   const { user, logout } = useAuth();
@@ -44,12 +44,14 @@ export default function Platform() {
         <button onClick={() => setTab("library")} style={{ ...tabBtn, ...(tab === "library" ? tabActive : {}) }}>🌐 المنتجات العالمية</button>
         <button onClick={() => setTab("invoices")} style={{ ...tabBtn, ...(tab === "invoices" ? tabActive : {}) }}>🧾 الفواتير</button>
         <button onClick={() => setTab("messages")} style={{ ...tabBtn, ...(tab === "messages" ? tabActive : {}) }}>💬 الرسائل</button>
+        <button onClick={() => setTab("announce")} style={{ ...tabBtn, ...(tab === "announce" ? tabActive : {}) }}>📢 الإعلان العام</button>
       </div>
 
       <div style={{ maxWidth: 1150, margin: "0 auto", padding: 24 }}>
         {tab === "tenants" && <TenantsTab />}
         {tab === "library" && <LibraryTab />}
         {tab === "invoices" && <BillingTab />}
+        {tab === "announce" && <AnnounceTab />}
         {tab === "messages" && (
           <div style={{ background: "#fff", borderRadius: 12, padding: 20 }}>
             <Tickets canCreate={false} title="رسائل المتاجر" />
@@ -275,6 +277,45 @@ function ManagePackages({ game, onClose }: { game: LibGame; onClose: () => void 
             <button className="btn g" style={{ height: 38 }} disabled={busy}>{busy ? "..." : "➕ إضافة"}</button>
           </form>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===== الإعلان العام (يظهر فوق هيدر لوحات أصحاب المتاجر) ===== */
+function AnnounceTab() {
+  const [message, setMessage] = useState("");
+  const [ticker, setTicker] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.get("/platform/announcement/").then((r) => { setMessage(r.data.message); setTicker(r.data.ticker); });
+  }, []);
+
+  async function save() {
+    setBusy(true); setSaved(false);
+    try { await api.put("/platform/announcement/", { message, ticker }); setSaved(true); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <h2 style={{ fontSize: 18, marginBottom: 6 }}>الإعلان العام</h2>
+      <p style={{ color: "#94a3b8", fontSize: 13, marginBottom: 18 }}>
+        يظهر فوق هيدر لوحات كل أصحاب المتاجر. المساحة محجوزة دائماً — اتركه فارغاً لإخفاء المحتوى دون تحريك الهيدر.
+      </p>
+      <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 5 }}>نص التنبيه (الشريط الثابت فوق الهيدر)</div>
+      <textarea value={message} onChange={(e) => setMessage(e.target.value)}
+        style={{ width: "100%", height: 80, padding: 10, borderRadius: 8, border: "1px solid #334155", background: "#0f172a", color: "#e2e8f0", fontSize: 14 }}
+        placeholder="مثال: مرحباً بكم في منصّة WTN — تابعوا التحديثات من هنا." />
+      <div style={{ fontSize: 13, color: "#94a3b8", margin: "16px 0 5px" }}>الشريط العاجل المتحرّك (سطر لكل عنصر — يظهر تحت الهيدر)</div>
+      <textarea value={ticker} onChange={(e) => setTicker(e.target.value)}
+        style={{ width: "100%", height: 100, padding: 10, borderRadius: 8, border: "1px solid #334155", background: "#0f172a", color: "#e2e8f0", fontSize: 14 }}
+        placeholder={"صيانة مجدولة يوم الجمعة 02:00–04:00 فجراً.\nحدّثوا أسعار PUBG اليوم."} />
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 16 }}>
+        <button style={addBtn} onClick={save} disabled={busy}>{busy ? "جارٍ الحفظ..." : "حفظ ونشر"}</button>
+        {saved && <span style={{ color: "#4ade80", fontSize: 13 }}>✓ نُشر — سيظهر فوراً في لوحات المتاجر</span>}
       </div>
     </div>
   );

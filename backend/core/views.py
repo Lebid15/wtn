@@ -314,3 +314,12 @@ def my_invoices_view(request):
         return Response({"count": 0, "results": []})
     qs = Invoice.objects.filter(tenant=request.user.tenant).select_related("tenant")
     return Response({"count": qs.count(), "results": [_invoice_row(i) for i in qs]})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def announcement_view(request):
+    """إعلان المنصّة الحالي — يظهر فوق هيدر لوحات أصحاب المتاجر."""
+    from .models import PlatformAnnouncement
+    a = PlatformAnnouncement.get()
+    return Response({"message": a.message, "ticker": a.ticker})

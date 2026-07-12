@@ -79,3 +79,147 @@ input, select {
   padding: 0 8px;
   font-size: 14px;
 }
+
+/* ═══════════ نظام التصميم المعتمد v7 (من design/dealers-prototype.html) ═══════════ */
+:root {
+  --surface-2: #f6f8f8;
+  --faint: #8a9a9d;
+  --border-strong: #d2dcdc;
+  --primary-tint: #e9f0f0;
+  --ok-tint: #e7f4ec;
+  --debt: #d6335a;
+  --debt-tint: #fbe9ee;
+  --row-sep: #dbecd2;      /* الفاصل الأخضر المميّز بين صفوف الجداول */
+  --info: #2b6cb8;         /* الشراء (أزرق) في الجداول */
+  --announce: #3f8f86;
+  --announce-2: #357a77;
+  --ticker: #b23a48;
+  --radius: 14px;
+  --shadow-soft: 0 1px 2px rgba(20,40,45,.04), 0 8px 24px rgba(20,40,45,.06);
+}
+
+/* ── شريط تنبيه المنصّة (فوق الهيدر — المساحة محجوزة دائماً) ── */
+.announce {
+  background: linear-gradient(180deg, var(--announce), var(--announce-2));
+  color: #f2fbf9;
+  border-bottom: 1px solid rgba(0,0,0,.12);
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+}
+.announce.is-empty { background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.announce.is-empty .announce-main { visibility: hidden; }
+.announce-main {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 10px 22px;
+}
+.announce-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.28);
+  border-radius: 999px; padding: 4px 11px;
+  font-size: 12px; font-weight: 700; white-space: nowrap;
+}
+.announce-text { font-size: 14.5px; font-weight: 600; line-height: 1.55; }
+
+/* ── الشريط العاجل المتحرّك (تحت الهيدر، أعلى المحتوى) ── */
+.ticker { background: var(--ticker); overflow: hidden; }
+.ticker-inner {
+  display: flex; align-items: center; gap: 40px; white-space: nowrap;
+  color: #fff; font-size: 13px; font-weight: 700; padding: 6px 0;
+  animation: tickerMove 28s linear infinite;
+}
+@keyframes tickerMove { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .ticker-inner { animation: none; } }
+
+/* ── بطاقة + عنوانها ── */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-soft);
+  overflow: hidden; margin-bottom: 22px;
+}
+.card-title {
+  display: flex; align-items: center; gap: 9px; padding: 13px 16px;
+  font-weight: 800; font-size: 15px; color: var(--text);
+  background: var(--surface-2); border-bottom: 1px solid var(--border);
+}
+.table-scroll { overflow-x: auto; }
+
+/* ── نمط الجدول المعتمد (grid) — يُعمَّم على كل جداول المشروع ── */
+table.grid { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.grid thead th {
+  background: var(--surface-2); color: var(--text); font-size: 12.5px; font-weight: 800;
+  text-align: center; padding: 11px 10px; white-space: nowrap;
+  border: 1px solid var(--border); border-top: 0;
+}
+table.grid tbody td {
+  padding: 10px; text-align: center; white-space: nowrap; vertical-align: middle;
+  background: var(--surface); border: 1px solid var(--border);
+  transition: background .12s;
+}
+table.grid th:first-child, table.grid td:first-child { border-inline-start: 0; }
+table.grid th:last-child,  table.grid td:last-child  { border-inline-end: 0; }
+table.grid tbody tr { border-bottom: 3px solid var(--row-sep); }
+table.grid tbody tr:last-child { border-bottom: 0; }
+table.grid tbody tr:hover td { background: var(--primary-tint); }
+table.grid input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; }
+.cell-start { text-align: start !important; padding-inline-start: 14px !important; }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+/* ── ألوان الأموال بالنمط المرجعي ── */
+.buy    { color: var(--info); font-weight: 700; }
+.sell   { color: var(--text); font-weight: 700; }
+.profit { color: var(--ok);  font-weight: 700; }
+.bal-pos { color: var(--ok);   font-weight: 800; }
+.bal-neg { color: var(--debt); font-weight: 800; }
+.bal-zero { color: var(--faint); font-weight: 600; }
+
+/* ── شرائح الحالة + رقائق الصلاحيات ── */
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+}
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.on  { color: var(--ok); background: var(--ok-tint); }
+.pill.off { color: var(--faint); background: rgba(138,154,157,.14); }
+.chips { display: inline-flex; gap: 5px; margin-top: 5px; }
+.chip {
+  font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px;
+  border: 1px solid var(--border-strong); color: var(--faint);
+}
+.chip.on { color: var(--primary-dark); border-color: var(--primary); background: var(--primary-tint); }
+
+/* ── نقطة الحالة (كما في المرجع) ── */
+.stdot { display: inline-block; width: 13px; height: 13px; border-radius: 50%; box-shadow: inset 0 -2px 3px rgba(0,0,0,.25); }
+.stdot.ok   { background: #35c245; }
+.stdot.wait { background: #e8b013; }
+.stdot.err  { background: #dd4444; }
+
+/* ── أيقونة اللعبة داخل الجداول ── */
+.gicon {
+  width: 36px; height: 36px; border-radius: 8px; display: inline-flex;
+  align-items: center; justify-content: center; color: #fff; font-weight: 800;
+  font-size: 12px; box-shadow: inset 0 -8px 14px rgba(0,0,0,.18);
+  object-fit: cover; overflow: hidden;
+}
+img.gicon { box-shadow: none; }
+
+/* ── شريط المؤشّرات + شريط الأدوات ── */
+.summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+.stat {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 15px 18px; box-shadow: var(--shadow-soft); position: relative; overflow: hidden;
+}
+.stat .label { color: var(--muted); font-size: 12.5px; display: flex; align-items: center; gap: 7px; }
+.stat .value { font-size: 25px; font-weight: 800; margin-top: 7px; }
+.stat .spark { position: absolute; inset-inline-start: 0; bottom: 0; height: 3px; width: 100%; background: linear-gradient(90deg, var(--primary), transparent); opacity: .5; }
+.toolbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 14px; box-shadow: var(--shadow-soft); margin-bottom: 16px;
+}
+.segment { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; }
+.segment button {
+  border: 0; background: transparent; color: var(--muted); font-size: 13px;
+  padding: 6px 13px; border-radius: 7px; height: auto; transition: .12s;
+}
+.segment button.active { background: var(--surface); color: var(--text); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.06); }

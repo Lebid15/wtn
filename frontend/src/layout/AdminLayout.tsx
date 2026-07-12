@@ -1,5 +1,6 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { api } from "../api";
 import { useAuth } from "../auth";
 import Icon from "../components/Icon";
 
@@ -51,9 +52,26 @@ function subnavFor(path: string) {
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const loc = useLocation();
+  const [ann, setAnn] = useState<{ message: string; ticker: string } | null>(null);
+
+  useEffect(() => {
+    api.get("/announcement/").then((r) => setAnn(r.data)).catch(() => setAnn({ message: "", ticker: "" }));
+  }, []);
+
+  const tickerItems = (ann?.ticker || "").split("\n").map((s) => s.trim()).filter(Boolean);
 
   return (
     <div className="app">
+      {/* ===== شريط تنبيه المنصّة (فوق الهيدر — المساحة محجوزة دائماً) ===== */}
+      <div className={`announce${ann?.message ? "" : " is-empty"}`}>
+        <div className="announce-main">
+          <span className="announce-tag">
+            <Icon name="bell" size={13} style={{ marginInlineEnd: 4 }} />إعلان من إدارة المنصّة
+          </span>
+          <span className="announce-text">{ann?.message || "—"}</span>
+        </div>
+      </div>
+
       {/* ===== Navbar ===== */}
       <div style={topbar}>
         <div style={{ display: "flex", gap: 1 }}>
@@ -109,6 +127,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           );
         })}
       </div>
+
+      {/* ===== الشريط العاجل المتحرّك (تحت الهيدر، أعلى المحتوى) ===== */}
+      {tickerItems.length > 0 && (
+        <div className="ticker">
+          <div className="ticker-inner">
+            {[...tickerItems, ...tickerItems].map((t, i) => (
+              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <Icon name="warning" size={13} /> {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ===== المحتوى ===== */}
       <div>{children}</div>

@@ -206,6 +206,27 @@ class WalletTransaction(models.Model):
         return f"{self.type} {self.amount} → {self.balance_after}"
 
 
+# ─────────────────────────── إعلان المنصّة (المبرمج → أصحاب المتاجر) ───────────────────────────
+class PlatformAnnouncement(models.Model):
+    """إعلان عام يكتبه مالك المنصّة ويظهر فوق هيدر لوحات أصحاب المتاجر.
+    صفّ واحد فقط (singleton) — message للشريط الثابت، ticker للشريط العاجل المتحرّك."""
+
+    message = models.TextField(blank=True, default="")
+    ticker = models.TextField(blank=True, default="")  # عناصر مفصولة بأسطر
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "platform_announcement"
+
+    @classmethod
+    def get(cls):
+        obj = cls.objects.first()
+        return obj if obj else cls.objects.create()
+
+    def __str__(self):
+        return f"إعلان المنصّة ({self.updated_at:%Y-%m-%d})"
+
+
 # ─────────────────────────── التذاكر / الرسائل ───────────────────────────
 class Ticket(models.Model):
     """تذكرة دعم/رسالة: من مستخدم إلى إدارة متجره أو إلى مالك المنصّة."""

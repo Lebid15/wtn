@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, type Dealer } from "../api";
 import WalletModal from "../components/WalletModal";
 import DealerCreateModal from "../components/DealerCreateModal";
 import Icon from "../components/Icon";
 
 const FLAG: Record<string, string> = { SY: "🇸🇾", TR: "🇹🇷", SA: "🇸🇦", IQ: "🇮🇶" };
+type Filter = "all" | "active" | "neg" | "off";
 
 export default function Dealers() {
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [q, setQ] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<{ dealer: Dealer; action: "topup" | "deduct" } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -26,95 +28,139 @@ export default function Dealers() {
     setModal(null);
   }
 
-  const money = (v: string) => Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 });
+  const money = (v: string | number) =>
+    Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 });
+
+  // الرصيد واحد موقّع: سالب = مديونية
+  const shown = useMemo(() => dealers.filter((d) => {
+    const bal = Number(d.balance);
+    if (filter === "active") return d.active;
+    if (filter === "off") return !d.active;
+    if (filter === "neg") return bal < 0;
+    return true;
+  }), [dealers, filter]);
+
+  const stats = useMemo(() => ({
+    total: dealers.length,
+    active: dealers.filter((d) => d.active).length,
+    net: dealers.reduce((s, d) => s + Number(d.balance), 0),
+    negative: dealers.filter((d) => Number(d.balance) < 0).length,
+  }), [dealers]);
+
+  const balCls = (v: number) => (v < 0 ? "bal-neg" : v > 0 ? "bal-pos" : "bal-zero");
 
   return (
-    <div>
-      {/* شريط الأدوات */}
-      <div style={toolbar}>
-        <div style={{ position: "relative" }}>
-          <input placeholder="بحث عن وكيل..." value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && load(q)}
-            style={{ width: 240, paddingInlineStart: 32 }} />
-          <span style={{ position: "absolute", insetInlineStart: 9, top: 8, color: "var(--muted)" }}>
-            <Icon name="search" size={16} />
-          </span>
+    <div style={{ maxWidth: 1320, margin: "0 auto", padding: "22px 20px 40px" }}>
+      {/* شريط المؤشّرات */}
+      <div className="summary">
+        <div className="stat">
+          <div className="label"><Icon name="users" size={15} style={{ color: "var(--primary)" }} /> إجمالي الوكلاء</div>
+          <div className="value num">{stats.total}</div><span className="spark" />
         </div>
-        <button className="btn" onClick={() => load(q)}>بحث</button>
-        <button className="btn g" onClick={() => setCreateOpen(true)}><Icon name="plus" size={15} style={ib} />إضافة وكيل</button>
-        <button className="btn"><Icon name="excel" size={15} style={ib} />تصدير Excel</button>
-        <button className="btn r" onClick={() => { setQ(""); load(""); }}>إزالة الفلتر</button>
-        <span style={{ marginInlineStart: "auto", color: "var(--muted)", fontSize: 14 }}>
-          العدد: {dealers.length}
-        </span>
+        <div className="stat">
+          <div className="label"><Icon name="check" size={15} style={{ color: "var(--primary)" }} /> نشطون</div>
+          <div className="value num">{stats.active} <small style={{ fontSize: 13, color: "var(--faint)" }}>/ {stats.total}</small></div>
+          <span className="spark" />
+        </div>
+        <div className="stat">
+          <div className="label"><Icon name="wallet" size={15} style={{ color: "var(--primary)" }} /> صافي أرصدة الوكلاء</div>
+          <div className={`value num ${balCls(stats.net)}`}>{money(stats.net)} <small style={{ fontSize: 13, color: "var(--faint)" }}>ل.ت</small></div>
+          <span className="spark" />
+        </div>
+        <div className="stat">
+          <div className="label"><Icon name="warning" size={15} style={{ color: "var(--primary)" }} /> وكلاء برصيد سالب</div>
+          <div className="value num" style={{ color: "var(--debt)" }}>{stats.negative}</div><span className="spark" />
+        </div>
       </div>
 
-      {/* الجدول — أعمدة مطابقة للمرجع (Bayi Listesi) */}
-      <div style={{ overflowX: "auto" }}>
-        <table style={table}>
-          <thead>
-            <tr>
-              <th style={th}>الرقم</th>
-              <th style={{ ...th, textAlign: "right", paddingInlineStart: 12 }}>اسم الوكيل</th>
-              <th style={th}>الرصيد المتاح</th>
-              <th style={th}>الدين</th>
-              <th style={th}>الحد الائتماني</th>
-              <th style={th}>العمليات المالية</th>
-              <th style={th} title="مشتريات">مشتريات</th>
-              <th style={th} title="ألعاب">ألعاب</th>
-              <th style={th} title="نشط">نشط</th>
-              <th style={th}>المجموعة</th>
-              <th style={th}>الدولة</th>
-              <th style={th}>إجراء</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={12} style={{ ...td, padding: 30 }}>جارٍ التحميل...</td></tr>
-            ) : dealers.length === 0 ? (
-              <tr><td colSpan={12} style={{ ...td, padding: 30 }}>لا يوجد وكلاء</td></tr>
-            ) : dealers.map((d, i) => {
-              const bal = Number(d.balance);
-              const available = bal > 0 ? bal : 0;
-              const debt = bal < 0 ? -bal : 0;
-              return (
-                <tr key={d.id} style={{ background: i % 2 ? "var(--row-alt)" : "#fff" }}>
-                  <td style={{ ...td, color: "var(--muted)" }}>{d.login_id}</td>
-                  <td style={{ ...td, textAlign: "right", paddingInlineStart: 12 }}>
-                    <a style={{ color: "var(--primary-dark)", fontWeight: 600 }}>{d.name}</a>
-                    {d.children_count > 0 && <span style={{ color: "var(--muted)" }}> ({d.children_count})</span>}
-                  </td>
-                  <td style={{ ...td, fontWeight: 600 }}>{money(String(available))}</td>
-                  <td style={{ ...td, color: debt > 0 ? "var(--danger)" : "var(--muted)", fontWeight: debt > 0 ? 700 : 400 }}>
-                    {money(String(debt))}
-                  </td>
-                  <td style={{ ...td, color: "var(--muted)" }}>{money(d.credit_limit)}</td>
-                  {/* العمليات المالية: شحن · خصم · كشف · حركات */}
-                  <td style={td}>
-                    <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                      <IconBtn name="plus" color="var(--ok)" title="شحن رصيد" onClick={() => setModal({ dealer: d, action: "topup" })} />
-                      <IconBtn name="minus" color="var(--danger)" title="خصم رصيد" onClick={() => setModal({ dealer: d, action: "deduct" })} />
-                      <IconBtn name="chart" color="var(--primary)" title="كشف حساب" />
-                      <IconBtn name="calendar" color="var(--muted)" title="حركات بتاريخ" />
-                    </div>
-                  </td>
-                  <td style={td}><Dot on={d.shopping} /></td>
-                  <td style={td}><Dot on={d.oyun} /></td>
-                  <td style={td}><Dot on={d.active} /></td>
-                  <td style={td}>{d.group || "—"}</td>
-                  <td style={{ ...td, fontSize: 18 }}>{FLAG[d.country] || "🏳️"}</td>
-                  <td style={td}>
-                    <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                      <IconBtn name="edit" color="var(--primary)" title="تعديل" />
-                      <IconBtn name="settings" color="var(--muted)" title="إعدادات" />
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* شريط الأدوات */}
+      <div className="toolbar">
+        <div style={{ position: "relative", flex: 1, minWidth: 220 }}>
+          <input placeholder="ابحث باسم الوكيل أو رقمه…" value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && load(q)}
+            style={{ width: "100%", height: 40, paddingInlineStart: 36, borderRadius: 10 }} />
+          <span style={{ position: "absolute", insetInlineStart: 11, top: 11, color: "var(--faint)" }}>
+            <Icon name="search" size={17} />
+          </span>
+        </div>
+        <div className="segment">
+          {([["all", "الكل"], ["active", "نشط"], ["neg", "رصيد سالب"], ["off", "موقوف"]] as [Filter, string][]).map(([k, label]) => (
+            <button key={k} className={filter === k ? "active" : ""} onClick={() => setFilter(k)}>{label}</button>
+          ))}
+        </div>
+        <span style={{ marginInlineStart: "auto", color: "var(--muted)", fontSize: 13 }}>
+          العدد: <b style={{ color: "var(--text)" }}>{shown.length}</b>
+        </span>
+        <button className="btn"><Icon name="excel" size={15} style={ib} />تصدير Excel</button>
+        <button className="btn g" onClick={() => setCreateOpen(true)}>
+          <Icon name="plus" size={15} style={ib} />إضافة وكيل
+        </button>
+      </div>
+
+      {/* الجدول — النمط المعتمد */}
+      <div className="card">
+        <div className="card-title"><Icon name="users" size={16} style={{ color: "var(--primary)" }} /> قائمة الوكلاء</div>
+        <div className="table-scroll">
+          <table className="grid">
+            <thead>
+              <tr>
+                <th><input type="checkbox" title="تحديد الكل" /></th>
+                <th>الرقم</th>
+                <th className="cell-start">اسم الوكيل</th>
+                <th>الرصيد</th>
+                <th>الحد الائتماني</th>
+                <th>الحالة</th>
+                <th>المجموعة</th>
+                <th>الدولة</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={9} style={{ padding: 30, color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
+              ) : shown.length === 0 ? (
+                <tr><td colSpan={9} style={{ padding: 30, color: "var(--muted)" }}>لا يوجد وكلاء مطابقون</td></tr>
+              ) : shown.map((d) => {
+                const bal = Number(d.balance);
+                return (
+                  <tr key={d.id}>
+                    <td><input type="checkbox" /></td>
+                    <td className="num" style={{ color: "var(--faint)", fontSize: 12.5 }}>{d.login_id}</td>
+                    <td className="cell-start">
+                      <div style={{ fontWeight: 700 }}>
+                        {d.name}
+                        {d.children_count > 0 && <span style={{ color: "var(--primary)", fontSize: 11, fontWeight: 700 }}> ({d.children_count})</span>}
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`num ${balCls(bal)}`} style={{ fontSize: 14.5 }}>{money(bal)}</span>
+                      <span style={{ fontSize: 11, color: "var(--faint)", marginInlineStart: 3 }}>{d.currency === "TRY" ? "ل.ت" : d.currency}</span>
+                    </td>
+                    <td className="num" style={{ color: "var(--muted)" }}>{money(d.credit_limit)}</td>
+                    <td>
+                      <span className={`pill ${d.active ? "on" : "off"}`}>{d.active ? "نشط" : "موقوف"}</span>
+                      <div className="chips">
+                        <span className={`chip ${d.shopping ? "on" : ""}`}>مشتريات</span>
+                        <span className={`chip ${d.oyun ? "on" : ""}`}>ألعاب</span>
+                      </div>
+                    </td>
+                    <td className="num" style={{ fontWeight: 700, color: "var(--muted)" }}>{d.group || "—"}</td>
+                    <td style={{ fontSize: 17 }}>{FLAG[d.country] || "🏳️"}</td>
+                    <td>
+                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                        <IconBtn name="plus" color="var(--ok)" title="شحن رصيد" onClick={() => setModal({ dealer: d, action: "topup" })} />
+                        <IconBtn name="minus" color="var(--danger)" title="خصم رصيد" onClick={() => setModal({ dealer: d, action: "deduct" })} />
+                        <IconBtn name="chart" color="var(--primary)" title="كشف حساب" />
+                        <IconBtn name="edit" color="var(--muted)" title="تعديل" />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {modal && (
@@ -136,26 +182,13 @@ function IconBtn({ name, color, title, onClick }:
   { name: string; color: string; title: string; onClick?: () => void }) {
   return (
     <button onClick={onClick} title={title} style={{
-      border: "1px solid #dde4e6", background: "#fff", color,
-      width: 28, height: 28, borderRadius: 5, display: "flex",
+      border: "1px solid var(--border)", background: "var(--surface)", color,
+      width: 30, height: 30, borderRadius: 8, display: "flex",
       alignItems: "center", justifyContent: "center", cursor: "pointer",
-    }}><Icon name={name} size={15} /></button>
+    }}>
+      <Icon name={name} size={15} />
+    </button>
   );
 }
 
-function Dot({ on }: { on: boolean }) {
-  return <span style={{ display: "inline-block", width: 11, height: 11, borderRadius: "50%",
-    background: on ? "var(--ok)" : "var(--danger)" }} />;
-}
-
-const ib: React.CSSProperties = { marginInlineEnd: 5 };
-const toolbar: React.CSSProperties = {
-  display: "flex", gap: 10, alignItems: "center", padding: "12px 16px",
-  background: "#f2f5f6", flexWrap: "wrap",
-};
-const table: React.CSSProperties = { width: "100%", borderCollapse: "collapse", background: "#fff", fontSize: 14 };
-const th: React.CSSProperties = {
-  background: "var(--th-bg)", color: "#fff", padding: "10px 6px",
-  textAlign: "center", fontWeight: 600, whiteSpace: "nowrap",
-};
-const td: React.CSSProperties = { padding: "8px 6px", textAlign: "center", borderBottom: "1px solid #edf1f2" };
+const ib: React.CSSProperties = { marginInlineEnd: 5, verticalAlign: -2 };

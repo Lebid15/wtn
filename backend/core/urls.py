@@ -22,6 +22,7 @@ urlpatterns = [
     path("tickets/<int:ticket_id>/", tickets.ticket_thread_view, name="ticket-thread"),
     path("tickets/<int:ticket_id>/reply/", tickets.ticket_reply_view, name="ticket-reply"),
     path("tickets/<int:ticket_id>/close/", tickets.ticket_close_view, name="ticket-close"),
+    path("announcement/", views.announcement_view, name="announcement"),
     # فواتير المستأجر الحالي
     path("invoices/", views.my_invoices_view, name="my-invoices"),
 ] + router.urls
