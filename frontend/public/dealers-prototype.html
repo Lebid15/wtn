@@ -5,72 +5,94 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>قسم الوكلاء — نموذج تصميم</title>
 <style>
-  /* ============ Tokens ============ */
   :root {
-    --ground: #f5f8f7;
-    --surface: #ffffff;
-    --surface-2: #fafcfb;
-    --ink: #0f1e1b;
-    --muted: #5f7d77;
-    --faint: #8aa39d;
-    --border: #e4ece9;
-    --border-strong: #d3e0dc;
-    --primary: #0d9488;
-    --primary-strong: #0b6b62;
-    --primary-tint: #e3f4f1;
-    --ok: #16a34a;
-    --ok-tint: #e6f6ec;
-    --debt: #e11d48;
-    --debt-tint: #fdeaee;
-    --warn: #d97706;
+    --ground: #eef2f2; --surface: #ffffff; --surface-2: #fafcfb;
+    --ink: #0f1e1b; --muted: #5f7d77; --faint: #8aa39d;
+    --border: #e4ece9; --border-strong: #d3e0dc;
+    --primary: #0d9488; --primary-strong: #0b6b62; --primary-tint: #e3f4f1;
+    --topbar: #0d9488; --topbar-soft: rgba(255,255,255,.16);
+    --ok: #16a34a; --ok-tint: #e6f6ec; --debt: #e11d48; --debt-tint: #fdeaee; --warn: #d97706;
     --shadow: 0 1px 2px rgba(15,30,27,.04), 0 8px 24px rgba(15,30,27,.06);
     --radius: 14px;
-    --radius-sm: 9px;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --ground: #0d1513; --surface: #141f1c; --surface-2: #18241f;
-      --ink: #e7f0ed; --muted: #8aa39d; --faint: #6a827c;
-      --border: #243330; --border-strong: #2e3f3a;
-      --primary: #2dd4bf; --primary-strong: #5eead4; --primary-tint: #16302b;
-      --ok: #34d399; --ok-tint: #14312a; --debt: #fb7185; --debt-tint: #34181f;
-      --warn: #f59e0b;
-      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+      --ground:#0d1513; --surface:#141f1c; --surface-2:#18241f; --ink:#e7f0ed; --muted:#8aa39d;
+      --faint:#6a827c; --border:#243330; --border-strong:#2e3f3a; --primary:#2dd4bf;
+      --primary-strong:#5eead4; --primary-tint:#16302b; --topbar:#0f766e; --topbar-soft:rgba(255,255,255,.14);
+      --ok:#34d399; --ok-tint:#14312a; --debt:#fb7185; --debt-tint:#34181f; --warn:#f59e0b;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
     }
   }
   :root[data-theme="light"] {
-    --ground:#f5f8f7; --surface:#fff; --surface-2:#fafcfb; --ink:#0f1e1b; --muted:#5f7d77;
+    --ground:#eef2f2; --surface:#fff; --surface-2:#fafcfb; --ink:#0f1e1b; --muted:#5f7d77;
     --faint:#8aa39d; --border:#e4ece9; --border-strong:#d3e0dc; --primary:#0d9488;
-    --primary-strong:#0b6b62; --primary-tint:#e3f4f1; --ok:#16a34a; --ok-tint:#e6f6ec;
-    --debt:#e11d48; --debt-tint:#fdeaee; --warn:#d97706;
+    --primary-strong:#0b6b62; --primary-tint:#e3f4f1; --topbar:#0d9488; --topbar-soft:rgba(255,255,255,.16);
+    --ok:#16a34a; --ok-tint:#e6f6ec; --debt:#e11d48; --debt-tint:#fdeaee; --warn:#d97706;
     --shadow:0 1px 2px rgba(15,30,27,.04),0 8px 24px rgba(15,30,27,.06);
   }
   :root[data-theme="dark"] {
     --ground:#0d1513; --surface:#141f1c; --surface-2:#18241f; --ink:#e7f0ed; --muted:#8aa39d;
     --faint:#6a827c; --border:#243330; --border-strong:#2e3f3a; --primary:#2dd4bf;
-    --primary-strong:#5eead4; --primary-tint:#16302b; --ok:#34d399; --ok-tint:#14312a;
-    --debt:#fb7185; --debt-tint:#34181f; --warn:#f59e0b;
+    --primary-strong:#5eead4; --primary-tint:#16302b; --topbar:#0f766e; --topbar-soft:rgba(255,255,255,.14);
+    --ok:#34d399; --ok-tint:#14312a; --debt:#fb7185; --debt-tint:#34181f; --warn:#f59e0b;
     --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
   }
 
   * { box-sizing: border-box; }
   html, body { margin: 0; }
   body {
-    background: var(--ground);
-    color: var(--ink);
+    background: var(--ground); color: var(--ink);
     font-family: "Cairo", "Segoe UI", "Noto Sans Arabic", Tahoma, system-ui, sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
+    font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
   }
   .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+  svg { display: block; }
 
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
+  /* ============ Topbar (هيدر التاجر) ============ */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--topbar); height: 48px; padding-inline: 12px; color: #f2fafb;
+  }
+  .tabs { display: flex; height: 100%; }
+  .tab {
+    display: flex; align-items: center; gap: 7px; height: 100%; padding: 0 22px;
+    color: #f2fafb; font-size: 15px; text-decoration: none; cursor: pointer; border: 0; background: transparent;
+  }
+  .tab.home, .tab.active { background: var(--ground); color: var(--primary-strong); }
+  .tab.active { font-weight: 700; }
+  .tools { display: flex; align-items: center; gap: 6px; }
+  .aico {
+    width: 30px; height: 30px; border-radius: 5px; background: var(--topbar-soft);
+    display: flex; align-items: center; justify-content: center; color: #fff; position: relative;
+  }
+  .aico .dot {
+    position: absolute; top: -5px; inset-inline-end: -5px; background: #fff; color: var(--debt);
+    font-size: 10px; font-weight: 800; width: 16px; height: 16px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .uname { font-size: 13px; margin-inline-start: 8px; }
+  .logout {
+    display: inline-flex; align-items: center; gap: 5px; background: transparent;
+    border: 1px solid rgba(255,255,255,.4); color: #f2fafb; height: 30px; border-radius: 5px;
+    padding: 0 11px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .logout:hover { background: rgba(255,255,255,.12); }
 
-  /* ============ Page header ============ */
-  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+  /* ============ Sub-nav ============ */
+  .subnav { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .sublink {
+    padding: 12px 20px; color: var(--muted); font-size: 14.5px; white-space: nowrap;
+    border-inline-start: 1px solid var(--border); cursor: pointer; text-decoration: none;
+  }
+  .sublink:hover { color: var(--ink); background: var(--surface-2); }
+  .sublink.active { background: var(--ground); color: var(--ink); font-weight: 700; }
+
+  /* ============ Content ============ */
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 22px 40px; }
+  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
   .head .eyebrow { color: var(--primary-strong); font-size: 12px; font-weight: 700; letter-spacing: .08em; }
-  .head h1 { margin: 4px 0 2px; font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
+  .head h1 { margin: 4px 0 2px; font-size: 23px; font-weight: 800; letter-spacing: -.01em; }
   .head p { margin: 0; color: var(--muted); font-size: 13.5px; }
   .theme-btn {
     display: inline-flex; align-items: center; gap: 7px; background: var(--surface);
@@ -79,18 +101,16 @@
   }
   .theme-btn:hover { color: var(--ink); border-color: var(--border-strong); }
 
-  /* ============ Summary strip ============ */
-  .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+  /* ============ Summary ============ */
+  .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
   .stat {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 16px 18px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+    padding: 15px 18px; box-shadow: var(--shadow); position: relative; overflow: hidden;
   }
   .stat .label { color: var(--muted); font-size: 12.5px; display: flex; align-items: center; gap: 7px; }
-  .stat .value { font-size: 26px; font-weight: 800; margin-top: 8px; letter-spacing: -.02em; }
+  .stat .value { font-size: 25px; font-weight: 800; margin-top: 7px; letter-spacing: -.02em; }
   .stat .value small { font-size: 13px; font-weight: 600; color: var(--faint); }
   .stat .spark { position: absolute; inset-inline-start: 0; bottom: 0; height: 3px; width: 100%; background: linear-gradient(90deg, var(--primary), transparent); opacity: .5; }
-  .stat.good .ico { color: var(--ok); }
-  .stat.debt .ico { color: var(--debt); }
   .ico { color: var(--primary); display: inline-flex; }
 
   /* ============ Toolbar ============ */
@@ -100,7 +120,7 @@
     padding: 12px 14px; box-shadow: var(--shadow); margin-bottom: 16px;
   }
   .search { position: relative; flex: 1; min-width: 220px; }
-  .search .si { position: absolute; inset-inline-start: 12px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
+  .search .si { position: absolute; inset-inline-start: 12px; top: 50%; transform: translateY(-50%); color: var(--faint); }
   .search input {
     width: 100%; height: 40px; border: 1px solid var(--border); background: var(--surface-2);
     color: var(--ink); border-radius: 10px; padding-inline: 38px 14px; font: inherit; font-size: 14px;
@@ -108,15 +128,10 @@
   }
   .search input::placeholder { color: var(--faint); }
   .search input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-tint); }
-
   .segment { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; }
-  .segment button {
-    border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px;
-    padding: 6px 13px; border-radius: 7px; cursor: pointer; transition: .12s;
-  }
+  .segment button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; padding: 6px 13px; border-radius: 7px; cursor: pointer; transition: .12s; }
   .segment button.active { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
   .segment button:not(.active):hover { color: var(--ink); }
-
   .btn { display: inline-flex; align-items: center; gap: 7px; border-radius: 10px; padding: 9px 16px; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: .15s; }
   .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 40%, transparent); }
   .btn-primary:hover { background: var(--primary-strong); }
@@ -126,7 +141,7 @@
   .count { color: var(--muted); font-size: 13px; }
   .count b { color: var(--ink); }
 
-  /* ============ Table card ============ */
+  /* ============ Table ============ */
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
   .table-scroll { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
@@ -136,57 +151,81 @@
     padding: 13px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
   }
   thead th.start { text-align: start; padding-inline-start: 20px; }
-  tbody td { padding: 13px 10px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
+  tbody td { padding: 12px 10px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
   tbody tr { transition: background .12s; }
   tbody tr:nth-child(even) { background: var(--surface-2); }
   tbody tr:hover { background: var(--primary-tint); }
   tbody tr:last-child td { border-bottom: 0; }
-
   .bid { color: var(--faint); font-size: 12.5px; }
   .dealer { text-align: start; padding-inline-start: 20px; }
   .dealer .name { font-weight: 700; color: var(--ink); }
   .dealer .sub { color: var(--faint); font-size: 11.5px; margin-top: 1px; }
   .dealer .kids { color: var(--primary); font-weight: 700; font-size: 11px; }
 
-  .money { font-weight: 700; }
-  .money.pos { color: var(--ok); }
-  .money.zero { color: var(--faint); font-weight: 500; }
-  .money.debt { color: var(--debt); }
+  /* الرصيد الموحّد (قيمة واحدة موقّعة) */
+  .bal { font-weight: 800; font-size: 14.5px; }
+  .bal.pos { color: var(--ok); }
+  .bal.neg { color: var(--debt); }
+  .bal.zero { color: var(--faint); font-weight: 600; }
+  .bal .cur { font-size: 11px; font-weight: 600; color: var(--faint); margin-inline-start: 3px; }
   .limit { color: var(--muted); }
 
-  /* status pills + capability chips */
   .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
   .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .pill.active { color: var(--ok); background: var(--ok-tint); }
   .pill.off { color: var(--faint); background: color-mix(in srgb, var(--faint) 14%, transparent); }
-  .caps { display: inline-flex; gap: 5px; }
+  .caps { display: inline-flex; gap: 5px; margin-top: 5px; }
   .chip { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border-strong); color: var(--faint); }
   .chip.on { color: var(--primary-strong); border-color: color-mix(in srgb, var(--primary) 40%, transparent); background: var(--primary-tint); }
-
   .grp { display: inline-block; min-width: 22px; font-weight: 700; color: var(--muted); }
   .flag { font-size: 17px; }
-
-  /* action buttons */
   .actions { display: inline-flex; gap: 4px; justify-content: center; }
-  .iconbtn {
-    width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
-    border: 1px solid var(--border); background: var(--surface); border-radius: 8px; cursor: pointer;
-    color: var(--muted); transition: .12s;
-  }
+  .iconbtn { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; cursor: pointer; color: var(--muted); transition: .12s; }
   tbody tr:hover .iconbtn { border-color: var(--border-strong); }
   .iconbtn:hover { transform: translateY(-1px); }
   .iconbtn.up:hover { color: var(--ok); border-color: var(--ok); background: var(--ok-tint); }
   .iconbtn.down:hover { color: var(--debt); border-color: var(--debt); background: var(--debt-tint); }
   .iconbtn.info:hover { color: var(--primary); border-color: var(--primary); background: var(--primary-tint); }
-
   .empty { padding: 40px; text-align: center; color: var(--muted); }
-  svg { display: block; }
-  .footnote { margin-top: 14px; color: var(--faint); font-size: 12px; text-align: center; }
+
+  .footer { text-align: center; padding: 18px; color: var(--faint); font-size: 12.5px; }
 </style>
 </head>
 <body>
+  <!-- ===== هيدر التاجر ===== -->
+  <div class="topbar">
+    <nav class="tabs">
+      <a class="tab home"><span data-i="home"></span> الرئيسية</a>
+      <a class="tab"><span data-i="games"></span> الألعاب</a>
+      <a class="tab active"><span data-i="settings"></span> الإعدادات</a>
+      <a class="tab"><span data-i="chart"></span> التقارير</a>
+    </nav>
+    <div class="tools">
+      <span class="aico" style="background:var(--debt)"><span data-i="bell"></span><span class="dot">1</span></span>
+      <span class="aico"><span data-i="message"></span></span>
+      <span class="aico"><span data-i="grid"></span></span>
+      <span class="aico"><span data-i="user"></span></span>
+      <span class="aico"><span data-i="alert"></span></span>
+      <span class="aico"><span data-i="card"></span></span>
+      <span class="uname">مدير النظام</span>
+      <button class="logout"><span data-i="logout"></span> خروج آمن</button>
+    </div>
+  </div>
+
+  <!-- ===== الشريط الفرعي ===== -->
+  <div class="subnav">
+    <a class="sublink">متابعة الدفع</a>
+    <a class="sublink">حساباتي</a>
+    <a class="sublink">حركات الحسابات</a>
+    <a class="sublink active">قائمة الوكلاء</a>
+    <a class="sublink">مجموعات الوكلاء</a>
+    <a class="sublink">إعدادات الموقع</a>
+    <a class="sublink">إعدادات SMS</a>
+    <a class="sublink">الرسائل</a>
+    <a class="sublink">فواتير الاشتراك</a>
+  </div>
+
   <div class="wrap">
-    <!-- Header -->
     <header class="head">
       <div>
         <div class="eyebrow">الإعدادات · قائمة الوكلاء</div>
@@ -198,7 +237,6 @@
       </button>
     </header>
 
-    <!-- Summary -->
     <section class="summary">
       <div class="stat">
         <div class="label"><span class="ico" data-i="users"></span> إجمالي الوكلاء</div>
@@ -208,17 +246,16 @@
         <div class="label"><span class="ico" data-i="check"></span> نشطون</div>
         <div class="value num">7 <small>/ 8</small></div><span class="spark"></span>
       </div>
-      <div class="stat good">
-        <div class="label"><span class="ico" data-i="wallet"></span> إجمالي الأرصدة</div>
-        <div class="value num">13,893.35 <small>ل.ت</small></div><span class="spark"></span>
+      <div class="stat">
+        <div class="label"><span class="ico" data-i="wallet"></span> صافي أرصدة الوكلاء</div>
+        <div class="value num" style="color:var(--ok)">10,063.75 <small>ل.ت</small></div><span class="spark"></span>
       </div>
-      <div class="stat debt">
-        <div class="label"><span class="ico" data-i="alert"></span> إجمالي الديون</div>
-        <div class="value num" style="color:var(--debt)">4,469.60 <small>ل.ت</small></div><span class="spark"></span>
+      <div class="stat">
+        <div class="label"><span class="ico" data-i="alert"></span> وكلاء برصيد سالب</div>
+        <div class="value num" style="color:var(--debt)">3</div><span class="spark"></span>
       </div>
     </section>
 
-    <!-- Toolbar -->
     <div class="toolbar">
       <div class="search">
         <span class="si" data-i="search"></span>
@@ -227,7 +264,7 @@
       <div class="segment" id="filter">
         <button class="active" data-f="all">الكل</button>
         <button data-f="active">نشط</button>
-        <button data-f="debt">مدين</button>
+        <button data-f="neg">رصيد سالب</button>
         <button data-f="off">موقوف</button>
       </div>
       <div class="spacer"></div>
@@ -236,7 +273,6 @@
       <button class="btn btn-primary"><span data-i="plus"></span> إضافة وكيل</button>
     </div>
 
-    <!-- Table -->
     <div class="card">
       <div class="table-scroll">
         <table>
@@ -244,8 +280,7 @@
             <tr>
               <th>الرقم</th>
               <th class="start">اسم الوكيل</th>
-              <th>الرصيد المتاح</th>
-              <th>الدين</th>
+              <th>الرصيد</th>
               <th>الحد الائتماني</th>
               <th>الحالة</th>
               <th>المجموعة</th>
@@ -257,12 +292,20 @@
         </table>
       </div>
     </div>
-    <p class="footnote">نموذج ثابت ببيانات تجريبية — للاتفاق على الشكل قبل تعميمه على المشروع.</p>
+    <p class="footer">نموذج ثابت ببيانات تجريبية — للاتفاق على الشكل قبل تعميمه على المشروع.</p>
   </div>
 
 <script>
-  // ---- icons (inline SVG, stroke=currentColor) ----
   const I = {
+    home:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 3l9 6.5V21H3z"/><path d="M9 21v-6h6v6"/></svg>',
+    games:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="12" rx="4"/><path d="M7 11v4M5 13h4"/><circle cx="16" cy="12" r="1"/><circle cx="18.5" cy="14.5" r="1"/></svg>',
+    settings:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    chart:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 3-4 4 3 5-7"/></svg>',
+    bell:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
+    message:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    grid:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+    user:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+    card:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>',
     users:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     check:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
     wallet:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>',
@@ -271,15 +314,16 @@
     plus:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
     minus:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg>',
     excel:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9.5 12 5 6M14.5 12l-5 6"/></svg>',
-    chart:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 3-4 4 3 5-7"/></svg>',
+    stmt:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 3-4 4 3 5-7"/></svg>',
     edit:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    logout:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>',
     moon:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
     sun:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
   };
   document.querySelectorAll('[data-i]').forEach(el => el.innerHTML = I[el.dataset.i] || '');
 
-  // ---- sample data ----
   const FLAG = { SY:'🇸🇾', TR:'🇹🇷', SA:'🇸🇦', IQ:'🇮🇶' };
+  // bal = رصيد واحد موقّع (سالب = مديونية)
   const dealers = [
     { bid:'bayi001', name:'متجر النور للاتصالات', bal:13.57,    limit:-500,  grp:'5',  cc:'SY', active:true,  shop:true,  game:true,  kids:0 },
     { bid:'bayi002', name:'الشحن السريع',          bal:-2636.36, limit:-5000, grp:'4',  cc:'SY', active:true,  shop:true,  game:true,  kids:2 },
@@ -295,22 +339,20 @@
   function render(list) {
     const rows = document.getElementById('rows');
     document.getElementById('count').innerHTML = 'العدد: <b>' + list.length + '</b>';
-    if (!list.length) { rows.innerHTML = '<tr><td colspan="9" class="empty">لا يوجد وكلاء مطابقون.</td></tr>'; return; }
+    if (!list.length) { rows.innerHTML = '<tr><td colspan="8" class="empty">لا يوجد وكلاء مطابقون.</td></tr>'; return; }
     rows.innerHTML = list.map(d => {
-      const avail = d.bal > 0 ? d.bal : 0;
-      const debt = d.bal < 0 ? -d.bal : 0;
+      const cls = d.bal < 0 ? 'neg' : (d.bal > 0 ? 'pos' : 'zero');
       return `<tr>
         <td class="bid num">${d.bid}</td>
         <td class="dealer">
           <div class="name">${d.name} ${d.kids ? `<span class="kids">(${d.kids})</span>` : ''}</div>
           <div class="sub">آخر دخول: اليوم</div>
         </td>
-        <td class="money num ${avail>0?'pos':'zero'}">${money(avail)}</td>
-        <td class="money num ${debt>0?'debt':'zero'}">${money(debt)}</td>
+        <td><span class="bal num ${cls}">${money(d.bal)}</span><span class="cur">ل.ت</span></td>
         <td class="limit num">${money(d.limit)}</td>
         <td>
           <span class="pill ${d.active?'active':'off'}">${d.active?'نشط':'موقوف'}</span>
-          <div class="caps" style="margin-top:5px">
+          <div class="caps">
             <span class="chip ${d.shop?'on':''}">مشتريات</span>
             <span class="chip ${d.game?'on':''}">ألعاب</span>
           </div>
@@ -321,7 +363,7 @@
           <div class="actions">
             <button class="iconbtn up" title="شحن رصيد">${I.plus}</button>
             <button class="iconbtn down" title="خصم رصيد">${I.minus}</button>
-            <button class="iconbtn info" title="كشف حساب">${I.chart}</button>
+            <button class="iconbtn info" title="كشف حساب">${I.stmt}</button>
             <button class="iconbtn info" title="تعديل">${I.edit}</button>
           </div>
         </td>
@@ -329,7 +371,6 @@
     }).join('');
   }
 
-  // ---- filtering ----
   let filter = 'all', query = '';
   function apply() {
     render(dealers.filter(d => {
@@ -337,7 +378,7 @@
       if (q && !(d.name.toLowerCase().includes(q) || d.bid.includes(q))) return false;
       if (filter === 'active') return d.active;
       if (filter === 'off') return !d.active;
-      if (filter === 'debt') return d.bal < 0;
+      if (filter === 'neg') return d.bal < 0;
       return true;
     }));
   }
@@ -348,15 +389,13 @@
     b.classList.add('active'); filter = b.dataset.f; apply();
   });
 
-  // ---- theme toggle ----
   const btn = document.getElementById('themeBtn');
   function setTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
     document.getElementById('themeIco').innerHTML = t === 'dark' ? I.sun : I.moon;
     document.getElementById('themeTxt').textContent = t === 'dark' ? 'فاتح' : 'داكن';
   }
-  const start = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  setTheme(start);
+  setTheme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   btn.addEventListener('click', () => setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
 
   apply();
