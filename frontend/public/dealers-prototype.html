@@ -93,14 +93,18 @@
   .sublink:hover { color: var(--ink); background: var(--surface-2); }
   .sublink.active { background: var(--ground); color: var(--ink); font-weight: 700; }
 
-  /* ============ شريط إعلانات المنصّة (المبرمج → المتاجر) ============ */
+  /* ============ شريط إعلانات المنصّة (المبرمج → المتاجر) ============
+     المساحة محجوزة دائماً (min-height) حتى بلا تنبيه — الهيدر لا يرتفع. */
   .announce {
     background: linear-gradient(180deg, var(--announce), var(--announce-2));
     color: #f2fbf9; border-bottom: 1px solid rgba(0,0,0,.12);
+    min-height: 54px; display: flex; align-items: center;
   }
+  .announce.is-empty { background: var(--surface-2); border-bottom: 1px solid var(--border); }
+  .announce.is-empty .announce-main { visibility: hidden; }
   .announce-main {
     display: flex; align-items: center; gap: 12px; max-width: 1180px; margin: 0 auto;
-    padding: 12px 22px;
+    padding: 10px 22px; width: 100%;
   }
   .announce-tag {
     display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.16);
@@ -229,22 +233,12 @@
 </style>
 </head>
 <body>
-  <!-- ===== شريط إعلانات المنصّة (فوق الهيدر — تُكتب من المبرمج وتظهر لكل أصحاب المتاجر) ===== -->
+  <!-- ===== شريط تنبيه المنصّة (فوق الهيدر — مساحته محجوزة دائماً حتى بلا تنبيه) ===== -->
   <div class="announce" id="announce">
     <div class="announce-main">
       <span class="announce-tag"><span data-i="mega"></span> إعلان من إدارة المنصّة</span>
       <span class="announce-text">مرحباً بكم في منصّة WTN — تابعوا التحديثات والميزات الجديدة من هنا. تُكتب هذه الرسائل من إدارة المنصّة وتظهر لكل أصحاب المتاجر.</span>
-      <button class="announce-close" id="announceClose" title="إخفاء">✕</button>
-    </div>
-    <div class="ticker">
-      <div class="ticker-inner">
-        <span><span data-i="alert"></span> صيانة مجدولة يوم الجمعة 02:00–04:00 فجراً.</span>
-        <span>· حدّثوا أسعار PUBG اليوم — تغيّرت أسعار المزوّد.</span>
-        <span>· خطط اشتراك جديدة متاحة الآن في تبويب الفواتير.</span>
-        <span><span data-i="alert"></span> صيانة مجدولة يوم الجمعة 02:00–04:00 فجراً.</span>
-        <span>· حدّثوا أسعار PUBG اليوم — تغيّرت أسعار المزوّد.</span>
-        <span>· خطط اشتراك جديدة متاحة الآن في تبويب الفواتير.</span>
-      </div>
+      <button class="announce-close" id="announceClose" title="إخفاء (لاحظ: المساحة تبقى محجوزة)">✕</button>
     </div>
   </div>
 
@@ -281,6 +275,18 @@
     <a class="sublink">فواتير الاشتراك</a>
   </div>
 
+  <!-- ===== الشريط العاجل المتحرّك (تحت الهيدر، أعلى محتوى الصفحة) ===== -->
+  <div class="ticker">
+    <div class="ticker-inner">
+      <span><span data-i="alert"></span> صيانة مجدولة يوم الجمعة 02:00–04:00 فجراً.</span>
+      <span>· حدّثوا أسعار PUBG اليوم — تغيّرت أسعار المزوّد.</span>
+      <span>· خطط اشتراك جديدة متاحة الآن في تبويب الفواتير.</span>
+      <span><span data-i="alert"></span> صيانة مجدولة يوم الجمعة 02:00–04:00 فجراً.</span>
+      <span>· حدّثوا أسعار PUBG اليوم — تغيّرت أسعار المزوّد.</span>
+      <span>· خطط اشتراك جديدة متاحة الآن في تبويب الفواتير.</span>
+    </div>
+  </div>
+
   <div class="wrap">
     <header class="head">
       <div>
@@ -289,7 +295,7 @@
         <p>إدارة أرصدة الوكلاء وحدودهم الائتمانية وحالتهم — نموذج تصميم للمراجعة.</p>
       </div>
       <div style="display:flex; align-items:center; gap:10px">
-        <span class="ver">نسخة المعاينة · v5</span>
+        <span class="ver">نسخة المعاينة · v6</span>
         <button class="theme-btn" id="themeBtn" aria-label="تبديل المظهر">
           <span id="themeIco"></span><span id="themeTxt">داكن</span>
         </button>
@@ -458,8 +464,9 @@
   setTheme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   btn.addEventListener('click', () => setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
 
+  // إخفاء التنبيه = مسح المحتوى فقط؛ المساحة تبقى محجوزة (الهيدر لا يرتفع)
   document.getElementById('announceClose').addEventListener('click', () => {
-    document.getElementById('announce').style.display = 'none';
+    document.getElementById('announce').classList.add('is-empty');
   });
 
   apply();
