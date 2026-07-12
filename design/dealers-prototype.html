@@ -136,6 +136,7 @@
     padding: 8px 14px; cursor: pointer; font: inherit; font-size: 13px; box-shadow: var(--shadow);
   }
   .theme-btn:hover { color: var(--ink); border-color: var(--border-strong); }
+  .ver { background: var(--primary); color: #fff; font-size: 11.5px; font-weight: 700; padding: 5px 11px; border-radius: 999px; letter-spacing: .02em; }
 
   /* ============ Summary ============ */
   .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
@@ -287,9 +288,12 @@
         <h1>قسم الوكلاء</h1>
         <p>إدارة أرصدة الوكلاء وحدودهم الائتمانية وحالتهم — نموذج تصميم للمراجعة.</p>
       </div>
-      <button class="theme-btn" id="themeBtn" aria-label="تبديل المظهر">
-        <span id="themeIco"></span><span id="themeTxt">داكن</span>
-      </button>
+      <div style="display:flex; align-items:center; gap:10px">
+        <span class="ver">نسخة المعاينة · v5</span>
+        <button class="theme-btn" id="themeBtn" aria-label="تبديل المظهر">
+          <span id="themeIco"></span><span id="themeTxt">داكن</span>
+        </button>
+      </div>
     </header>
 
     <section class="summary">
