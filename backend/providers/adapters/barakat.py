@@ -34,7 +34,7 @@ class BarakatAdapter(BaseAdapter):
     def _base(self, config: dict) -> str:
         return (config.get("base_url") or "").rstrip("/")
 
-    def place_order(self, order, config: dict) -> ExecutionResult:
+    def place_order(self, order, config: dict, provider=None, depth: int = 0) -> ExecutionResult:
         base = self._base(config)
         token = config.get("api_token")
         if not base or not token:

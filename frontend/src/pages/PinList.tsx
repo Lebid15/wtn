@@ -30,6 +30,13 @@ export default function PinList() {
 
   const money = (v: string) => Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
+  // حفظ توجيه المنتج فوراً (المزوّد الرئيسي/البديلان/معرّف الباقة)
+  async function patch(id: number, field: string, value: string) {
+    const body: any = { [field]: field === "provider_package_id" ? value : (value || null) };
+    const r = await api.patch(`/catalog/products/${id}/`, body);
+    setProducts((ps) => ps.map((x) => (x.id === id ? { ...x, ...r.data } : x)));
+  }
+
   if (loading) return <div style={{ padding: 30 }}>جارٍ التحميل...</div>;
 
   return (
@@ -75,9 +82,15 @@ export default function PinList() {
                       </td>
                       <td className="buy num">{money(p.cost_price)}</td>
                       <td className="sell num">{money(p.recommended_price)}</td>
-                      <td><ApiSelect providers={providers} /></td>
-                      <td><ApiSelect providers={providers} fallback /></td>
-                      <td><ApiSelect providers={providers} fallback /></td>
+                      <td>
+                        <ApiSelect providers={providers} value={p.provider} onPick={(v) => patch(p.id, "provider", v)} />
+                        <input defaultValue={p.provider_package_id}
+                          onBlur={(e) => e.target.value !== p.provider_package_id && patch(p.id, "provider_package_id", e.target.value)}
+                          placeholder="معرّف الباقة لدى المزوّد"
+                          style={{ width: 150, height: 26, fontSize: 11, marginTop: 4, borderRadius: 6 }} />
+                      </td>
+                      <td><ApiSelect providers={providers} fallback value={p.provider_alt1} onPick={(v) => patch(p.id, "provider_alt1", v)} /></td>
+                      <td><ApiSelect providers={providers} fallback value={p.provider_alt2} onPick={(v) => patch(p.id, "provider_alt2", v)} /></td>
                     </tr>
                   ))}
                 </Fragment>
@@ -95,9 +108,10 @@ export default function PinList() {
   );
 }
 
-function ApiSelect({ providers, fallback = false }: { providers: Provider[]; fallback?: boolean }) {
+function ApiSelect({ providers, fallback = false, value, onPick }:
+  { providers: Provider[]; fallback?: boolean; value: number | null; onPick: (v: string) => void }) {
   return (
-    <select style={{ width: 150 }} defaultValue="">
+    <select style={{ width: 150, height: 30 }} value={value ?? ""} onChange={(e) => onPick(e.target.value)}>
       <option value="">{fallback ? "بديل مغلق" : "— اختر —"}</option>
       {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
     </select>

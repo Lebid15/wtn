@@ -9,10 +9,9 @@ class InternalPoolAdapter(BaseAdapter):
 
     code = "internal"
 
-    def place_order(self, order, config: dict) -> ExecutionResult:
+    def place_order(self, order, config: dict, provider=None, depth: int = 0) -> ExecutionResult:
         from pool.models import Pin, PinPool
 
-        provider = order.product.provider
         pools = PinPool.objects.filter(
             tenant=order.tenant, status=PinPool.Status.ACTIVE
         )

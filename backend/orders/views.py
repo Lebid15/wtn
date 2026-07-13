@@ -197,8 +197,11 @@ def store_buy_view(request):
 
 
 def _maybe_auto_execute(order):
-    """ينفّذ الطلب آلياً إن كان منتجه تلقائياً وله مزوّد (بعد الإنشاء والالتزام)."""
-    if order.product.execution_type == Product.Execution.AUTO and order.product.provider_id:
+    """ينفّذ الطلب آلياً إن كان منتجه تلقائياً وله أي مزوّد في سلسلة التوجيه."""
+    p = order.product
+    if p.execution_type == Product.Execution.AUTO and (
+        p.provider_id or p.provider_alt1_id or p.provider_alt2_id
+    ):
         services.dispatch_order(order)
 
 

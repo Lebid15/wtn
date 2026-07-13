@@ -25,7 +25,7 @@ class BaseAdapter:
 
     code = "base"
 
-    def place_order(self, order, config: dict) -> ExecutionResult:  # pragma: no cover
+    def place_order(self, order, config: dict, provider=None, depth: int = 0) -> ExecutionResult:  # pragma: no cover
         raise NotImplementedError
 
     # أدوات مشتركة لتحليل الاستجابات التركية (pipe-separated)

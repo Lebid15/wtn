@@ -101,44 +101,68 @@ def execute_order(order: Order, *, provider=None, pin="") -> Order:
     return order
 
 
-def dispatch_order(order: Order) -> Order:
+def dispatch_order(order: Order, depth: int = 0) -> Order:
     """
-    التنفيذ التلقائي: يستدعي محوّل المزوّد ويطبّق النتيجة على الطلب.
-    يُستدعى بعد إنشاء الطلب (خارج معاملة الإنشاء، لأنه قد يتصل بالشبكة).
-    - success → ناجح + PIN.  - processing → قيد التنفيذ.  - failed → عالق.
-    لا يُسترجع المبلغ آلياً عند الفشل؛ يتركه للأدمن (إلغاء = استرجاع).
+    التنفيذ التلقائي مع التوجيه البديل (Failover):
+    يُجرَّب المزوّد الرئيسي، وعند الفشل يُجرَّب API 1 ثم API 2 تلقائياً —
+    بحسب ما فعّله صاحب المتجر على المنتج (مزوّد واحد أو اثنان أو ثلاثة).
+    - success → ناجح + PIN.  - processing → قيد التنفيذ (يتوقّف عندها).
+    - فشل الكل → عالق، مع سجلّ محاولات كامل في api_response.
+    depth يمنع حلقات التوجيه الداخلي بين المتاجر (متجر → متجر → ...).
     """
     from providers.adapters.registry import adapter_for
 
-    provider = order.product.provider
-    adapter = adapter_for(provider)
-    if adapter is None:
-        return order  # يدوي أو بلا مزوّد — يبقى قيد الانتظار
-
-    try:
-        result = adapter.place_order(order, provider.config or {})
-    except Exception as e:  # أي خطأ غير متوقّع في المحوّل → عالق، لا يكسر الطلب
+    if depth > 2:
         order.status = Order.Status.STUCK
-        order.provider = provider
-        order.api_response = f"خطأ محوّل: {e}"[:1000]
-        order.save(update_fields=["status", "provider", "api_response"])
+        order.api_response = "تجاوز عمق التوجيه الداخلي المسموح (حلقة متاجر؟)"
+        order.save(update_fields=["status", "api_response"])
         return order
 
-    order.provider = provider
-    order.api_response = (result.note or "")[:1000]
-    if result.external_ref:
-        order.api_response = f"{order.api_response} · ref={result.external_ref}"[:1000]
+    product = order.product
+    chain = [p for p in (product.provider, product.provider_alt1, product.provider_alt2) if p]
+    if not chain:
+        return order  # بلا مزوّد — يبقى قيد الانتظار للتنفيذ اليدوي
 
-    if result.status == "success":
-        order.status = Order.Status.SUCCESS
-        order.pin_result = result.pin or ""
-        order.approved_at = timezone.now()
-    elif result.status == "processing":
-        order.status = Order.Status.PROCESSING
-    else:
-        order.status = Order.Status.STUCK
+    trail = []  # سجلّ المحاولات: "المزوّد: السبب"
+    for provider in chain:
+        adapter = adapter_for(provider)
+        if adapter is None:
+            trail.append(f"{provider.name}: منفّذ يدوي — تُخُطّي")
+            continue
+        try:
+            result = adapter.place_order(order, provider.config or {}, provider=provider, depth=depth)
+        except Exception as e:
+            trail.append(f"{provider.name}: خطأ محوّل ({e})")
+            continue
 
-    order.save(update_fields=["status", "provider", "pin_result", "api_response", "approved_at"])
+        note = (result.note or "").strip()
+        ref = f" · ref={result.external_ref}" if result.external_ref else ""
+
+        if result.status == "success":
+            order.status = Order.Status.SUCCESS
+            order.provider = provider
+            order.pin_result = result.pin or ""
+            order.approved_at = timezone.now()
+            prefix = f"[بديل بعد: {' | '.join(trail)}] " if trail else ""
+            order.api_response = f"{prefix}{note}{ref}"[:1000]
+            order.save(update_fields=["status", "provider", "pin_result", "api_response", "approved_at"])
+            return order
+
+        if result.status == "processing":
+            order.status = Order.Status.PROCESSING
+            order.provider = provider
+            prefix = f"[بديل بعد: {' | '.join(trail)}] " if trail else ""
+            order.api_response = f"{prefix}{note}{ref}"[:1000]
+            order.save(update_fields=["status", "provider", "api_response"])
+            return order
+
+        trail.append(f"{provider.name}: {note or 'فشل'}")
+
+    # فشلت كل التوجيهات → عالق مع السجلّ الكامل
+    order.status = Order.Status.STUCK
+    order.provider = chain[-1]
+    order.api_response = ("فشلت كل التوجيهات → " + " | ".join(trail))[:1000]
+    order.save(update_fields=["status", "provider", "api_response"])
     return order
 
 

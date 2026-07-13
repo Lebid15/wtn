@@ -86,6 +86,15 @@ class Product(models.Model):
         "providers.Provider", null=True, blank=True,
         on_delete=models.SET_NULL, related_name="products",
     )
+    # التوجيه البديل: عند فشل الرئيسي يُجرَّب API 1 ثم API 2 تلقائياً
+    provider_alt1 = models.ForeignKey(
+        "providers.Provider", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="products_alt1",
+    )
+    provider_alt2 = models.ForeignKey(
+        "providers.Provider", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="products_alt2",
+    )
     provider_package_id = models.CharField(max_length=120, blank=True, default="")
     description = models.CharField(max_length=255, blank=True, default="")
     sort_order = models.PositiveIntegerField(default=0)

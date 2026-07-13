@@ -22,7 +22,7 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             "id", "game", "game_name", "name", "cost_price", "recommended_price", "profit",
             "kupur", "status", "status_label", "is_parcali", "execution_type",
-            "provider", "provider_package_id",
+            "provider", "provider_alt1", "provider_alt2", "provider_package_id",
             "description", "sort_order", "created_at",
         ]
         read_only_fields = ["tenant"]

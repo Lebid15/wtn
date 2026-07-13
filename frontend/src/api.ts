@@ -63,6 +63,10 @@ export interface Product {
   status_label: string;
   execution_type: string;
   is_parcali: boolean;
+  provider: number | null;
+  provider_alt1: number | null;
+  provider_alt2: number | null;
+  provider_package_id: string;
   description: string;
   sort_order: number;
   created_at: string;

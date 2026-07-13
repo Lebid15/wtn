@@ -24,7 +24,7 @@ class ZnetAdapter(BaseAdapter):
     def _gen_referans() -> str:
         return str(int(time.time() * 1000) + random.randint(100, 999))
 
-    def place_order(self, order, config: dict) -> ExecutionResult:
+    def place_order(self, order, config: dict, provider=None, depth: int = 0) -> ExecutionResult:
         base = self._base(config)
         if not base or not config.get("kod") or not config.get("sifre"):
             return ExecutionResult(status="failed", note="إعداد ZNET ناقص (base_url/kod/sifre)")
