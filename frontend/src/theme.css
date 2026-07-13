@@ -26,7 +26,10 @@
   --border: #d7dee0;
   --text: #233;
   --muted: #6a7a7f;
-  --th-bg: #41565c;
+  --th-bg: var(--surface-2);
+  --th-ink: var(--text);
+  --btn-radius: 8px;
+  --fs: 16px;
   --ok: #3c8f57;
   --danger: #b0463a;
   --row-alt: #f8fafb;
@@ -47,6 +50,7 @@
 body {
   background: var(--bg);
   color: var(--text);
+  font-size: var(--fs);
 }
 /* حاوية بعرض ثابت — لا تتكيّف مع حجم الشاشة إطلاقاً */
 .app {
@@ -63,7 +67,7 @@ button { cursor: pointer; font-family: inherit; }
   height: 32px;
   padding: 0 16px;
   border: 0;
-  border-radius: 3px;
+  border-radius: var(--btn-radius);
   background: var(--primary);
   color: #fff;
   font-size: 14px;
@@ -147,7 +151,7 @@ input, select {
 /* ── نمط الجدول المعتمد (grid) — يُعمَّم على كل جداول المشروع ── */
 table.grid { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 table.grid thead th {
-  background: var(--surface-2); color: var(--text); font-size: 12.5px; font-weight: 800;
+  background: var(--th-bg); color: var(--th-ink); font-size: 12.5px; font-weight: 800;
   text-align: center; padding: 11px 10px; white-space: nowrap;
   border: 1px solid var(--border); border-top: 0;
 }
@@ -223,3 +227,17 @@ img.gicon { box-shadow: none; }
   padding: 6px 13px; border-radius: 7px; height: auto; transition: .12s;
 }
 .segment button.active { background: var(--surface); color: var(--text); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+
+
+/* ═══ الوضع الداكن (من لوحة التخصيص) ═══ */
+[data-mode="dark"] {
+  --bg: #10181a; --surface: #16211f; --surface-2: #1b2825;
+  --border: #26363310; --border: #263633; --border-strong: #31443f;
+  --text: #e7f0ed; --muted: #94a8a3; --faint: #6f847f;
+  --row-alt: #18241f; --primary-tint: #1c2f2c;
+  --ok-tint: #14312a; --debt-tint: #34181f;
+  --row-sep: #22362b; --th-bg: var(--surface-2); --th-ink: var(--text);
+  --shadow-soft: 0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+}
+[data-mode="dark"] .subnav, [data-mode="dark"] .sublink { background: var(--surface); }
+[data-mode="dark"] .sublink.active { background: var(--bg); }

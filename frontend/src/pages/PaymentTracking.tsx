@@ -98,7 +98,7 @@ const table: React.CSSProperties = {
   width: "100%", borderCollapse: "collapse", background: "var(--surface)", fontSize: 13.5,
 };
 const th: React.CSSProperties = {
-  background: "var(--surface-2)", color: "var(--text)", padding: "11px 10px",
+  background: "var(--th-bg)", color: "var(--th-ink)", padding: "11px 10px",
   textAlign: "center", fontWeight: 800, fontSize: 12.5, whiteSpace: "nowrap",
   border: "1px solid var(--border)", borderTop: 0,
 };

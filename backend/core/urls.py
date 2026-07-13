@@ -12,6 +12,7 @@ urlpatterns = [
     path("auth/me/", views.me_view, name="me"),
     path("settings/site/", views.site_settings_view, name="site-settings"),
     path("settings/sms/", views.sms_settings_view, name="sms-settings"),
+    path("settings/theme/", views.theme_config_view, name="theme-config"),
     path("ledger/", views.ledger_view, name="ledger"),
     path("dealers/", views.dealers_view, name="dealers"),
     path("dealers/<int:dealer_id>/transactions/", views.wallet_transactions_view, name="wallet-txns"),

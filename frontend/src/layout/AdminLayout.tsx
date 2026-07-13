@@ -3,6 +3,8 @@ import { Link, useLocation } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import Icon from "../components/Icon";
+import ThemeCustomizer from "../components/ThemeCustomizer";
+import { applyThemeConfig, THEME_DEFAULTS, type ThemeConfig } from "../theme";
 
 // أقسام القائمة الرئيسية (مطابقة للمرجع؛ Fatura/Kontor مستبعدان)
 const MAIN_TABS = [
@@ -53,24 +55,35 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const loc = useLocation();
   const [ann, setAnn] = useState<{ message: string; ticker: string } | null>(null);
+  const [themeCfg, setThemeCfg] = useState<ThemeConfig>({});
+  const [customizerOpen, setCustomizerOpen] = useState(false);
 
   useEffect(() => {
     api.get("/announcement/").then((r) => setAnn(r.data)).catch(() => setAnn({ message: "", ticker: "" }));
+    // تخصيص المظهر المحفوظ لهذا المتجر
+    api.get("/settings/theme/").then((r) => {
+      const cfg = r.data.config || {};
+      setThemeCfg(cfg);
+      applyThemeConfig(cfg);
+    }).catch(() => {});
   }, []);
 
+  const flags = { ...THEME_DEFAULTS, ...themeCfg };
   const tickerItems = (ann?.ticker || "").split("\n").map((s) => s.trim()).filter(Boolean);
 
   return (
     <div className="app">
       {/* ===== شريط تنبيه المنصّة (فوق الهيدر — المساحة محجوزة دائماً) ===== */}
-      <div className={`announce${ann?.message ? "" : " is-empty"}`}>
-        <div className="announce-main">
-          <span className="announce-tag">
-            <Icon name="bell" size={13} style={{ marginInlineEnd: 4 }} />إعلان من إدارة المنصّة
-          </span>
-          <span className="announce-text">{ann?.message || "—"}</span>
+      {flags.show_announce && (
+        <div className={`announce${ann?.message ? "" : " is-empty"}`}>
+          <div className="announce-main">
+            <span className="announce-tag">
+              <Icon name="bell" size={13} style={{ marginInlineEnd: 4 }} />إعلان من إدارة المنصّة
+            </span>
+            <span className="announce-text">{ann?.message || "—"}</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ===== Navbar ===== */}
       <div style={topbar}>
@@ -110,6 +123,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <span style={{ color: "#fff", fontSize: 13, marginInlineStart: 8 }}>
             {user?.name}
           </span>
+          <button onClick={() => setCustomizerOpen(true)} style={logoutBtn} title="تخصيص المظهر">
+            🎨 المظهر
+          </button>
           <button onClick={logout} style={logoutBtn}>
             <Icon name="logout" size={15} style={{ marginInlineEnd: 5 }} />خروج آمن
           </button>
@@ -129,7 +145,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       </div>
 
       {/* ===== الشريط العاجل المتحرّك (تحت الهيدر، أعلى المحتوى) ===== */}
-      {tickerItems.length > 0 && (
+      {flags.show_ticker && tickerItems.length > 0 && (
         <div className="ticker">
           <div className="ticker-inner">
             {[...tickerItems, ...tickerItems].map((t, i) => (
@@ -148,6 +164,15 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <div style={footer}>
         {user?.tenant?.name} — نظام لوحة وكلاء لشحن الألعاب © {new Date().getFullYear()}
       </div>
+
+      {/* ===== لوحة تخصيص المظهر ===== */}
+      {customizerOpen && (
+        <ThemeCustomizer
+          config={themeCfg}
+          onChange={setThemeCfg}
+          onClose={() => setCustomizerOpen(false)}
+        />
+      )}
     </div>
   );
 }

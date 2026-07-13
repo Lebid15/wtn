@@ -323,3 +323,21 @@ def announcement_view(request):
     from .models import PlatformAnnouncement
     a = PlatformAnnouncement.get()
     return Response({"message": a.message, "ticker": a.ticker})
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([IsAuthenticated])
+def theme_config_view(request):
+    """تخصيص مظهر المتجر: أي مستخدم بالمستأجر يقرأه؛ صاحب المتجر فقط يعدّله."""
+    tenant = request.user.tenant
+    if tenant is None:
+        return Response({"config": {}})
+    if request.method == "PUT":
+        if request.user.role != User.Role.TENANT_ADMIN:
+            return Response({"detail": "التخصيص لصاحب المتجر فقط"}, status=403)
+        cfg = request.data.get("config")
+        if not isinstance(cfg, dict) or len(str(cfg)) > 4000:
+            return Response({"detail": "إعدادات غير صالحة"}, status=400)
+        tenant.theme_config = cfg
+        tenant.save(update_fields=["theme_config"])
+    return Response({"config": tenant.theme_config or {}})

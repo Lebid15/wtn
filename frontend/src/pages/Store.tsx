@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import Icon from "../components/Icon";
 import Tickets from "../components/Tickets";
+import { applyThemeConfig } from "../theme";
 
 interface SProduct { id: number; name: string; price: string; require_player_id: boolean }
 interface SGame { id: number; name: string; image_url: string; require_player_id: boolean; products: SProduct[] }
@@ -36,7 +37,11 @@ export default function Store() {
   function loadSummary() {
     api.get("/store/summary/").then((r) => setSummary(r.data)).catch(() => {});
   }
-  useEffect(loadSummary, []);
+  useEffect(() => {
+    loadSummary();
+    // الوكيل يرث تخصيص مظهر متجره (يضبطه صاحب المتجر)
+    api.get("/settings/theme/").then((r) => applyThemeConfig(r.data.config || {})).catch(() => {});
+  }, []);
 
   // تحديث لحظي (polling) لعدّاد الرسائل غير المقروءة
   useEffect(() => {
@@ -617,7 +622,7 @@ const table: React.CSSProperties = {
   width: "100%", borderCollapse: "collapse", background: "var(--surface)", fontSize: 13.5,
 };
 const th: React.CSSProperties = {
-  background: "var(--surface-2)", color: "var(--text)", padding: "11px 10px",
+  background: "var(--th-bg)", color: "var(--th-ink)", padding: "11px 10px",
   textAlign: "center", fontWeight: 800, fontSize: 12.5, whiteSpace: "nowrap",
   border: "1px solid var(--border)", borderTop: 0,
 };
