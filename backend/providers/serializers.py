@@ -11,7 +11,7 @@ class ProviderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Provider
         fields = [
-            "id", "name", "type", "type_label", "status", "status_label",
+            "id", "name", "type", "type_label", "config", "status", "status_label",
             "real_balance", "balance", "debt", "loss_guard", "auto_update",
             "balance_alert_threshold", "sort_order", "created_at",
         ]

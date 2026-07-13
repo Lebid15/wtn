@@ -7,6 +7,7 @@ export default function Providers() {
   const [totals, setTotals] = useState<{ real_balance: string; balance: string; debt: string } | null>(null);
   const [showPassive, setShowPassive] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState<{ edit?: Provider } | null>(null);
 
   function load() {
     setLoading(true);
@@ -29,7 +30,7 @@ export default function Providers() {
     <div style={{ padding: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
         <h2 style={{ fontSize: 20, color: "var(--primary-dark)" }}>مزوّدو API (Oyun Apileri)</h2>
-        <button className="btn g">➕ إضافة مزوّد</button>
+        <button className="btn g" onClick={() => setModal({})}>➕ إضافة مزوّد</button>
         <button className={showPassive ? "btn" : "btn r"} onClick={() => setShowPassive((v) => !v)}>
           {showPassive ? "عرض النشطة" : "⏸ المعطّلة"}
         </button>
@@ -67,7 +68,10 @@ export default function Providers() {
               </td>
               <td style={td}>
                 <div style={{ display: "flex", gap: 4, justifyContent: "center", color: "var(--muted)" }}>
-                  <Icon name="settings" size={15} /><Icon name="edit" size={15} />
+                  <button onClick={() => setModal({ edit: p })} title="إعدادات الاتصال"
+                    style={{ background: "transparent", border: 0, color: "var(--primary)", cursor: "pointer" }}>
+                    <Icon name="settings" size={15} />
+                  </button>
                   <Icon name="card" size={15} /><Icon name="chart" size={15} />
                 </div>
               </td>
@@ -88,13 +92,164 @@ export default function Providers() {
       </table>
 
       <div style={note}>
-        أنواع المزوّدين: <b>نفس النظام</b> (ربط لوحة أخرى) · <b>متجر بطاقات</b> (مزوّد خارجي)
+        أنواع المزوّدين: <b>نفس النظام</b> (متجر داخلي على منصّتنا) · <b>متجر بطاقات</b> (ZNET/Barakat خارجي)
         · <b>بنك البينات</b> (مخزون داخلي) · <b>منفّذ يدوي</b> (بشري). التوجيه بثلاثة
         مستويات (رئيسي + بديلين) يُربط من صفحة قائمة المنتجات.
       </div>
+
+      {modal && (
+        <ProviderModal edit={modal.edit}
+          onClose={() => setModal(null)}
+          onDone={() => { setModal(null); load(); }} />
+      )}
     </div>
   );
 }
+
+/* ===== نموذج إضافة/تعديل مزوّد — حقول ذكية حسب النوع ===== */
+type Kind = "pool" | "tenant" | "znet" | "barakat" | "loader";
+const KINDS: { k: Kind; label: string; hint: string }[] = [
+  { k: "znet", label: "ZNET (خارجي)", hint: "مزوّد تركي — kod/sifre" },
+  { k: "barakat", label: "Barakat / Apstore (خارجي)", hint: "توكن API في الهيدر" },
+  { k: "tenant", label: "متجر داخلي (نفس النظام)", hint: "متجر آخر على منصّتنا" },
+  { k: "pool", label: "بنك البينات (بطاقات)", hint: "مخزون داخلي — تسليم فوري" },
+  { k: "loader", label: "منفّذ يدوي", hint: "بلا تنفيذ آلي" },
+];
+
+function kindOf(p?: Provider): Kind {
+  const code = (p?.config?.code || "").toLowerCase();
+  if (code === "znet") return "znet";
+  if (code === "barakat" || code === "apstore") return "barakat";
+  if (p?.type === "pool") return "pool";
+  if (p?.type === "same_system") return "tenant";
+  if (p?.type === "loader") return "loader";
+  return p?.type === "card_store" ? "barakat" : "pool";
+}
+
+function ProviderModal({ edit, onClose, onDone }:
+  { edit?: Provider; onClose: () => void; onDone: () => void }) {
+  const [name, setName] = useState(edit?.name || "");
+  const [kind, setKind] = useState<Kind>(kindOf(edit));
+  const [cfg, setCfg] = useState<Record<string, string>>({ ...(edit?.config || {}) });
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const c = (k: string) => cfg[k] || "";
+  const setC = (k: string, v: string) => setCfg((o) => ({ ...o, [k]: v }));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(""); setBusy(true);
+    // اجمع النوع + config حسب الاختيار
+    const body: any = { name };
+    if (kind === "znet") {
+      body.type = "card_store";
+      body.config = { code: "znet", base_url: c("base_url"), kod: c("kod"), sifre: c("sifre") };
+      if (!c("base_url") || !c("kod") || !c("sifre")) { setErr("كل حقول ZNET مطلوبة"); setBusy(false); return; }
+    } else if (kind === "barakat") {
+      body.type = "card_store";
+      body.config = { code: "barakat", base_url: c("base_url"), api_token: c("api_token") };
+      if (!c("base_url") || !c("api_token")) { setErr("رابط الخدمة والتوكن مطلوبان"); setBusy(false); return; }
+    } else if (kind === "tenant") {
+      body.type = "same_system";
+      body.config = { dealer_login: c("dealer_login") };
+      if (!c("dealer_login")) { setErr("رقم دخول حسابنا لدى المتجر المورّد مطلوب"); setBusy(false); return; }
+    } else if (kind === "pool") {
+      body.type = "pool"; body.config = {};
+    } else {
+      body.type = "loader"; body.config = {};
+    }
+    try {
+      if (edit) await api.patch(`/providers/${edit.id}/`, body);
+      else await api.post("/providers/", body);
+      onDone();
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || "فشل الحفظ");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <form style={mbox} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+        <div style={mhead}>{edit ? `إعدادات المزوّد: ${edit.name}` : "إضافة مزوّد"}</div>
+        <div style={{ padding: 20 }}>
+          <label style={lbl}>اسم المزوّد *</label>
+          <input style={inp} value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+
+          <label style={lbl}>نوع المزوّد *</label>
+          <select style={inp} value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
+            {KINDS.map((x) => <option key={x.k} value={x.k}>{x.label}</option>)}
+          </select>
+          <div style={{ fontSize: 12, color: "var(--muted)", margin: "4px 2px 0" }}>
+            {KINDS.find((x) => x.k === kind)?.hint}
+          </div>
+
+          {kind === "znet" && (
+            <>
+              <label style={lbl}>رابط الخدمة (base_url) *</label>
+              <input style={inp} dir="ltr" placeholder="https://panel.znet.com.tr" value={c("base_url")} onChange={(e) => setC("base_url", e.target.value)} />
+              <label style={lbl}>kod (رقم الجوال) *</label>
+              <input style={inp} dir="ltr" value={c("kod")} onChange={(e) => setC("kod", e.target.value)} />
+              <label style={lbl}>sifre (كلمة السر) *</label>
+              <input style={inp} dir="ltr" type="password" value={c("sifre")} onChange={(e) => setC("sifre", e.target.value)} />
+            </>
+          )}
+          {kind === "barakat" && (
+            <>
+              <label style={lbl}>رابط الخدمة (base_url) *</label>
+              <input style={inp} dir="ltr" placeholder="https://api.x-stor.net" value={c("base_url")} onChange={(e) => setC("base_url", e.target.value)} />
+              <label style={lbl}>api-token *</label>
+              <input style={inp} dir="ltr" type="password" value={c("api_token")} onChange={(e) => setC("api_token", e.target.value)} />
+            </>
+          )}
+          {kind === "tenant" && (
+            <>
+              <label style={lbl}>رقم دخول حسابنا لدى المتجر المورّد *</label>
+              <input style={inp} dir="ltr" placeholder="مثال: alaya_at_supplier" value={c("dealer_login")} onChange={(e) => setC("dealer_login", e.target.value)} />
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+                يجب أن يكون لديك حساب وكيل (برصيد) لدى ذلك المتجر. معرّف الباقة على
+                منتجاتك = رقم منتج المورّد.
+              </div>
+            </>
+          )}
+          {kind === "pool" && (
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 8 }}>
+              بعد الحفظ: أنشئ مجموعة بينات واربطها بهذا المزوّد من صفحة <b>بنك البينات</b>.
+            </div>
+          )}
+
+          {err && <div style={errBox}>{err}</div>}
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <button className="btn g" style={{ flex: 1, height: 40 }} disabled={busy}>
+              {busy ? "جارٍ..." : "حفظ"}
+            </button>
+            <button type="button" className="btn" style={{ height: 40, background: "#8a999e" }} onClick={onClose}>
+              إلغاء
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+const overlay: React.CSSProperties = {
+  position: "fixed", inset: 0, background: "rgba(0,0,0,.45)",
+  display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
+};
+const mbox: React.CSSProperties = {
+  width: 440, background: "var(--surface)", borderRadius: 10, overflow: "hidden",
+  boxShadow: "0 16px 50px rgba(0,0,0,.35)",
+};
+const mhead: React.CSSProperties = {
+  background: "var(--primary)", color: "#fff", padding: "14px 18px", fontWeight: 700, fontSize: 15,
+};
+const lbl: React.CSSProperties = { display: "block", fontSize: 13, color: "var(--muted)", margin: "13px 2px 5px" };
+const inp: React.CSSProperties = { width: "100%", height: 38, borderRadius: 8 };
+const errBox: React.CSSProperties = {
+  background: "#fdecea", border: "1px solid #f5c6c2", color: "var(--danger)",
+  fontSize: 13, padding: "9px 12px", borderRadius: 5, marginTop: 12,
+};
 
 const table: React.CSSProperties = {
   width: "100%", borderCollapse: "collapse", background: "var(--surface)", fontSize: 13.5,

@@ -106,6 +106,7 @@ export interface Provider {
   debt: string;
   loss_guard: boolean;
   auto_update: boolean;
+  config: Record<string, string>;
 }
 export interface Dealer {
   id: number;
