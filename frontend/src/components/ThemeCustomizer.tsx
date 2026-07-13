@@ -26,6 +26,44 @@ const FONTS = [
   { label: "Segoe", v: '"Segoe UI", Tahoma, Arial, sans-serif' },
 ];
 
+/** يشتقّ درجة أغمق من اللون (للـ hover والتبويب النشط). */
+function darken(hex: string, f = 0.24): string {
+  const n = hex.replace("#", "");
+  if (n.length !== 6) return hex;
+  const d = (i: number) => Math.max(0, Math.round(parseInt(n.slice(i, i + 2), 16) * (1 - f)))
+    .toString(16).padStart(2, "0");
+  return `#${d(0)}${d(2)}${d(4)}`;
+}
+
+/** أبيض أم داكن؟ حسب سطوع الخلفية (ليبقى نص رأس الجدول مقروءاً). */
+function inkFor(hex: string): string {
+  const n = hex.replace("#", "");
+  if (n.length !== 6) return "#ffffff";
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(n.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 160 ? "#1e2b2d" : "#ffffff";
+}
+
+/** دائرة "لون مخصّص" — تفتح منتقي ألوان المتصفح الكامل وتبثّ أثناء السحب. */
+function ColorPick({ value, selected, onPick }:
+  { value: string; selected: boolean; onPick: (v: string) => void }) {
+  return (
+    <label title="لون مخصّص — اختر أي لون" style={{
+      width: 34, height: 34, borderRadius: 9, cursor: "pointer", position: "relative",
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      background: selected
+        ? value
+        : "conic-gradient(#f44,#fa0,#ff4,#4c4,#4cf,#44f,#c4f,#f44)",
+      border: selected ? "2.5px solid var(--text)" : "2px solid var(--border)",
+      color: "#fff", fontWeight: 800, fontSize: 15, textShadow: "0 1px 2px rgba(0,0,0,.5)",
+    }}>
+      +
+      <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#3a6b73"}
+        onInput={(e) => onPick(e.currentTarget.value)}
+        style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", width: "100%", height: "100%", border: 0, padding: 0 }} />
+    </label>
+  );
+}
+
 export default function ThemeCustomizer({ config, onChange, onClose }: Props) {
   const [saved, setSaved] = useState<null | "ok" | "err">(null);
   const [busy, setBusy] = useState(false);
@@ -83,6 +121,8 @@ export default function ThemeCustomizer({ config, onChange, onClose }: Props) {
                 <Swatch key={p.c} color={p.c} selected={c.primary === p.c}
                   onClick={() => set({ primary: p.c, primary_strong: p.s })} />
               ))}
+              <ColorPick value={c.primary} selected={!PRIMARIES.some((p) => p.c === c.primary)}
+                onPick={(v) => set({ primary: v, primary_strong: darken(v) })} />
             </div>
           </Section>
 
@@ -92,6 +132,8 @@ export default function ThemeCustomizer({ config, onChange, onClose }: Props) {
                 <Swatch key={i} color={t.c || "#f6f8f8"} label={t.label} selected={(c.th_bg || "") === t.c}
                   onClick={() => set({ th_bg: t.c, th_ink: t.ink })} />
               ))}
+              <ColorPick value={c.th_bg || "#f6f8f8"} selected={!!c.th_bg && !TH_COLORS.some((t) => t.c === c.th_bg)}
+                onPick={(v) => set({ th_bg: v, th_ink: inkFor(v) })} />
             </div>
           </Section>
 
@@ -100,6 +142,8 @@ export default function ThemeCustomizer({ config, onChange, onClose }: Props) {
               {ANNOUNCES.map((a) => (
                 <Swatch key={a} color={a} selected={c.announce === a} onClick={() => set({ announce: a })} />
               ))}
+              <ColorPick value={c.announce} selected={!ANNOUNCES.includes(c.announce)}
+                onPick={(v) => set({ announce: v })} />
             </div>
           </Section>
 
