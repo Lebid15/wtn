@@ -25,6 +25,7 @@ else:
 # المكتبة العالمية + عرض التنفيذ التلقائي idempotent — تُشغَّل دائماً
 subprocess.run(["python", "manage.py", "seed_library"], check=False)
 subprocess.run(["python", "manage.py", "seed_auto"], check=False)
+subprocess.run(["python", "manage.py", "seed_routing_test"], check=False)
 PY
 
 exec gunicorn config.wsgi:application \
