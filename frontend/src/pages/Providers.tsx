@@ -10,6 +10,8 @@ export default function Providers() {
   const [modal, setModal] = useState<{ edit?: Provider } | null>(null);
   const [refreshing, setRefreshing] = useState<number | null>(null);
   const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
+  const [del, setDel] = useState<Provider | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   function load() {
     setLoading(true);
@@ -43,6 +45,20 @@ export default function Providers() {
     } catch (e: any) {
       setFlash({ ok: false, text: `«${p.name}»: ${e?.response?.data?.detail || "فشل جلب الرصيد"}` });
     } finally { setRefreshing(null); }
+  }
+
+  async function confirmDelete() {
+    if (!del) return;
+    setDeleting(true); setFlash(null);
+    try {
+      await api.delete(`/providers/${del.id}/`);
+      setFlash({ ok: true, text: `تم حذف المزوّد «${del.name}»` });
+      setDel(null);
+      load();
+    } catch (e: any) {
+      setFlash({ ok: false, text: `«${del.name}»: ${e?.response?.data?.detail || "فشل الحذف"}` });
+      setDel(null);
+    } finally { setDeleting(false); }
   }
 
   if (loading) return <div style={{ padding: 30 }}>جارٍ التحميل...</div>;
@@ -100,9 +116,9 @@ export default function Providers() {
               </td>
               <td style={td}>
                 <div style={{ display: "flex", gap: 4, justifyContent: "center", alignItems: "center", color: "var(--muted)" }}>
-                  <button onClick={() => setModal({ edit: p })} title="إعدادات الاتصال"
+                  <button onClick={() => setModal({ edit: p })} title="تعديل المزوّد وإعدادات الاتصال"
                     style={{ background: "transparent", border: 0, color: "var(--primary)", cursor: "pointer" }}>
-                    <Icon name="settings" size={15} />
+                    <Icon name="edit" size={15} />
                   </button>
                   <button onClick={() => refreshBalance(p)} title="تحديث الرصيد الفعلي"
                     disabled={refreshing !== null}
@@ -112,6 +128,10 @@ export default function Providers() {
                     }}>
                     <Icon name="sun" size={15}
                       style={refreshing === p.id ? { animation: "spin 1.1s linear infinite" } : undefined} />
+                  </button>
+                  <button onClick={() => setDel(p)} title="حذف المزوّد"
+                    style={{ background: "transparent", border: 0, color: "var(--danger)", cursor: "pointer" }}>
+                    <Icon name="trash" size={15} />
                   </button>
                   <Icon name="card" size={15} /><Icon name="chart" size={15} />
                 </div>
@@ -142,6 +162,33 @@ export default function Providers() {
         <ProviderModal edit={modal.edit}
           onClose={() => setModal(null)}
           onDone={() => { setModal(null); load(); }} />
+      )}
+
+      {del && (
+        <div style={overlay} onClick={() => setDel(null)}>
+          <div style={mbox} onClick={(e) => e.stopPropagation()}>
+            <div style={{ ...mhead, background: "var(--danger)" }}>حذف المزوّد</div>
+            <div style={{ padding: 20 }}>
+              <div style={{ fontSize: 14.5, lineHeight: 1.9 }}>
+                هل أنت متأكد من حذف المزوّد <b>«{del.name}»</b>؟
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 8, lineHeight: 1.8 }}>
+                المنتجات الموجَّهة إليه لن تُحذف — سيُفكّ ربطها فقط وتعود للتنفيذ
+                اليدوي حتى تربطها بمزوّد آخر. سجلّ الطلبات السابقة يبقى كما هو.
+              </div>
+              <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+                <button className="btn r" style={{ flex: 1, height: 40 }}
+                  disabled={deleting} onClick={confirmDelete}>
+                  {deleting ? "جارٍ الحذف..." : "نعم، احذف"}
+                </button>
+                <button type="button" className="btn" style={{ height: 40, background: "#8a999e" }}
+                  onClick={() => setDel(null)}>
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
