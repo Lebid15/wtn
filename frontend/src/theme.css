@@ -133,6 +133,7 @@ input, select {
   animation: tickerMove 28s linear infinite;
 }
 @keyframes tickerMove { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .ticker-inner { animation: none; } }
 
 /* ── بطاقة + عنوانها ── */

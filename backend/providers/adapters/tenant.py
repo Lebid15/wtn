@@ -8,12 +8,32 @@ provider_package_id على المنتج = رقم منتج المورّد (ب).
 ويُنفَّذ لدى (ب) بتوجيهات (ب) نفسها (بنك بيناته أو مزوّده الخارجي...)،
 ويعود الـ PIN إلى طلبنا. أي سلسلة توريد كاملة داخل المنصّة.
 """
-from .base import BaseAdapter, ExecutionResult
+from decimal import Decimal
+
+from .base import BalanceResult, BaseAdapter, ExecutionResult
 
 
 class InternalTenantAdapter(BaseAdapter):
 
     code = "tenant"
+
+    def get_balance(self, config: dict, provider=None) -> BalanceResult:
+        """رصيد محفظتنا (كوكيل) لدى المتجر المورّد — قراءة محلية من القاعدة."""
+        from core.models import User
+
+        login = ((config or {}).get("dealer_login") or "").strip()
+        if not login:
+            return BalanceResult(ok=False, note="إعداد ناقص: dealer_login")
+        dealer = User.objects.filter(login_id=login).select_related("wallet", "tenant").first()
+        wallet = getattr(dealer, "wallet", None)
+        if dealer is None or wallet is None:
+            return BalanceResult(ok=False, note=f"حساب '{login}' غير موجود لدى المورّد أو بلا محفظة")
+        bal = wallet.balance
+        return BalanceResult(
+            ok=True, balance=bal,
+            debt=-bal if bal < Decimal("0") else Decimal("0"),
+            note=f"رصيدنا لدى متجر {dealer.tenant.name}",
+        )
 
     def place_order(self, order, config: dict, provider=None, depth: int = 0) -> ExecutionResult:
         from core.models import User

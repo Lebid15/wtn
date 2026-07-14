@@ -1,10 +1,12 @@
 """API للمزوّدين (Oyun Apileri) — معزول لكل مستأجر."""
 from django.db.models import Sum
+from rest_framework import status as http_status
 from rest_framework import viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from .adapters.registry import adapter_for
 from .models import Provider
 from .serializers import ProviderSerializer
 
@@ -23,6 +25,35 @@ class ProviderViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.user.tenant)
+
+    @action(detail=True, methods=["post"], url_path="refresh-balance")
+    def refresh_balance(self, request, pk=None):
+        """جلب الرصيد الفعلي من المزوّد وحفظه (زر الشمس ☀)."""
+        provider = self.get_object()
+        adapter = adapter_for(provider)
+        if adapter is None:
+            return Response(
+                {"detail": "منفّذ يدوي — لا رصيد آلياً لهذا النوع"},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        result = adapter.get_balance(provider.config or {}, provider=provider)
+        if not result.ok:
+            return Response(
+                {"detail": result.note or "فشل جلب الرصيد من المزوّد"},
+                status=http_status.HTTP_502_BAD_GATEWAY,
+            )
+        fields = []
+        if result.balance is not None:
+            provider.real_balance = result.balance
+            fields.append("real_balance")
+        if result.debt is not None:
+            provider.debt = result.debt
+            fields.append("debt")
+        if fields:
+            provider.save(update_fields=fields)
+        data = ProviderSerializer(provider).data
+        data["balance_note"] = result.note
+        return Response(data)
 
 
 @api_view(["GET"])

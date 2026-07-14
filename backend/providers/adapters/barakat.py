@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 import requests
 
-from .base import BaseAdapter, ExecutionResult
+from .base import BalanceResult, BaseAdapter, ExecutionResult
 
 
 _SUCCESS = {"success", "ok", "done", "complete", "completed", "accept"}
@@ -59,6 +59,35 @@ class BarakatAdapter(BaseAdapter):
             return ExecutionResult(status="failed", note="استجابة Barakat غير صالحة", raw=resp.text)
 
         return self.parse_place(data)
+
+    def get_balance(self, config: dict, provider=None) -> BalanceResult:
+        """GET {base}/client/api/profile بترويسة api-token → JSON فيه balance."""
+        base = self._base(config)
+        token = config.get("api_token")
+        if not base or not token:
+            return BalanceResult(ok=False, note="إعداد Barakat ناقص (base_url/api_token)")
+        try:
+            resp = requests.get(
+                f"{base}/client/api/profile",
+                headers={"api-token": token}, timeout=(5, 20),
+            )
+            data = resp.json()
+        except requests.RequestException as e:
+            return BalanceResult(ok=False, note=f"تعذّر الاتصال بـ Barakat: {e}")
+        except ValueError:
+            return BalanceResult(ok=False, note="استجابة Barakat غير صالحة", raw=resp.text)
+
+        d = data.get("data", data) if isinstance(data, dict) else {}
+        raw_balance = d.get("balance") if isinstance(d, dict) else None
+        if raw_balance is None:
+            return BalanceResult(
+                ok=False, raw=str(data),
+                note=str((data or {}).get("message") or "لم يُعِد المزوّد رصيداً"),
+            )
+        try:
+            return BalanceResult(ok=True, balance=Decimal(str(raw_balance)), raw=str(data))
+        except (InvalidOperation, ValueError):
+            return BalanceResult(ok=False, note=f"رصيد غير مفهوم: {raw_balance}", raw=str(data))
 
     def parse_place(self, data: dict) -> ExecutionResult:
         """تحليل استجابة newOrder: {status:'OK', data:{order_id,status,price,note}} أو {status:'ERROR',message}."""

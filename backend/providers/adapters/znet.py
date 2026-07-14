@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 
 import requests
 
-from .base import BaseAdapter, ExecutionResult
+from .base import BalanceResult, BaseAdapter, ExecutionResult
 
 
 class ZnetAdapter(BaseAdapter):
@@ -13,6 +13,7 @@ class ZnetAdapter(BaseAdapter):
     config المتوقّع: {base_url, kod, sifre, orders_path?}
     place_order → GET {base}/servis/pin_ekle.php?kod&sifre&oyun&referans&musteri_tel&oyuncu_bilgi
     استجابة النجاح: "OK|cost|balance" · الفشل: "<code>|رسالة"
+    get_balance → GET {base}/servis/bakiye_kontrol.php?kod&sifre → "OK|رصيد|دين"
     """
 
     code = "znet"
@@ -47,6 +48,36 @@ class ZnetAdapter(BaseAdapter):
             return ExecutionResult(status="failed", note=f"تعذّر الاتصال بـ ZNET: {e}")
 
         return self.parse_place(resp.text, referans, resp.status_code)
+
+    def get_balance(self, config: dict, provider=None) -> BalanceResult:
+        base = self._base(config)
+        if not base or not config.get("kod") or not config.get("sifre"):
+            return BalanceResult(ok=False, note="إعداد ZNET ناقص (base_url/kod/sifre)")
+        path = config.get("balance_path") or "servis/bakiye_kontrol.php"
+        try:
+            resp = requests.get(
+                f"{base}/{path}",
+                params={"kod": config["kod"], "sifre": config["sifre"]},
+                timeout=(5, 20),
+            )
+        except requests.RequestException as e:
+            return BalanceResult(ok=False, note=f"تعذّر الاتصال بـ ZNET: {e}")
+        return self.parse_balance(resp.text, resp.status_code)
+
+    def parse_balance(self, text: str, http_status: int = 200) -> BalanceResult:
+        """تحليل bakiye_kontrol: "OK|رصيد|دين" أو "<code>|رسالة"."""
+        if http_status >= 400:
+            return BalanceResult(ok=False, note=f"HTTP {http_status}", raw=text)
+        parts = self.split_pipe(text)
+        if parts and parts[0].upper() == "OK":
+            def dec(i):
+                try:
+                    return Decimal(parts[i].replace(",", "."))
+                except (IndexError, InvalidOperation, ValueError):
+                    return None
+            return BalanceResult(ok=True, balance=dec(1), debt=dec(2), raw=text)
+        msg = parts[1] if len(parts) > 1 else (text or "استجابة فارغة من ZNET")
+        return BalanceResult(ok=False, note=msg.strip(), raw=text)
 
     def parse_place(self, text: str, referans: str, http_status: int = 200) -> ExecutionResult:
         """تحليل استجابة pin_ekle: OK|cost|balance أو code|message."""

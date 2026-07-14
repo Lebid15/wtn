@@ -1,7 +1,9 @@
 """محوّل داخلي: التسليم الفوري من بنك البينات (Havuz) — لا اتصال خارجي."""
+from decimal import Decimal
+
 from django.db import transaction
 
-from .base import BaseAdapter, ExecutionResult
+from .base import BalanceResult, BaseAdapter, ExecutionResult
 
 
 class InternalPoolAdapter(BaseAdapter):
@@ -35,4 +37,19 @@ class InternalPoolAdapter(BaseAdapter):
         return ExecutionResult(
             status="success", pin=pin.code, cost=pin.cost,
             note="تسليم فوري من بنك البينات", external_ref=f"pool:{pin.id}",
+        )
+
+    def get_balance(self, config: dict, provider=None) -> BalanceResult:
+        """قيمة المخزون: مجموع تكلفة البينات المتاحة في مجموعات هذا المزوّد."""
+        from django.db.models import Count, Sum
+        from pool.models import Pin
+
+        if provider is None:
+            return BalanceResult(ok=False, note="مزوّد غير محدّد")
+        agg = Pin.objects.filter(
+            pool__provider=provider, status=Pin.Status.AVAILABLE
+        ).aggregate(total=Sum("cost"), n=Count("id"))
+        return BalanceResult(
+            ok=True, balance=agg["total"] or Decimal("0"), debt=Decimal("0"),
+            note=f"{agg['n'] or 0} بين متاح",
         )

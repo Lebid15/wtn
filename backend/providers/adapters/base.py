@@ -20,6 +20,16 @@ class ExecutionResult:
         return self.status == "success"
 
 
+@dataclass
+class BalanceResult:
+    """نتيجة استعلام الرصيد لدى مزوّد."""
+    ok: bool
+    balance: Optional[Decimal] = None   # الرصيد الفعلي لدى المزوّد
+    debt: Optional[Decimal] = None      # الدين (إن أعاده المزوّد)
+    note: str = ""
+    raw: str = ""
+
+
 class BaseAdapter:
     """واجهة المحوّل: كل مزوّد ينفّذ place_order ويُعيد ExecutionResult."""
 
@@ -27,6 +37,10 @@ class BaseAdapter:
 
     def place_order(self, order, config: dict, provider=None, depth: int = 0) -> ExecutionResult:  # pragma: no cover
         raise NotImplementedError
+
+    def get_balance(self, config: dict, provider=None) -> BalanceResult:
+        """جلب الرصيد الفعلي — المحوّلات الداعمة تعيد تعريفه."""
+        return BalanceResult(ok=False, note="هذا النوع لا يدعم جلب الرصيد آلياً")
 
     # أدوات مشتركة لتحليل الاستجابات التركية (pipe-separated)
     @staticmethod

@@ -8,6 +8,8 @@ export default function Providers() {
   const [showPassive, setShowPassive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<{ edit?: Provider } | null>(null);
+  const [refreshing, setRefreshing] = useState<number | null>(null);
+  const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
 
   function load() {
     setLoading(true);
@@ -22,7 +24,26 @@ export default function Providers() {
   const money = (v: string) => Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 }) + " ل.ت";
   const typeColor: Record<string, string> = {
     same_system: "var(--primary)", pool: "#c1692a", card_store: "#33454a", loader: "var(--primary-dark)",
+    znet: "#1a7f8c", barakat: "#7a3ba0", apstore: "#7a3ba0",
   };
+  const kindKey = (p: Provider) => (p.config?.code || "").toLowerCase() || p.type;
+
+  async function refreshBalance(p: Provider) {
+    setRefreshing(p.id); setFlash(null);
+    try {
+      const r = await api.post(`/providers/${p.id}/refresh-balance/`);
+      setProviders((list) => list.map((x) => (x.id === r.data.id ? r.data : x)));
+      api.get("/providers/totals/").then((t) => setTotals(t.data));
+      setFlash({
+        ok: true,
+        text: `تم تحديث «${p.name}»: الرصيد الفعلي ${money(r.data.real_balance)}` +
+          (Number(r.data.debt) > 0 ? ` · الدين ${money(r.data.debt)}` : "") +
+          (r.data.balance_note ? ` — ${r.data.balance_note}` : ""),
+      });
+    } catch (e: any) {
+      setFlash({ ok: false, text: `«${p.name}»: ${e?.response?.data?.detail || "فشل جلب الرصيد"}` });
+    } finally { setRefreshing(null); }
+  }
 
   if (loading) return <div style={{ padding: 30 }}>جارٍ التحميل...</div>;
 
@@ -35,6 +56,17 @@ export default function Providers() {
           {showPassive ? "عرض النشطة" : "⏸ المعطّلة"}
         </button>
       </div>
+
+      {flash && (
+        <div style={{
+          background: flash.ok ? "#e8f6ec" : "#fdecea",
+          border: `1px solid ${flash.ok ? "#bfe3c8" : "#f5c6c2"}`,
+          color: flash.ok ? "#1e7a35" : "var(--danger)",
+          fontSize: 13, padding: "9px 12px", borderRadius: 6, marginBottom: 12,
+        }}>
+          {flash.text}
+        </div>
+      )}
 
       <table style={table}>
         <thead>
@@ -53,7 +85,7 @@ export default function Providers() {
           {providers.map((p, i) => (
             <tr key={p.id} style={{ background: i % 2 ? "var(--row-alt)" : "#fff" }}>
               <td style={{ ...td, textAlign: "right", paddingInlineStart: 12, fontWeight: 600 }}>{p.name}</td>
-              <td style={{ ...td, color: typeColor[p.type], fontWeight: 600 }}>{p.type_label}</td>
+              <td style={{ ...td, color: typeColor[kindKey(p)] || typeColor[p.type], fontWeight: 600 }}>{p.type_label}</td>
               <td style={td}>
                 <span style={{
                   display: "inline-block", width: 11, height: 11, borderRadius: "50%",
@@ -67,10 +99,19 @@ export default function Providers() {
                 {money(p.debt)}
               </td>
               <td style={td}>
-                <div style={{ display: "flex", gap: 4, justifyContent: "center", color: "var(--muted)" }}>
+                <div style={{ display: "flex", gap: 4, justifyContent: "center", alignItems: "center", color: "var(--muted)" }}>
                   <button onClick={() => setModal({ edit: p })} title="إعدادات الاتصال"
                     style={{ background: "transparent", border: 0, color: "var(--primary)", cursor: "pointer" }}>
                     <Icon name="settings" size={15} />
+                  </button>
+                  <button onClick={() => refreshBalance(p)} title="تحديث الرصيد الفعلي"
+                    disabled={refreshing !== null}
+                    style={{
+                      background: "transparent", border: 0, color: "#e8a416",
+                      cursor: refreshing !== null ? "wait" : "pointer",
+                    }}>
+                    <Icon name="sun" size={15}
+                      style={refreshing === p.id ? { animation: "spin 1.1s linear infinite" } : undefined} />
                   </button>
                   <Icon name="card" size={15} /><Icon name="chart" size={15} />
                 </div>
