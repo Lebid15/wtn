@@ -199,6 +199,14 @@ table.grid input[type="checkbox"] { width: 15px; height: 15px; accent-color: var
 .stdot.wait { background: #e8b013; }
 .stdot.err  { background: #dd4444; }
 
+/* ── دائرة تحميل متحركة للطلبات قيد الانتظار/التنفيذ ── */
+.stspin {
+  display: inline-block; width: 15px; height: 15px; border-radius: 50%;
+  border: 2.5px solid rgba(232,176,19,.28); border-top-color: #e8b013;
+  animation: spin .75s linear infinite; vertical-align: middle;
+}
+.stspin.proc { border-color: rgba(59,130,246,.28); border-top-color: #3b82f6; }
+
 /* ── أيقونة اللعبة داخل الجداول ── */
 .gicon {
   width: 36px; height: 36px; border-radius: 8px; display: inline-flex;

@@ -279,10 +279,15 @@ function OrdersTab() {
                 <td style={{ ...td, color: "var(--ok)", fontWeight: 700 }}>{money(o.profit)}</td>
                 <td style={{ ...td, direction: "ltr", fontFamily: "monospace", fontSize: 12 }}>{o.pin_result || "—"}</td>
                 <td style={td}>
-                  <span style={{
-                    display: "inline-block", width: 10, height: 10, borderRadius: "50%",
-                    background: STATUS_COLOR[o.status] || "#999", marginInlineEnd: 6,
-                  }} />
+                  {o.status === "pending" || o.status === "processing" ? (
+                    <span className={`stspin${o.status === "processing" ? " proc" : ""}`}
+                      style={{ width: 12, height: 12, marginInlineEnd: 6 }} />
+                  ) : (
+                    <span style={{
+                      display: "inline-block", width: 10, height: 10, borderRadius: "50%",
+                      background: STATUS_COLOR[o.status] || "#999", marginInlineEnd: 6,
+                    }} />
+                  )}
                   {o.status_label}
                 </td>
                 <td style={{ ...td, color: "var(--muted)", fontSize: 12 }}>{o.created_at}</td>

@@ -156,7 +156,13 @@ export default function Orders() {
                     <td className="buy num">{money(o.cost_price)} ل.ت</td>
                     <td className="sell num">{money(o.sell_price)} ل.ت</td>
                     <td className="profit num">{money(o.profit)} ل.ت</td>
-                    <td><span className={`stdot ${DOT[o.status] || "wait"}`} title={o.status_label} /></td>
+                    <td>
+                      {o.status === "pending" || o.status === "processing" ? (
+                        <span className={`stspin${o.status === "processing" ? " proc" : ""}`} title={o.status_label} />
+                      ) : (
+                        <span className={`stdot ${DOT[o.status] || "wait"}`} title={o.status_label} />
+                      )}
+                    </td>
                     <td>
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                         <MiniBtn name="print" title="طباعة" />
