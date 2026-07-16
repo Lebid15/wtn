@@ -14,7 +14,7 @@ export function roleHome(role?: string): string {
   if (role === "platform_owner") return "/platform";
   if (role === "ana_bayi") return "/bigagent";
   if (role === "bayi") return "/store";
-  return "/dealers"; // tenant_admin
+  return "/home"; // tenant_admin
 }
 
 const Ctx = createContext<AuthCtx>(null!);

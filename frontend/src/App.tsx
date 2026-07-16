@@ -25,6 +25,7 @@ import Ledger from "./pages/Ledger";
 import SmsSettings from "./pages/SmsSettings";
 import DealerReport from "./pages/DealerReport";
 import BigAgent from "./pages/BigAgent";
+import Home from "./pages/Home";
 
 // حارس صلاحيات: يمنع الوصول لغير المصرّح ويوجّه كل دور للوحته
 function Guard({ children, roles, bare }:
@@ -55,7 +56,10 @@ export default function App() {
           {/* لوحات مستقلة (بحسب الدور) */}
           <Route path="/platform" element={<Guard roles={["platform_owner"]} bare><Platform /></Guard>} />
           <Route path="/bigagent" element={<Guard roles={["ana_bayi"]} bare><BigAgent /></Guard>} />
-          <Route path="/store" element={<Guard roles={["bayi", "ana_bayi"]} bare><Store /></Guard>} />
+          <Route path="/store/*" element={<Guard roles={["bayi", "ana_bayi"]} bare><Store /></Guard>} />
+
+          {/* الصفحة الرئيسية (صاحب المتجر) */}
+          <Route path="/home" element={Admin(<Home />)} />
 
           {/* OyunPin (صاحب المتجر) */}
           <Route path="/oyunpin" element={Admin(<Games />)} />

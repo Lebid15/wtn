@@ -33,7 +33,7 @@ export default function Pool() {
   return (
     <div style={{ padding: 16 }}>
       <h2 style={{ fontSize: 20, color: "var(--primary-dark)", marginBottom: 14 }}>
-        بنك البينات (Havuz Apileri Takip)
+        بنك الأكواد (Havuz Apileri Takip)
       </h2>
 
       {/* نموذج إنشاء مجموعة */}

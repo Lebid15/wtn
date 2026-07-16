@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import Icon from "../components/Icon";
@@ -27,10 +27,20 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
 const money = (v: string | number) =>
   Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
+// كل قسم له رابطه الخاص: /store (الرئيسية) · /store/sell · /store/orders ...
+const SECTIONS: Tab[] = ["sell", "orders", "reports", "wallet", "support", "settings"];
+function tabFromPath(pathname: string): Tab {
+  const seg = pathname.replace(/^\/store\/?/, "").split("/")[0];
+  return (SECTIONS as string[]).includes(seg) ? (seg as Tab) : "home";
+}
+const pathForTab = (t: Tab) => (t === "home" ? "/store" : `/store/${t}`);
+
 export default function Store() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
-  const [tab, setTab] = useState<Tab>("home");
+  const loc = useLocation();
+  const tab = tabFromPath(loc.pathname);
+  const goTab = (t: Tab) => nav(pathForTab(t));
   const [summary, setSummary] = useState<Summary | null>(null);
   const [unread, setUnread] = useState(0);
 
@@ -81,7 +91,7 @@ export default function Store() {
       {/* شريط التبويبات */}
       <div style={subnav}>
         {TABS.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)}
+          <button key={t.key} onClick={() => goTab(t.key)}
             style={{ ...tabBtn, ...(tab === t.key ? tabActive : {}) }}>
             <Icon name={t.icon} size={16} style={{ marginInlineEnd: 6 }} />{t.label}
             {t.key === "support" && unread > 0 && (
@@ -92,8 +102,8 @@ export default function Store() {
       </div>
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: 20 }}>
-        {tab === "home" && <HomeTab summary={summary} onSell={() => setTab("sell")} />}
-        {tab === "sell" && <SellTab onBought={loadSummary} />}
+        {tab === "home" && <HomeTab summary={summary} onSell={() => goTab("sell")} />}
+        {tab === "sell" && <SellTab onBought={loadSummary} onFinish={() => goTab("orders")} />}
         {tab === "orders" && <OrdersTab />}
         {tab === "reports" && <ReportsTab />}
         {tab === "wallet" && <WalletTab />}
@@ -144,7 +154,7 @@ function Stat({ icon, label, value, tone = "primary" }:
 }
 
 /* ===== البيع (المتجر) ===== */
-function SellTab({ onBought }: { onBought: () => void }) {
+function SellTab({ onBought, onFinish }: { onBought: () => void; onFinish: () => void }) {
   const [games, setGames] = useState<SGame[]>([]);
   const [active, setActive] = useState<SGame | null>(null);
   const [buy, setBuy] = useState<SProduct | null>(null);
@@ -201,7 +211,7 @@ function SellTab({ onBought }: { onBought: () => void }) {
 
       {buy && active && (
         <BuyModal product={buy} requirePlayer={active.require_player_id}
-          onClose={() => setBuy(null)} onBought={onBought} />
+          onClose={() => setBuy(null)} onBought={onBought} onFinish={onFinish} />
       )}
     </div>
   );
@@ -493,8 +503,8 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function BuyModal({ product, requirePlayer, onClose, onBought }:
-  { product: SProduct; requirePlayer: boolean; onClose: () => void; onBought: () => void }) {
+function BuyModal({ product, requirePlayer, onClose, onBought, onFinish }:
+  { product: SProduct; requirePlayer: boolean; onClose: () => void; onBought: () => void; onFinish: () => void }) {
   const [playerId, setPlayerId] = useState("");
   const [phone, setPhone] = useState("");
   const [done, setDone] = useState<any | null>(null);
@@ -515,8 +525,14 @@ function BuyModal({ product, requirePlayer, onClose, onBought }:
     } finally { setBusy(false); }
   }
 
+  // بعد إنشاء الطلب: الإغلاق يوجّه تلقائياً إلى قسم "طلباتي"
+  function close() {
+    onClose();
+    if (done) onFinish();
+  }
+
   return (
-    <div style={overlay} onClick={onClose}>
+    <div style={overlay} onClick={close}>
       <form style={modal} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div style={{ background: "var(--primary)", color: "#fff", padding: "14px 18px", fontWeight: 700 }}>
           شراء: {product.name}
@@ -539,7 +555,9 @@ function BuyModal({ product, requirePlayer, onClose, onBought }:
                   {done.status_label} — ستظهر النتيجة في "طلباتي".
                 </p>
               )}
-              <button type="button" className="btn" style={{ marginTop: 14 }} onClick={onClose}>إغلاق</button>
+              <button type="button" className="btn g" style={{ marginTop: 14 }} onClick={close}>
+                عرض طلباتي ←
+              </button>
             </div>
           ) : (
             <>

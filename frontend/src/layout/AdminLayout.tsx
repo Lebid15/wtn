@@ -8,7 +8,7 @@ import { applyThemeConfig, THEME_DEFAULTS, type ThemeConfig } from "../theme";
 
 // أقسام القائمة الرئيسية (مطابقة للمرجع؛ Fatura/Kontor مستبعدان)
 const MAIN_TABS = [
-  { key: "home", label: "الرئيسية", icon: "home", to: "/dealers" },
+  { key: "home", label: "الرئيسية", icon: "home", to: "/home" },
   { key: "oyunpin", label: "الألعاب", icon: "games", to: "/oyunpin" },
   { key: "ayarlar", label: "الإعدادات", icon: "settings", to: "/dealers" },
   { key: "raporlar", label: "التقارير", icon: "chart", to: "/reports" },
@@ -22,10 +22,10 @@ const SUBNAV_OYUNPIN = [
   { label: "متابعة الطلبات", to: "/oyunpin/orders" },
   { label: "قائمة الألعاب", to: "/oyunpin" },
   { label: "المكتبة العالمية", to: "/oyunpin/library" },
-  { label: "قائمة المنتجات", to: "/oyunpin/pin-list" },
+  { label: "توجيه الباقات", to: "/oyunpin/pin-list" },
   { label: "مجموعات الأسعار", to: "/oyunpin/price-groups" },
   { label: "أسعار الوكلاء", to: "/oyunpin/dealer-prices" },
-  { label: "بنك البينات", to: "/oyunpin/pool" },
+  { label: "بنك الأكواد", to: "/oyunpin/pool" },
   { label: "مزوّدو API", to: "/oyunpin/providers" },
 ];
 const SUBNAV_AYARLAR = [
@@ -46,6 +46,7 @@ const SUBNAV_RAPORLAR = [
 ];
 
 function subnavFor(path: string) {
+  if (path.startsWith("/home")) return [];   // الرئيسية بلا قائمة فرعية
   if (path.startsWith("/oyunpin")) return SUBNAV_OYUNPIN;
   if (path.startsWith("/reports")) return SUBNAV_RAPORLAR;
   return SUBNAV_AYARLAR; // /dealers + /ayarlar
@@ -133,16 +134,18 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       </div>
 
       {/* ===== Sub-nav (تتغيّر حسب القسم) ===== */}
-      <div style={subnav}>
-        {subnavFor(loc.pathname).map((s) => {
-          const active = loc.pathname === s.to;
-          return (
-            <Link key={s.to} to={s.to} style={{ ...subLink, ...(active ? subActive : {}) }}>
-              {s.label}
-            </Link>
-          );
-        })}
-      </div>
+      {subnavFor(loc.pathname).length > 0 && (
+        <div style={subnav}>
+          {subnavFor(loc.pathname).map((s) => {
+            const active = loc.pathname === s.to;
+            return (
+              <Link key={s.to} to={s.to} style={{ ...subLink, ...(active ? subActive : {}) }}>
+                {s.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       {/* ===== الشريط العاجل المتحرّك (تحت الهيدر، أعلى المحتوى) ===== */}
       {flags.show_ticker && tickerItems.length > 0 && (

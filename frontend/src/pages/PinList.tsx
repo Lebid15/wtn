@@ -43,7 +43,7 @@ export default function PinList() {
     <div style={{ maxWidth: 1340, margin: "0 auto", padding: "18px 16px 40px" }}>
       <div className="card">
         <div className="card-title">
-          منتجات الألعاب (Pin Listesi)
+          توجيه الباقات (Pin Listesi)
           <span style={{ fontWeight: 400, fontSize: 12, color: "var(--debt)" }}>
             ** اسحب صفّ المنتج وأفلته لترتيب ما يراه وكلاؤك
           </span>
