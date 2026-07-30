@@ -30,6 +30,15 @@ class BalanceResult:
     raw: str = ""
 
 
+@dataclass
+class PackageList:
+    """كتالوج باقات المزوّد — لصفحة ربط الباقات."""
+    ok: bool
+    packages: list = field(default_factory=list)  # [{id, name, game, kupur, price}]
+    note: str = ""
+    raw: str = ""
+
+
 class BaseAdapter:
     """واجهة المحوّل: كل مزوّد ينفّذ place_order ويُعيد ExecutionResult."""
 
@@ -41,6 +50,30 @@ class BaseAdapter:
     def get_balance(self, config: dict, provider=None) -> BalanceResult:
         """جلب الرصيد الفعلي — المحوّلات الداعمة تعيد تعريفه."""
         return BalanceResult(ok=False, note="هذا النوع لا يدعم جلب الرصيد آلياً")
+
+    def list_packages(self, config: dict, provider=None) -> "PackageList":
+        """
+        جلب كتالوج باقات المزوّد (لصفحة "ربط الباقات").
+        كل عنصر: {id, name, game, kupur, price} — و`id` هو رقم الربط.
+        """
+        return PackageList(ok=False, note="هذا النوع لا يدعم جلب قائمة الباقات")
+
+    @staticmethod
+    def link_for(order, provider) -> tuple:
+        """
+        رقم الربط لهذا المنتج لدى **هذا المزوّد بالذات** + بياناته الإضافية.
+        يرتدّ إلى `product.provider_package_id` القديم إن لم يوجد ربط مخصّص —
+        فلا تنكسر الإعدادات السابقة.
+        """
+        from catalog.models import ProductLink
+
+        if provider is not None:
+            link = ProductLink.objects.filter(
+                product=order.product, provider=provider
+            ).first()
+            if link and link.package_id:
+                return link.package_id, dict(link.extra or {})
+        return (order.product.provider_package_id or ""), {}
 
     # أدوات مشتركة لتحليل الاستجابات التركية (pipe-separated)
     @staticmethod

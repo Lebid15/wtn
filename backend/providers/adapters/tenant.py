@@ -10,7 +10,7 @@ provider_package_id على المنتج = رقم منتج المورّد (ب).
 """
 from decimal import Decimal
 
-from .base import BalanceResult, BaseAdapter, ExecutionResult
+from .base import BalanceResult, BaseAdapter, ExecutionResult, PackageList
 
 
 class InternalTenantAdapter(BaseAdapter):
@@ -35,6 +35,29 @@ class InternalTenantAdapter(BaseAdapter):
             note=f"رصيدنا لدى متجر {dealer.tenant.name}",
         )
 
+    def list_packages(self, config: dict, provider=None) -> PackageList:
+        """كتالوج المورّد: منتجات المتجر الذي نملك حساب وكيل لديه."""
+        from catalog.models import Product
+        from core.models import User
+
+        login = ((config or {}).get("dealer_login") or "").strip()
+        if not login:
+            return PackageList(ok=False, note="إعداد ناقص: dealer_login")
+        dealer = User.objects.filter(login_id=login).select_related("tenant").first()
+        if dealer is None:
+            return PackageList(ok=False, note=f"حساب '{login}' غير موجود لدى المورّد")
+        rows = Product.objects.filter(
+            tenant=dealer.tenant, status=Product.Status.ACTIVE
+        ).select_related("game").order_by("game__sort_order", "sort_order")
+        packages = [
+            {"id": str(x.id), "name": x.name, "game": x.game.name,
+             "kupur": x.kupur, "price": str(x.recommended_price)}
+            for x in rows
+        ]
+        if not packages:
+            return PackageList(ok=False, note=f"لا منتجات نشطة لدى {dealer.tenant.name}")
+        return PackageList(ok=True, packages=packages)
+
     def place_order(self, order, config: dict, provider=None, depth: int = 0) -> ExecutionResult:
         from core.models import User
         from catalog.models import Product
@@ -54,7 +77,8 @@ class InternalTenantAdapter(BaseAdapter):
             return ExecutionResult(status="failed", note="التوجيه الداخلي يجب أن يكون لمتجر آخر")
 
         try:
-            supplier_product_id = int(order.product.provider_package_id)
+            package_id, _extra = self.link_for(order, provider)
+            supplier_product_id = int(package_id)
         except (TypeError, ValueError):
             return ExecutionResult(
                 status="failed",

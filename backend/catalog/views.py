@@ -7,8 +7,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from core.models import User
+from providers.models import Provider
 from django.db import transaction
-from .models import Game, LibraryGame, PriceGroup, Product, ProductPrice
+from .models import Game, LibraryGame, PriceGroup, Product, ProductLink, ProductPrice
 from .serializers import (
     GameDetailSerializer, GameSerializer, PriceGroupSerializer, ProductSerializer,
 )
@@ -277,3 +278,54 @@ def library_import_view(request, library_game_id):
         GameDetailSerializer(game).data | {"imported_products": len(packages)},
         status=201,
     )
+
+
+@api_view(["GET", "POST", "DELETE"])
+@permission_classes([IsAuthenticated])
+def product_links_view(request):
+    """
+    ربط الباقات: رقم ربط لكل (منتج × مزوّد).
+
+    GET    → كل روابط المستأجر: [{product, provider, package_id, package_name, extra}]
+    POST   → إنشاء/تحديث ربط: {product, provider, package_id, package_name?, extra?}
+    DELETE → فكّ الربط: {product, provider}
+    """
+    tenant = request.user.tenant
+
+    if request.method == "GET":
+        rows = ProductLink.objects.filter(tenant=tenant).values(
+            "product", "provider", "package_id", "package_name", "extra"
+        )
+        return Response(list(rows))
+
+    try:
+        product = Product.objects.get(pk=request.data.get("product"), tenant=tenant)
+        provider = Provider.objects.get(pk=request.data.get("provider"), tenant=tenant)
+    except (Product.DoesNotExist, Provider.DoesNotExist):
+        return Response({"detail": "المنتج أو المزوّد غير موجود"}, status=404)
+
+    if request.method == "DELETE":
+        ProductLink.objects.filter(tenant=tenant, product=product, provider=provider).delete()
+        return Response(status=204)
+
+    package_id = str(request.data.get("package_id") or "").strip()
+    if not package_id:
+        return Response({"detail": "رقم الربط مطلوب"}, status=400)
+
+    extra = request.data.get("extra") or {}
+    if not isinstance(extra, dict):
+        extra = {}
+
+    link, _ = ProductLink.objects.update_or_create(
+        tenant=tenant, product=product, provider=provider,
+        defaults={
+            "package_id": package_id,
+            "package_name": str(request.data.get("package_name") or "")[:200],
+            "extra": extra,
+        },
+    )
+    return Response({
+        "product": link.product_id, "provider": link.provider_id,
+        "package_id": link.package_id, "package_name": link.package_name,
+        "extra": link.extra,
+    }, status=201)

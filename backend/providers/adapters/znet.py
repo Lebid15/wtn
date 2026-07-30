@@ -1,11 +1,12 @@
 """محوّل ZNET — مصادقة بـ query params، استجابات pipe-separated (النمط التركي)."""
+import json
 import random
 import time
 from decimal import Decimal, InvalidOperation
 
 import requests
 
-from .base import BalanceResult, BaseAdapter, ExecutionResult
+from .base import BalanceResult, BaseAdapter, ExecutionResult, PackageList
 
 
 class ZnetAdapter(BaseAdapter):
@@ -32,13 +33,19 @@ class ZnetAdapter(BaseAdapter):
 
         referans = self._gen_referans()
         path = config.get("orders_path") or "servis/pin_ekle.php"
+        # ZNET يطلب `oyun` (معرّف اللعبة) **و** `kupur` (كود الكوبون) معاً —
+        # إرسال `oyun` وحده يردّ "Kupur Bilgisi Bulunamadı".
+        package_id, extra = self.link_for(order, provider)
+        kupur = extra.get("kupur") or order.product.kupur or ""
         params = {
             "kod": config["kod"], "sifre": config["sifre"],
-            "oyun": order.product.provider_package_id,
+            "oyun": package_id,
             "referans": referans,
             "musteri_tel": order.customer_phone or order.player_id,
             "oyuncu_bilgi": order.player_id,
         }
+        if kupur:
+            params["kupur"] = kupur
         try:
             resp = requests.get(
                 f"{base}/{path}", params=params,
@@ -63,6 +70,84 @@ class ZnetAdapter(BaseAdapter):
         except requests.RequestException as e:
             return BalanceResult(ok=False, note=f"تعذّر الاتصال بـ ZNET: {e}")
         return self.parse_balance(resp.text, resp.status_code)
+
+    def list_packages(self, config: dict, provider=None) -> PackageList:
+        """كتالوج ZNET: GET servis/pin_listesi.php?kod&sifre."""
+        base = self._base(config)
+        if not base or not config.get("kod") or not config.get("sifre"):
+            return PackageList(ok=False, note="إعداد ZNET ناقص (base_url/kod/sifre)")
+        path = config.get("catalog_path") or "servis/pin_listesi.php"
+        try:
+            resp = requests.get(
+                f"{base}/{path}",
+                params={"kod": config["kod"], "sifre": config["sifre"]},
+                headers={"Accept": "application/json"}, timeout=(5, 30),
+            )
+        except requests.RequestException as e:
+            return PackageList(ok=False, note=f"تعذّر الاتصال بـ ZNET: {e}")
+        return self.parse_packages(resp.text, resp.status_code)
+
+    @classmethod
+    def parse_packages(cls, text: str, http_status: int = 200) -> PackageList:
+        """
+        ZNET يردّ إمّا JSON ({success, result:[…]} أو مصفوفة)، أو أسطراً
+        pipe-separated: id|الاسم|اللعبة|kupur|السعر.
+        """
+        if http_status >= 400:
+            return PackageList(ok=False, note=f"HTTP {http_status}", raw=text)
+
+        text = (text or "").strip()
+        if not text:
+            return PackageList(ok=False, note="استجابة فارغة من ZNET")
+
+        rows = None
+        try:
+            data = json.loads(text)
+        except ValueError:
+            data = None
+        if isinstance(data, list):
+            rows = data
+        elif isinstance(data, dict):
+            rows = data.get("result") or data.get("data") or data.get("products")
+            if rows is None:
+                msg = data.get("message") or data.get("error") or "استجابة ZNET غير متوقّعة"
+                return PackageList(ok=False, note=str(msg), raw=text)
+
+        packages = []
+        if rows is not None:
+            for it in rows:
+                if not isinstance(it, dict):
+                    continue
+                packages.append({
+                    # `oyun` المُرسَل في pin_ekle هو oyun_bilgi_id إن وُجد
+                    "id": str(it.get("oyun_bilgi_id") or it.get("id") or ""),
+                    "name": str(it.get("adi") or it.get("name") or ""),
+                    "game": str(it.get("oyun_adi") or it.get("game") or ""),
+                    "kupur": str(it.get("kupur") or ""),
+                    "price": str(it.get("fiyat") or it.get("price") or ""),
+                })
+        else:
+            # ارتداد: أسطر pipe-separated — id|الاسم|اللعبة|kupur|السعر
+            rows_p = [cls.split_pipe(l) for l in text.splitlines() if l.strip()]
+            # سطر واحد بجزأين أو أقل = رسالة خطأ لا كتالوج ("3|Yetkisiz erisim")
+            if len(rows_p) == 1 and len(rows_p[0]) <= 2:
+                only = rows_p[0]
+                return PackageList(
+                    ok=False, note=only[1] if len(only) > 1 else text, raw=text,
+                )
+            for p in rows_p:
+                if len(p) < 2 or p[0].upper() == "OK":
+                    continue
+                packages.append({
+                    "id": p[0], "name": p[1],
+                    "game": p[2] if len(p) > 2 else "",
+                    "kupur": p[3] if len(p) > 3 else "",
+                    "price": p[4] if len(p) > 4 else "",
+                })
+
+        if not packages:
+            return PackageList(ok=False, note="لم يُعِد ZNET أي باقة", raw=text)
+        return PackageList(ok=True, packages=packages, raw=text[:2000])
 
     def parse_balance(self, text: str, http_status: int = 200) -> BalanceResult:
         """تحليل bakiye_kontrol: "OK|رصيد|دين" أو "<code>|رسالة"."""

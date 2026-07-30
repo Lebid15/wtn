@@ -23,6 +23,7 @@ const SUBNAV_OYUNPIN = [
   { label: "قائمة الألعاب", to: "/oyunpin" },
   { label: "المكتبة العالمية", to: "/oyunpin/library" },
   { label: "توجيه الباقات", to: "/oyunpin/pin-list" },
+  { label: "ربط الباقات", to: "/oyunpin/package-links" },
   { label: "مجموعات الأسعار", to: "/oyunpin/price-groups" },
   { label: "أسعار الوكلاء", to: "/oyunpin/dealer-prices" },
   { label: "بنك الأكواد", to: "/oyunpin/pool" },

@@ -8,6 +8,7 @@ import Library from "./pages/Library";
 import Support from "./pages/Support";
 import MyInvoices from "./pages/MyInvoices";
 import GameDetail from "./pages/GameDetail";
+import PackageLinks from "./pages/PackageLinks";
 import PinList from "./pages/PinList";
 import PriceGroups from "./pages/PriceGroups";
 import DealerPrices from "./pages/DealerPrices";
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="/oyunpin" element={Admin(<Games />)} />
           <Route path="/oyunpin/library" element={Admin(<Library />)} />
           <Route path="/oyunpin/pin-list" element={Admin(<PinList />)} />
+          <Route path="/oyunpin/package-links" element={Admin(<PackageLinks />)} />
           <Route path="/oyunpin/orders" element={Admin(<Orders />)} />
           <Route path="/oyunpin/price-groups" element={Admin(<PriceGroups />)} />
           <Route path="/oyunpin/dealer-prices" element={Admin(<DealerPrices />)} />

@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 import requests
 
-from .base import BalanceResult, BaseAdapter, ExecutionResult
+from .base import BalanceResult, BaseAdapter, ExecutionResult, PackageList
 
 
 _SUCCESS = {"success", "ok", "done", "complete", "completed", "accept"}
@@ -40,7 +40,8 @@ class BarakatAdapter(BaseAdapter):
         if not base or not token:
             return ExecutionResult(status="failed", note="إعداد Barakat ناقص (base_url/api_token)")
 
-        pkg = quote(str(order.product.provider_package_id))
+        package_id, _extra = self.link_for(order, provider)
+        pkg = quote(str(package_id))
         params = {
             "qty": "1",
             "phone": order.customer_phone or order.player_id or "",
@@ -59,6 +60,39 @@ class BarakatAdapter(BaseAdapter):
             return ExecutionResult(status="failed", note="استجابة Barakat غير صالحة", raw=resp.text)
 
         return self.parse_place(data)
+
+    def list_packages(self, config: dict, provider=None) -> PackageList:
+        """كتالوج Barakat/Apstore: GET {base}/client/api/products بترويسة api-token."""
+        base = self._base(config)
+        token = config.get("api_token")
+        if not base or not token:
+            return PackageList(ok=False, note="إعداد Barakat ناقص (base_url/api_token)")
+        try:
+            resp = requests.get(
+                f"{base}/client/api/products",
+                headers={"api-token": token}, timeout=(5, 30),
+            )
+            data = resp.json()
+        except requests.RequestException as e:
+            return PackageList(ok=False, note=f"تعذّر الاتصال بـ Barakat: {e}")
+        except ValueError:
+            return PackageList(ok=False, note="استجابة Barakat غير صالحة", raw=resp.text)
+
+        rows = data if isinstance(data, list) else (data or {}).get("data") or []
+        packages = [
+            {
+                "id": str(it.get("id") or ""),
+                "name": str(it.get("name") or ""),
+                "game": str(it.get("category_name") or ""),
+                "kupur": "",
+                "price": str(it.get("price") or ""),
+                "available": bool(it.get("available", True)),
+            }
+            for it in rows if isinstance(it, dict)
+        ]
+        if not packages:
+            return PackageList(ok=False, note="لم يُعِد Barakat أي باقة")
+        return PackageList(ok=True, packages=packages)
 
     def get_balance(self, config: dict, provider=None) -> BalanceResult:
         """GET {base}/client/api/profile بترويسة api-token → JSON فيه balance."""

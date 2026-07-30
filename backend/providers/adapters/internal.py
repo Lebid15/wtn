@@ -3,13 +3,31 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from .base import BalanceResult, BaseAdapter, ExecutionResult
+from .base import BalanceResult, BaseAdapter, ExecutionResult, PackageList
 
 
 class InternalPoolAdapter(BaseAdapter):
     """يسحب بيناً متاحاً من مجموعة مرتبطة بالمزوّد ويسلّمه فوراً."""
 
     code = "internal"
+
+    def list_packages(self, config: dict, provider=None) -> PackageList:
+        """كتالوج بنك البينات: مجموعات البينات المرتبطة بهذا المزوّد + المتاح فيها."""
+        from pool.models import Pin, PinPool
+
+        pools = PinPool.objects.filter(status=PinPool.Status.ACTIVE)
+        if provider is not None:
+            pools = pools.filter(provider=provider)
+        packages = []
+        for pool in pools.order_by("id"):
+            available = Pin.objects.filter(pool=pool, status=Pin.Status.AVAILABLE).count()
+            packages.append({
+                "id": str(pool.id), "name": pool.name, "game": "بنك الأكواد",
+                "kupur": "", "price": "", "available_count": available,
+            })
+        if not packages:
+            return PackageList(ok=False, note="لا مجموعات بينات مرتبطة بهذا المزوّد")
+        return PackageList(ok=True, packages=packages)
 
     def place_order(self, order, config: dict, provider=None, depth: int = 0) -> ExecutionResult:
         from pool.models import Pin, PinPool

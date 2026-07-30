@@ -6,7 +6,7 @@ from .views import (
     GameViewSet, PriceGroupViewSet, ProductViewSet,
     dealer_bulk_group_view, dealer_price_update_view, dealer_prices_view,
     library_browse_view, library_import_view,
-    price_matrix_view, set_price_view,
+    price_matrix_view, product_links_view, set_price_view,
 )
 
 router = DefaultRouter()
@@ -22,4 +22,5 @@ urlpatterns = [
     path("dealer-prices/<int:dealer_id>/", dealer_price_update_view, name="dealer-price-update"),
     path("library/", library_browse_view, name="library-browse"),
     path("library/<int:library_game_id>/import/", library_import_view, name="library-import"),
+    path("product-links/", product_links_view, name="product-links"),
 ] + router.urls

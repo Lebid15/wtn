@@ -194,3 +194,38 @@ class LibraryProduct(models.Model):
 
     def __str__(self):
         return f"[Library] {self.game.name} — {self.name}"
+
+
+class ProductLink(models.Model):
+    """
+    رقم ربط الباقة لدى مزوّد بعينه.
+
+    كل مزوّد يسمّي الباقة كما يشاء، لكن **رقم الربط** هو صلة الوصل. ولأن المنتج
+    قد يُوجَّه إلى أكثر من مزوّد (رئيسي + بديلان)، يلزم رقم ربط **لكل مزوّد على
+    حدة** — لا رقم واحد مشترك.
+
+    `extra` يحمل ما يحتاجه المزوّد زيادةً على المعرّف؛ ZNET مثلاً يطلب
+    `oyun` (معرّف اللعبة) **و** `kupur` (كود الكوبون) معاً.
+    """
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="product_links")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="links")
+    provider = models.ForeignKey(
+        "providers.Provider", on_delete=models.CASCADE, related_name="product_links"
+    )
+    package_id = models.CharField(max_length=120)          # المعرّف الأساسي لدى المزوّد
+    package_name = models.CharField(max_length=200, blank=True, default="")  # اسمه هناك (للعرض)
+    extra = models.JSONField(default=dict, blank=True)     # {"kupur": "...", ...}
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "product_links"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "provider"], name="uniq_product_provider_link"
+            )
+        ]
+        ordering = ["product_id", "provider_id"]
+
+    def __str__(self):
+        return f"{self.product} ← {self.provider}: {self.package_id}"

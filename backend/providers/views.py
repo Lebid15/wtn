@@ -26,6 +26,24 @@ class ProviderViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(tenant=self.request.user.tenant)
 
+    @action(detail=True, methods=["get"], url_path="packages")
+    def packages(self, request, pk=None):
+        """كتالوج باقات المزوّد — لقائمة الاختيار في صفحة ربط الباقات."""
+        provider = self.get_object()
+        adapter = adapter_for(provider)
+        if adapter is None:
+            return Response(
+                {"detail": "منفّذ يدوي — لا كتالوج آلياً لهذا النوع"},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+        result = adapter.list_packages(provider.config or {}, provider=provider)
+        if not result.ok:
+            return Response(
+                {"detail": result.note or "تعذّر جلب باقات المزوّد"},
+                status=http_status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response({"count": len(result.packages), "packages": result.packages})
+
     @action(detail=True, methods=["post"], url_path="refresh-balance")
     def refresh_balance(self, request, pk=None):
         """جلب الرصيد الفعلي من المزوّد وحفظه (زر الشمس ☀)."""
