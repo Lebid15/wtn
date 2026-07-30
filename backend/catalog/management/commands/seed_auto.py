@@ -32,14 +32,25 @@ class Command(BaseCommand):
                 tenant=tenant, pool=pool, code=f"AUTO-PIN-{i:04d}", cost=Decimal("1.00")
             )
 
-        # اربط أول منتج بالمزوّد واجعله تلقائياً
+        # اربط أول منتج بالمزوّد واجعله تلقائياً — للعرض على قاعدة جديدة فقط.
+        # هذا الأمر يعمل في كل نشر (start.sh)، فلا يجوز أن يدهس توجيهاً ضبطه
+        # صاحب المتجر يدوياً: أي منتج له مزوّد أو رقم ربط يُترك كما هو.
         product = Product.objects.filter(tenant=tenant).order_by("game__sort_order", "sort_order").first()
-        if product:
-            product.provider = provider
-            product.execution_type = Product.Execution.AUTO
-            product.provider_package_id = "auto-demo"
-            product.save(update_fields=["provider", "execution_type", "provider_package_id"])
-            self.stdout.write(self.style.SUCCESS(
-                f"التنفيذ التلقائي: '{product.game.name} — {product.name}' ← {provider.name} "
-                f"({Pin.objects.filter(pool=pool, status='available').count()} بين جاهز)"
-            ))
+        if not product:
+            return
+        if product.provider_id or product.provider_alt1_id or product.provider_alt2_id \
+                or product.provider_package_id:
+            self.stdout.write(
+                f"تخطّي بذرة التنفيذ التلقائي: '{product.game.name} — {product.name}' "
+                f"مضبوط مسبقاً (لا ندهس إعداد المستخدم)"
+            )
+            return
+
+        product.provider = provider
+        product.execution_type = Product.Execution.AUTO
+        product.provider_package_id = "auto-demo"
+        product.save(update_fields=["provider", "execution_type", "provider_package_id"])
+        self.stdout.write(self.style.SUCCESS(
+            f"التنفيذ التلقائي: '{product.game.name} — {product.name}' ← {provider.name} "
+            f"({Pin.objects.filter(pool=pool, status='available').count()} بين جاهز)"
+        ))
