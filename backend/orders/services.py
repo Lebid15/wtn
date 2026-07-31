@@ -117,16 +117,40 @@ def _link_price(product_id: int, provider_id: int):
         return None
 
 
-def _apply_real_cost(order: Order, result) -> list:
+def _apply_real_cost(order: Order, result, provider) -> list:
     """
     يعتمد التكلفة **الفعلية** التي أعادها المزوّد بدل التكلفة المقدَّرة على
     المنتج، ويعيد حساب الربح. بدونها يظهر ربح وهمي بينما العملية خاسرة.
+
+    ويُعلّم الربط بهذه التكلفة (`extra.price`) حتى تعمل حماية الخسارة على
+    الطلب التالي — فالربط قد يكون أُنشئ يدوياً بلا سعر كتالوج، وبلا سعر
+    معروف تمرّ الحماية صامتةً (فشل مفتوح).
     """
     if result.cost is None or result.cost < 0:
         return []
     order.cost_price = result.cost
     order.profit = order.sell_price - result.cost
+    _learn_link_price(order.product_id, getattr(provider, "id", None), result.cost)
     return ["cost_price", "profit"]
+
+
+def _learn_link_price(product_id: int, provider_id, cost) -> None:
+    """يحفظ التكلفة الفعلية على الربط ليصير سعراً مرجعياً لحماية الخسارة."""
+    from catalog.models import ProductLink
+
+    if not provider_id:
+        return
+    link = ProductLink.objects.filter(
+        product_id=product_id, provider_id=provider_id
+    ).first()
+    if link is None:
+        return
+    extra = dict(link.extra or {})
+    if str(extra.get("price") or "") == str(cost):
+        return
+    extra["price"] = str(cost)
+    link.extra = extra
+    link.save(update_fields=["extra", "updated_at"])
 
 
 def dispatch_order(order: Order, depth: int = 0) -> Order:
@@ -163,7 +187,11 @@ def dispatch_order(order: Order, depth: int = 0) -> Order:
         # نتخطّى هذا المزوّد بدل إنفاق المال. يُعطَّل بإطفاء loss_guard عليه.
         if provider.loss_guard:
             known = _link_price(order.product_id, provider.id)
-            if known is not None and known > order.sell_price:
+            if known is None:
+                # لا سعر مرجعي بعد (ربط يدوي مثلاً) — نمرّر ونتعلّم التكلفة من
+                # ردّ المزوّد، فتحمي الطلبَ التالي.
+                trail.append(f"{provider.name}: حماية الخسارة بلا سعر مرجعي — أول طلب يحدّده")
+            elif known > order.sell_price:
                 trail.append(
                     f"{provider.name}: حماية الخسارة — تكلفته {known} > سعر البيع {order.sell_price}"
                 )
@@ -177,7 +205,7 @@ def dispatch_order(order: Order, depth: int = 0) -> Order:
         note = (result.note or "").strip()
         ref = f" · ref={result.external_ref}" if result.external_ref else ""
 
-        cost_fields = _apply_real_cost(order, result)
+        cost_fields = _apply_real_cost(order, result, provider)
 
         if result.status == "success":
             order.status = Order.Status.SUCCESS
