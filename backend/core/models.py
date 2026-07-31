@@ -44,6 +44,12 @@ class Tenant(models.Model):
         MONTHLY = "monthly", "شهري"
         YEARLY = "yearly", "سنوي"
 
+    # ── سعر الصرف العام للمتجر ──
+    # base_currency = عملة محافظ الوكلاء. exchange_rates = {"USD": "41.50", …}
+    # أي: كم وحدة من عملة المتجر تساوي وحدةً واحدة من تلك العملة.
+    base_currency = models.CharField(max_length=8, default="TRY")
+    exchange_rates = models.JSONField(default=dict, blank=True)
+
     theme_config = models.JSONField(default=dict, blank=True)  # تخصيص المظهر (لوحة التخصيص)
     sub_monthly_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
     sub_yearly_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))

@@ -100,6 +100,43 @@ def site_settings_view(request):
 
 @api_view(["GET", "PUT"])
 @permission_classes([IsAuthenticated])
+def exchange_rates_view(request):
+    """
+    سعر الصرف العام للمتجر: عملة الأساس + كم وحدةً منها تساوي وحدةً
+    من كل عملة أخرى. تعتمد عليه طرق الدفع في حساب المبلغ المُضاف للمحفظة.
+    """
+    tenant = request.user.tenant
+    if tenant is None:
+        return Response({"detail": "لا يوجد مستأجر"}, status=400)
+
+    if request.method == "PUT":
+        if request.user.role != User.Role.TENANT_ADMIN:
+            return Response({"detail": "غير مصرّح"}, status=403)
+        base = str(request.data.get("base_currency") or tenant.base_currency or "TRY")
+        rates = request.data.get("exchange_rates")
+        if isinstance(rates, dict):
+            clean = {}
+            for cur, val in rates.items():
+                try:
+                    d = Decimal(str(val))
+                except (InvalidOperation, TypeError):
+                    return Response({"detail": f"سعر صرف غير صحيح للعملة {cur}"}, status=400)
+                if d <= 0:
+                    return Response({"detail": f"سعر صرف {cur} يجب أن يكون أكبر من صفر"}, status=400)
+                clean[cur] = str(d)
+            clean.pop(base, None)  # عملة الأساس لا سعر صرف لها
+            tenant.exchange_rates = clean
+        tenant.base_currency = base
+        tenant.save(update_fields=["base_currency", "exchange_rates"])
+
+    return Response({
+        "base_currency": tenant.base_currency or "TRY",
+        "exchange_rates": tenant.exchange_rates or {},
+    })
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([IsAuthenticated])
 def sms_settings_view(request):
     """قراءة/تحديث إعدادات SMS للمستأجر الحالي."""
     tenant = request.user.tenant

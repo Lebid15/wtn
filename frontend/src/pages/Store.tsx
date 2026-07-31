@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import Icon from "../components/Icon";
 import Tickets from "../components/Tickets";
+import TopUp from "../components/TopUp";
 import { applyThemeConfig } from "../theme";
 
 interface SProduct {
@@ -16,13 +17,14 @@ interface Summary {
   orders: number; profit: string; sell: string; pending: number;
 }
 
-type Tab = "home" | "sell" | "orders" | "reports" | "wallet" | "support" | "settings";
+type Tab = "home" | "sell" | "orders" | "reports" | "wallet" | "topup" | "support" | "settings";
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "home", label: "الرئيسية", icon: "home" },
   { key: "sell", label: "البيع", icon: "cart" },
   { key: "orders", label: "طلباتي", icon: "chart" },
   { key: "reports", label: "تقاريري", icon: "excel" },
   { key: "wallet", label: "محفظتي", icon: "wallet" },
+  { key: "topup", label: "إضافة رصيد", icon: "card" },
   { key: "support", label: "الدعم", icon: "chat" },
   { key: "settings", label: "إعداداتي", icon: "settings" },
 ];
@@ -45,7 +47,7 @@ const ROW_BG: Record<string, string> = {
 };
 
 // كل قسم له رابطه الخاص: /store (الرئيسية) · /store/sell · /store/orders ...
-const SECTIONS: Tab[] = ["sell", "orders", "reports", "wallet", "support", "settings"];
+const SECTIONS: Tab[] = ["sell", "orders", "reports", "wallet", "topup", "support", "settings"];
 function tabFromPath(pathname: string): Tab {
   const seg = pathname.replace(/^\/store\/?/, "").split("/")[0];
   return (SECTIONS as string[]).includes(seg) ? (seg as Tab) : "home";
@@ -123,7 +125,8 @@ export default function Store() {
         {tab === "sell" && <SellTab onBought={loadSummary} onFinish={() => goTab("orders")} />}
         {tab === "orders" && <OrdersTab />}
         {tab === "reports" && <ReportsTab />}
-        {tab === "wallet" && <WalletTab />}
+        {tab === "wallet" && <WalletTab onTopUp={() => goTab("topup")} />}
+        {tab === "topup" && <TopUp onDone={loadSummary} />}
         {tab === "support" && <Tickets title="الدعم / مراسلة الإدارة" />}
         {tab === "settings" && <SettingsTab />}
       </div>
@@ -484,7 +487,7 @@ function ReportsTab() {
 }
 
 /* ===== محفظتي (Hesap Hareketleri) ===== */
-function WalletTab() {
+function WalletTab({ onTopUp }: { onTopUp: () => void }) {
   const [data, setData] = useState<any>(null);
   useEffect(() => { api.get("/store/wallet/").then((r) => setData(r.data)); }, []);
   if (!data) return <div style={{ padding: 20 }}>جارٍ التحميل...</div>;
@@ -533,7 +536,12 @@ function WalletTab() {
         </table>
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 14 }}>
-        لشحن رصيدك تواصل مع صاحب المتجر — هو من يشحن محافظ الوكلاء.
+        لشحن رصيدك افتح قسم{" "}
+        <button onClick={onTopUp} style={{
+          background: "none", border: 0, padding: 0, cursor: "pointer",
+          color: "var(--primary)", fontWeight: 800, fontSize: 13,
+        }}>إضافة رصيد</button>{" "}
+        واختر طريقة الدفع — يُضاف الرصيد بعد موافقة صاحب المتجر.
       </p>
     </div>
   );

@@ -1,14 +1,41 @@
-"""API للمدفوعات: حسابات الاستلام + إشعارات الدفع (مع موافقة تشحن المحفظة)."""
-from django.db.models import Sum
+"""API للمدفوعات: حسابات الاستلام · طرق الدفع · طلبات إضافة الرصيد وقراراتها."""
+from decimal import Decimal, InvalidOperation
+
+from django.db.models import Count, Sum
+from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from core import services as wallet_services
-from core.models import WalletTransaction
-from .models import PaymentNotification, ReceivingAccount
-from .serializers import PaymentNotificationSerializer, ReceivingAccountSerializer
+from core.models import User, WalletTransaction
+from .models import PaymentMethod, PaymentNotification, ReceivingAccount
+from .serializers import (
+    PaymentMethodSerializer, PaymentNotificationSerializer, ReceivingAccountSerializer,
+)
+
+
+def _is_admin(user):
+    return user.role in (User.Role.TENANT_ADMIN, User.Role.PLATFORM_OWNER)
+
+
+def rate_for(tenant, currency: str) -> Decimal:
+    """سعر صرف عملةٍ إلى عملة المتجر — من جدول أسعار الصرف العام."""
+    base = tenant.base_currency or "TRY"
+    if not currency or currency == base:
+        return Decimal("1")
+    try:
+        return Decimal(str((tenant.exchange_rates or {}).get(currency, "1")))
+    except (InvalidOperation, TypeError):
+        return Decimal("1")
+
+
+def credit_for(method: PaymentMethod, amount: Decimal, rate: Decimal) -> Decimal:
+    """المبلغ الذي يدخل محفظة الوكيل: المبلغ × سعر الصرف − العمولة."""
+    gross = amount * rate
+    net = gross * (Decimal("100") - method.commission_percent) / Decimal("100")
+    return net.quantize(Decimal("0.01"))
 
 
 class ReceivingAccountViewSet(viewsets.ModelViewSet):
@@ -23,6 +50,22 @@ class ReceivingAccountViewSet(viewsets.ModelViewSet):
         serializer.save(tenant=self.request.user.tenant)
 
 
+class PaymentMethodViewSet(viewsets.ModelViewSet):
+    """CRUD طرق الدفع — لصاحب المتجر وحده، بكل تفاصيلها وحقولها المبنيّة."""
+    serializer_class = PaymentMethodSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return (
+            PaymentMethod.objects.filter(tenant=self.request.user.tenant)
+            .select_related("account").prefetch_related("fields")
+            .annotate(request_count=Count("requests"))
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(tenant=self.request.user.tenant)
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def accounts_total_view(request):
@@ -32,50 +75,203 @@ def accounts_total_view(request):
     return Response({"balance": str(total or 0)})
 
 
+# ─────────────────────────── جانب الوكيل ───────────────────────────
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def store_methods_view(request):
+    """طرق الدفع النشطة كما يراها الوكيل، مع سعر صرف كلٍّ منها الآن."""
+    tenant = request.user.tenant
+    methods = (
+        PaymentMethod.objects.filter(tenant=tenant, status=PaymentMethod.Status.ACTIVE)
+        .prefetch_related("fields")
+    )
+    wallet = getattr(request.user, "wallet", None)
+    data = []
+    for m in methods:
+        row = PaymentMethodSerializer(m).data
+        row["rate"] = str(rate_for(tenant, m.currency))
+        data.append(row)
+    return Response({
+        "base_currency": tenant.base_currency or "TRY",
+        "wallet_currency": wallet.currency if wallet else (tenant.base_currency or "TRY"),
+        "methods": data,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def store_deposits_view(request):
+    """سجلّ طلبات إضافة الرصيد الخاصة بالوكيل الحالي."""
+    qs = (
+        PaymentNotification.objects.filter(tenant=request.user.tenant, dealer=request.user)
+        .select_related("method", "account")
+    )
+    return Response({"results": PaymentNotificationSerializer(qs[:100], many=True).data})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def store_deposit_create_view(request):
+    """إنشاء طلب إضافة رصيد — يبقى قيد المراجعة حتى يقرّر صاحب المتجر."""
+    tenant = request.user.tenant
+    try:
+        method = PaymentMethod.objects.prefetch_related("fields").get(
+            pk=request.data.get("method"), tenant=tenant, status=PaymentMethod.Status.ACTIVE
+        )
+    except PaymentMethod.DoesNotExist:
+        return Response({"detail": "طريقة الدفع غير متاحة"}, status=404)
+
+    try:
+        amount = Decimal(str(request.data.get("amount")))
+    except (InvalidOperation, TypeError):
+        return Response({"detail": "مبلغ غير صحيح"}, status=400)
+    if amount <= 0:
+        return Response({"detail": "المبلغ يجب أن يكون أكبر من صفر"}, status=400)
+    if method.min_amount and amount < method.min_amount:
+        return Response({"detail": f"الحد الأدنى للإيداع {method.min_amount} {method.currency}"}, status=400)
+    if method.max_amount and amount > method.max_amount:
+        return Response({"detail": f"الحد الأعلى للإيداع {method.max_amount} {method.currency}"}, status=400)
+
+    # قيم الحقول المبنيّة — مع التحقّق من الإلزامي منها
+    sent = request.data.get("values") or {}
+    values = {}
+    for f in method.fields.all():
+        val = str(sent.get(str(f.id), "")).strip()
+        if f.required and not val:
+            return Response({"detail": f"الحقل «{f.label}» مطلوب"}, status=400)
+        if val:
+            values[f.label] = val
+
+    rate = rate_for(tenant, method.currency)
+    notif = PaymentNotification.objects.create(
+        tenant=tenant, dealer=request.user, method=method, account=method.account,
+        amount=amount, currency=method.currency, rate=rate,
+        commission_percent=method.commission_percent,
+        credit_amount=credit_for(method, amount, rate),
+        values=values, note=str(request.data.get("note") or "")[:255],
+    )
+    return Response(PaymentNotificationSerializer(notif).data, status=201)
+
+
+# ─────────────────────────── جانب صاحب المتجر ───────────────────────────
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def payment_notifications_view(request):
-    """قائمة إشعارات الدفع (Ödeme Takip) — فلتر بالحالة."""
+    """قائمة طلبات إضافة الرصيد — فلترة بالحالة والوكيل والطريقة والمبلغ والتاريخ."""
+    p = request.query_params
     qs = PaymentNotification.objects.filter(tenant=request.user.tenant).select_related(
-        "dealer", "account"
+        "dealer", "account", "method"
     )
-    st = request.query_params.get("status")
+    st = p.get("status")
     if st and st != "all":
         qs = qs.filter(status=st)
+    if p.get("dealer"):
+        qs = qs.filter(dealer_id=p["dealer"])
+    if p.get("method"):
+        qs = qs.filter(method_id=p["method"])
+    if p.get("min"):
+        qs = qs.filter(credit_amount__gte=p["min"])
+    if p.get("max"):
+        qs = qs.filter(credit_amount__lte=p["max"])
+    if p.get("date_from"):
+        qs = qs.filter(created_at__date__gte=p["date_from"])
+    if p.get("date_to"):
+        qs = qs.filter(created_at__date__lte=p["date_to"])
+    if p.get("q"):
+        qs = qs.filter(dealer__name__icontains=p["q"])
     return Response({
         "count": qs.count(),
-        "results": PaymentNotificationSerializer(qs[:200], many=True).data,
+        "results": PaymentNotificationSerializer(qs[:300], many=True).data,
     })
+
+
+def _apply_decision(notif, action, actor, note=""):
+    """
+    ينفّذ القرار على طلب واحد ويعيد (نجاح، رسالة).
+    القرار قابل للعكس: قبول المرفوض يضيف الرصيد، وإبطال المقبول يسحبه.
+    """
+    if action == "approve":
+        if notif.status == PaymentNotification.Status.APPROVED:
+            return False, "الطلب مقبول أصلاً"
+        wallet = getattr(notif.dealer, "wallet", None)
+        if wallet is None:
+            return False, "لا توجد محفظة للوكيل"
+        txn = wallet_services.apply_transaction(
+            wallet.id, notif.credit_amount or notif.amount, WalletTransaction.Type.TOPUP,
+            created_by=actor, note=note or f"إضافة رصيد — طلب #{notif.id}",
+            ref_type="payment", ref_id=notif.id, allow_below_limit=True,
+        )
+        notif.balance_before, notif.balance_after = txn.balance_before, txn.balance_after
+        notif.status = PaymentNotification.Status.APPROVED
+    else:
+        # الرفض بعد قبولٍ سابق يسحب ما أُضيف؛ والرفض المبتدأ لا يمسّ المحفظة
+        if notif.status == PaymentNotification.Status.REJECTED:
+            return False, "الطلب مرفوض أصلاً"
+        if notif.status == PaymentNotification.Status.APPROVED:
+            wallet = getattr(notif.dealer, "wallet", None)
+            if wallet is None:
+                return False, "لا توجد محفظة للوكيل"
+            txn = wallet_services.apply_transaction(
+                wallet.id, -(notif.credit_amount or notif.amount), WalletTransaction.Type.ADJUSTMENT,
+                created_by=actor, note=note or f"إبطال إضافة رصيد — طلب #{notif.id}",
+                ref_type="payment", ref_id=notif.id, allow_below_limit=True,
+            )
+            notif.balance_before, notif.balance_after = txn.balance_before, txn.balance_after
+        notif.status = PaymentNotification.Status.REJECTED
+
+    notif.approved_by = actor
+    notif.decided_at = timezone.now()
+    if note:
+        notif.admin_note = note[:255]
+    notif.save(update_fields=[
+        "status", "approved_by", "decided_at", "admin_note", "balance_before", "balance_after",
+    ])
+    return True, ""
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def payment_decide_view(request, notif_id, action):
-    """قبول/رفض إشعار دفع. القبول يشحن محفظة الوكيل."""
+    """قبول/رفض طلب واحد."""
     if action not in ("approve", "reject"):
         return Response({"detail": "إجراء غير معروف"}, status=400)
+    if not _is_admin(request.user):
+        return Response({"detail": "غير مصرّح"}, status=403)
     try:
         notif = PaymentNotification.objects.select_related("dealer").get(
             pk=notif_id, tenant=request.user.tenant
         )
     except PaymentNotification.DoesNotExist:
-        return Response({"detail": "الإشعار غير موجود"}, status=404)
-    if notif.status != PaymentNotification.Status.PENDING:
-        return Response({"detail": "تمّت معالجة الإشعار مسبقاً"}, status=400)
+        return Response({"detail": "الطلب غير موجود"}, status=404)
 
-    if action == "approve":
-        wallet = getattr(notif.dealer, "wallet", None)
-        if wallet is None:
-            return Response({"detail": "لا توجد محفظة للوكيل"}, status=400)
-        wallet_services.apply_transaction(
-            wallet.id, notif.amount, WalletTransaction.Type.TOPUP,
-            created_by=request.user, note=f"دفعة معتمدة #{notif.id}",
-            ref_type="payment", ref_id=notif.id, allow_below_limit=True,
-        )
-        notif.status = PaymentNotification.Status.APPROVED
-    else:
-        notif.status = PaymentNotification.Status.REJECTED
-
-    notif.approved_by = request.user
-    notif.save(update_fields=["status", "approved_by"])
+    ok, msg = _apply_decision(notif, action, request.user, str(request.data.get("note") or ""))
+    if not ok:
+        return Response({"detail": msg}, status=400)
     return Response(PaymentNotificationSerializer(notif).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def payment_bulk_action_view(request):
+    """قبول/رفض جماعي على الطلبات المحدَّدة — كإجراءات جدول طلبات الألعاب."""
+    if not _is_admin(request.user):
+        return Response({"detail": "غير مصرّح"}, status=403)
+    action = request.data.get("action")
+    if action not in ("approve", "reject"):
+        return Response({"detail": "إجراء غير معروف"}, status=400)
+    ids = request.data.get("requests") or []
+    note = str(request.data.get("note") or "")
+
+    results, done = [], 0
+    for notif in PaymentNotification.objects.select_related("dealer").filter(
+        pk__in=ids, tenant=request.user.tenant
+    ):
+        try:
+            ok, msg = _apply_decision(notif, action, request.user, note)
+        except wallet_services.WalletError as e:
+            ok, msg = False, str(e)
+        results.append({"request": notif.id, "ok": ok, "detail": msg})
+        done += 1 if ok else 0
+    return Response({"done": done, "results": results})

@@ -31,6 +31,7 @@ const SUBNAV_OYUNPIN = [
 ];
 const SUBNAV_AYARLAR = [
   { label: "متابعة الدفع", to: "/ayarlar/payments" },
+  { label: "طرق الدفع", to: "/ayarlar/payment-methods" },
   { label: "حساباتي", to: "/ayarlar/accounts" },
   { label: "حركات الحسابات", to: "/ayarlar/ledger" },
   { label: "قائمة الوكلاء", to: "/dealers" },

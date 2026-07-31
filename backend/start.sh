@@ -25,6 +25,8 @@ else:
 # المكتبة العالمية + عرض التنفيذ التلقائي idempotent — تُشغَّل دائماً
 subprocess.run(["python", "manage.py", "seed_library"], check=False)
 subprocess.run(["python", "manage.py", "seed_auto"], check=False)
+# طرق الدفع وسعر الصرف العام — متسامحة، تُنشئ الناقص وتترك تعديلات المالك
+subprocess.run(["python", "manage.py", "seed_payment_methods"], check=False)
 # seed_routing_test لا يُشغَّل في النشر: كان يزرع «بنك فارغ (للاختبار)» ومتجر
 # مورّد وهميّاً في بيئة الإنتاج، ويظهران للمالك كمزوّدَين حقيقيَّين. يبقى
 # الأمر متاحاً يدوياً للتجارب المحلية.

@@ -17,6 +17,7 @@ import Orders from "./pages/Orders";
 import Pool from "./pages/Pool";
 import SiteSettings from "./pages/SiteSettings";
 import Accounts from "./pages/Accounts";
+import PaymentMethods from "./pages/PaymentMethods";
 import PaymentTracking from "./pages/PaymentTracking";
 import Reports from "./pages/Reports";
 import DealerGroups from "./pages/DealerGroups";
@@ -77,6 +78,7 @@ export default function App() {
           {/* Ayarlar */}
           <Route path="/dealers" element={Admin(<Dealers />)} />
           <Route path="/ayarlar/payments" element={Admin(<PaymentTracking />)} />
+          <Route path="/ayarlar/payment-methods" element={Admin(<PaymentMethods />)} />
           <Route path="/ayarlar/accounts" element={Admin(<Accounts />)} />
           <Route path="/ayarlar/ledger" element={Admin(<Ledger />)} />
           <Route path="/ayarlar/groups" element={Admin(<DealerGroups />)} />

@@ -67,7 +67,7 @@ git push origin claude/website-clone-auth-access-xp4oj8
 2. **Docker مرحلة 2:** تثبيت `backend/requirements.txt` + نسخ `frontend/dist`
    إلى `/app/frontend_dist` (يقدّمها WhiteNoise مع SPA fallback) + `collectstatic`.
 3. **`backend/start.sh`:** `migrate` → بذور متسامحة (`seed_demo` · `seed_library` ·
-   `seed_auto` · `seed_routing_test` تعمل في كل نشر · بذور الكتالوج الثقيلة
+   `seed_auto` · `seed_payment_methods` تعمل في كل نشر · بذور الكتالوج الثقيلة
    مرّة واحدة فقط عند قاعدة فارغة) → تشغيل `gunicorn` بعاملين.
 
 ---
