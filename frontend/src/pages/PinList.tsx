@@ -247,14 +247,24 @@ export default function PinList() {
   );
 }
 
-/** رقم الباقة لدى المزوّد وسعرها عنده — تحت اسمه مباشرةً في الخلية نفسها. */
+/**
+ * رقم الباقة لدى المزوّد وسعرها عنده — تحت اسمه مباشرةً في الخلية نفسها.
+ *
+ * ZNET يرقّم **اللعبة** بـ`oyun` (PUBG = 1) ويميّز الباقات داخلها بـ`kupur`
+ * (60 · 325 · 660…) — فالرقمان معاً هما العنوان، وعرض الأول وحده يوهم أن
+ * رقم ربط 60 UC هو «1». نعرضهما `1/60` كما تعرضهما صفحة ربط الباقات.
+ */
 function LinkInfo({ link, sell }: { link?: Link; sell: string }) {
   if (!link) return null;
-  const price = (link.extra || {}).price;
+  const extra = link.extra || {};
+  const price = extra.price;
   const loss = price !== undefined && price !== "" && Number(price) > Number(sell);
   return (
     <div style={{ fontSize: 11, marginTop: 3, lineHeight: 1.5 }}>
-      <span style={{ color: "var(--muted)" }} dir="ltr">({link.package_id})</span>
+      <span style={{ color: "var(--muted)" }} dir="ltr"
+        title={extra.kupur ? "رقم اللعبة (oyun) / كود الباقة (kupur)" : "رقم الباقة لدى المزوّد"}>
+        ({link.package_id}{extra.kupur ? `/${extra.kupur}` : ""})
+      </span>
       {price ? (
         <b style={{ marginInlineStart: 6, color: loss ? "var(--danger)" : "var(--ok)" }}
           title={loss ? `تكلفته ${price} أعلى من سعر بيعك ${sell} — حماية الخسارة ستتخطّاه` : undefined}>
