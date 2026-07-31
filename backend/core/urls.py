@@ -17,6 +17,8 @@ urlpatterns = [
     path("ledger/", views.ledger_view, name="ledger"),
     path("dealers/", views.dealers_view, name="dealers"),
     path("dealers/<int:dealer_id>/transactions/", views.wallet_transactions_view, name="wallet-txns"),
+    # قبل مسار <str:action> وإلا ابتلعه
+    path("dealers/<int:dealer_id>/settings/", views.dealer_settings_view, name="dealer-settings"),
     path("dealers/<int:dealer_id>/<str:action>/", views.wallet_operation_view, name="wallet-op"),
     # التذاكر / الرسائل
     path("tickets/", tickets.tickets_view, name="tickets"),

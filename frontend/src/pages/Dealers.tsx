@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type Dealer } from "../api";
 import WalletModal from "../components/WalletModal";
 import DealerCreateModal from "../components/DealerCreateModal";
+import DealerSettingsModal from "../components/DealerSettingsModal";
 import Icon from "../components/Icon";
 import { symbolOf, useBaseSymbol } from "../currency";
 
-const FLAG: Record<string, string> = { SY: "🇸🇾", TR: "🇹🇷", SA: "🇸🇦", IQ: "🇮🇶" };
 type Filter = "all" | "active" | "neg" | "off";
 
 export default function Dealers() {
@@ -16,6 +16,7 @@ export default function Dealers() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<{ dealer: Dealer; action: "topup" | "deduct" } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [settingsFor, setSettingsFor] = useState<number | null>(null);
 
   function load(search = "") {
     setLoading(true);
@@ -114,15 +115,14 @@ export default function Dealers() {
                 <th>الحد الائتماني</th>
                 <th>الحالة</th>
                 <th>المجموعة</th>
-                <th>الدولة</th>
                 <th>إجراءات</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} style={{ padding: 30, color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
+                <tr><td colSpan={8} style={{ padding: 30, color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
               ) : shown.length === 0 ? (
-                <tr><td colSpan={9} style={{ padding: 30, color: "var(--muted)" }}>لا يوجد وكلاء مطابقون</td></tr>
+                <tr><td colSpan={8} style={{ padding: 30, color: "var(--muted)" }}>لا يوجد وكلاء مطابقون</td></tr>
               ) : shown.map((d) => {
                 const bal = Number(d.balance);
                 return (
@@ -148,13 +148,13 @@ export default function Dealers() {
                       </div>
                     </td>
                     <td className="num" style={{ fontWeight: 700, color: "var(--muted)" }}>{d.group || "—"}</td>
-                    <td style={{ fontSize: 17 }}>{FLAG[d.country] || "🏳️"}</td>
                     <td>
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                         <IconBtn name="plus" color="var(--ok)" title="شحن رصيد" onClick={() => setModal({ dealer: d, action: "topup" })} />
                         <IconBtn name="minus" color="var(--danger)" title="خصم رصيد" onClick={() => setModal({ dealer: d, action: "deduct" })} />
                         <IconBtn name="chart" color="var(--primary)" title="كشف حساب" />
-                        <IconBtn name="edit" color="var(--muted)" title="تعديل" />
+                        <IconBtn name="settings" color="var(--primary-dark)" title="إعدادات الوكيل"
+                          onClick={() => setSettingsFor(d.id)} />
                       </div>
                     </td>
                   </tr>
@@ -175,6 +175,12 @@ export default function Dealers() {
         <DealerCreateModal
           onClose={() => setCreateOpen(false)}
           onDone={() => { setCreateOpen(false); load(q); }} />
+      )}
+
+      {settingsFor !== null && (
+        <DealerSettingsModal dealerId={settingsFor}
+          onClose={() => setSettingsFor(null)}
+          onSaved={() => load(q)} />
       )}
     </div>
   );

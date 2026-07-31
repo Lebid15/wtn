@@ -8,7 +8,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from . import services
+from . import currency, services
 from .models import DealerGroup, Invoice, User, Wallet, WalletTransaction
 from .serializers import (
     DealerGroupSerializer, LoginSerializer, SiteSettingsSerializer,
@@ -268,6 +268,130 @@ def _get_dealer_wallet(request, dealer_id):
     return Wallet.objects.select_related("user").get(
         user_id=dealer_id, tenant=request.user.tenant
     )
+
+
+# أقصى حجم لصورة محفوظة كـ data URL — الصور تُصغَّر في المتصفّح قبل الإرسال
+MAX_IMAGE_CHARS = 3_000_000  # ≈ 2.2 ميغابايت بعد ترميز base64
+
+
+def _dealer_settings_row(u):
+    wallet = getattr(u, "wallet", None)
+    tenant = u.tenant
+    return {
+        "id": u.id,
+        "login_id": u.login_id,
+        "name": u.name,
+        "role": u.role,
+        "role_label": u.get_role_display(),
+        # التبويب الأول
+        "display_currency": u.display_currency or "",
+        "credit_limit": str(wallet.credit_limit) if wallet else "0.00",
+        "balance": str(wallet.balance) if wallet else "0.00",
+        "status": u.status,
+        # التبويب الثاني
+        "phone": u.phone,
+        "country": u.country,
+        "province": u.province,
+        "id_image": u.id_image,
+        "shop_image": u.shop_image,
+        "auto_debt_collection": u.auto_debt_collection,
+        # مرجع العملات
+        "base_currency": currency.base_currency(tenant),
+        "available_currencies": sorted(
+            c for c, v in (tenant.exchange_rates or {}).items() if str(v).strip()
+        ),
+    }
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def dealer_settings_view(request, dealer_id):
+    """
+    إعدادات وكيل واحد من «قائمة الوكلاء» — نافذة بتبويبين:
+    الحساب (العملة · الحد الائتماني · كلمة السر · الحالة) وبيانات الوكيل
+    (الجوال · البلد والمحافظة · الوثائق · موافقة التحصيل الآلي).
+    """
+    if request.user.role != User.Role.TENANT_ADMIN:
+        return Response({"detail": "غير مصرّح"}, status=403)
+    try:
+        u = User.objects.select_related("wallet", "tenant").get(
+            pk=dealer_id, tenant=request.user.tenant,
+            role__in=[User.Role.BAYI, User.Role.ANA_BAYI],
+        )
+    except User.DoesNotExist:
+        return Response({"detail": "الوكيل غير موجود"}, status=404)
+
+    if request.method == "GET":
+        return Response(_dealer_settings_row(u))
+
+    data = request.data
+    tenant = request.user.tenant
+    fields = []
+
+    if "display_currency" in data:
+        cur = str(data["display_currency"] or "")
+        if cur and cur != currency.base_currency(tenant) and not currency.rate_of(tenant, cur):
+            return Response(
+                {"detail": f"لا سعر صرف مضبوط للعملة {cur} — اضبطه في «أسعار الصرف» أولاً"},
+                status=400,
+            )
+        u.display_currency = "" if cur == currency.base_currency(tenant) else cur
+        fields.append("display_currency")
+
+    if "status" in data:
+        if data["status"] not in User.Status.values:
+            return Response({"detail": "حالة غير معروفة"}, status=400)
+        u.status = data["status"]
+        fields.append("status")
+
+    for key in ("phone", "province", "country"):
+        if key in data:
+            setattr(u, key, str(data[key] or "").strip()[:80])
+            fields.append(key)
+
+    for key in ("id_image", "shop_image"):
+        if key in data:
+            img = str(data[key] or "")
+            if len(img) > MAX_IMAGE_CHARS:
+                return Response({"detail": "الصورة كبيرة جداً — اختر صورة أصغر"}, status=400)
+            if img and not img.startswith("data:image/"):
+                return Response({"detail": "الملف المرفوع ليس صورة"}, status=400)
+            setattr(u, key, img)
+            fields.append(key)
+
+    if "auto_debt_collection" in data:
+        u.auto_debt_collection = bool(data["auto_debt_collection"])
+        fields.append("auto_debt_collection")
+
+    new_password = str(data.get("new_password") or "")
+    if new_password:
+        if len(new_password) < 5:
+            return Response({"detail": "كلمة السر قصيرة (5 أحرف على الأقل)"}, status=400)
+        u.set_password(new_password)
+        fields.append("password")
+
+    if fields:
+        u.save(update_fields=fields)
+
+    # الحد الائتماني على المحفظة لا على المستخدم
+    if "credit_limit" in data:
+        wallet = getattr(u, "wallet", None)
+        if wallet is None:
+            return Response({"detail": "لا توجد محفظة لهذا الوكيل"}, status=400)
+        try:
+            limit = Decimal(str(data["credit_limit"]))
+        except (InvalidOperation, TypeError):
+            return Response({"detail": "حد ائتماني غير صحيح"}, status=400)
+        if limit > 0:
+            return Response(
+                {"detail": "الحد الائتماني أقصى دَين مسموح — اكتبه صفراً أو رقماً سالباً"},
+                status=400,
+            )
+        wallet.credit_limit = limit
+        wallet.save(update_fields=["credit_limit"])
+
+    u.refresh_from_db()
+    return Response(_dealer_settings_row(u))
 
 
 @api_view(["POST"])

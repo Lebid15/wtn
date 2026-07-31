@@ -128,7 +128,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     totp_enabled = models.BooleanField(default=False)
 
     country = models.CharField(max_length=2, default="SY")
+    province = models.CharField(max_length=80, blank=True, default="")  # المحافظة
     foreign_ip_allowed = models.BooleanField(default=False)  # Bayi Yurt Dışı Ip İzin
+    # وثائق الوكيل — تُحفظ كـ data URL داخل القاعدة لا كملفّات على القرص،
+    # لأن قرص الاستضافة مؤقّت ويُمسح مع كل نشر. اختيارية دائماً.
+    id_image = models.TextField(blank=True, default="")     # صورة الهوية
+    shop_image = models.TextField(blank=True, default="")   # صورة لوحة المحل
+    # موافقة الوكيل على تحصيل دَينه آلياً (يبني عليها روبوت التحصيل لاحقاً)
+    auto_debt_collection = models.BooleanField(default=False)
     oyun_load_limit = models.DecimalField(  # Bayi Oyun Yükleme Limiti
         max_digits=12, decimal_places=2, default=Decimal("10000")
     )
