@@ -183,7 +183,11 @@ export default function Orders() {
                     </td>
                     <td className="buy num">{money(o.cost_price)} ل.ت</td>
                     <td className="sell num">{money(o.sell_price)} ل.ت</td>
-                    <td className="profit num">{money(o.profit)} ل.ت</td>
+                    <td className="profit num"
+                      style={Number(o.profit) < 0 ? { color: "var(--danger)", fontWeight: 800 } : undefined}
+                      title={Number(o.profit) < 0 ? "خسارة — تكلفة المزوّد أعلى من سعر البيع" : undefined}>
+                      {money(o.profit)} ل.ت
+                    </td>
                     <td>
                       {o.status === "pending" || o.status === "processing" ? (
                         <span className={`stspin${o.status === "processing" ? " proc" : ""}`} title={o.status_label} />

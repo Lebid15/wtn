@@ -104,7 +104,11 @@ export default function PackageLinks() {
       provider: provider.id,
       package_id: pkg.id,
       package_name: pkg.name,
-      extra: pkg.kupur ? { kupur: pkg.kupur } : {},
+      // نحفظ سعر المزوّد وقت الربط — يعتمده "منع البيع بخسارة" قبل الإرسال
+      extra: {
+        ...(pkg.kupur ? { kupur: pkg.kupur } : {}),
+        ...(pkg.price ? { price: pkg.price } : {}),
+      },
     });
     setLinks((m) => new Map(m).set(key(product.id, provider.id), r.data));
     setOpen(null);
@@ -205,10 +209,24 @@ export default function PackageLinks() {
                                         /{link.extra.kupur}
                                       </code>
                                     )}
-                                    <span style={{ fontSize: 11, opacity: 0.75, maxWidth: 90,
+                                    <span style={{ fontSize: 11, opacity: 0.75, maxWidth: 78,
                                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                       {link.package_name}
                                     </span>
+                                    {link.extra?.price && (
+                                      <span
+                                        title={Number(link.extra.price) > Number(p.recommended_price)
+                                          ? `تكلفة المزوّد ${link.extra.price} أعلى من سعر بيعك ${p.recommended_price} — بيع بخسارة`
+                                          : `تكلفة المزوّد ${link.extra.price}`}
+                                        style={{
+                                          fontSize: 11, fontWeight: 700, direction: "ltr",
+                                          color: Number(link.extra.price) > Number(p.recommended_price)
+                                            ? "var(--danger)" : "var(--ok)",
+                                        }}>
+                                        {Number(link.extra.price) > Number(p.recommended_price) ? "⚠ " : ""}
+                                        {link.extra.price}
+                                      </span>
+                                    )}
                                   </>
                                 ) : (
                                   <>

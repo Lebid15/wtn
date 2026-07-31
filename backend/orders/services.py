@@ -3,7 +3,7 @@
 يربط: التسعير (catalog) + المحفظة (core) + المزوّدين (providers).
 """
 import random
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 from django.utils import timezone
@@ -101,6 +101,34 @@ def execute_order(order: Order, *, provider=None, pin="") -> Order:
     return order
 
 
+def _link_price(product_id: int, provider_id: int):
+    """سعر الباقة لدى المزوّد كما حُفظ وقت الربط من كتالوجه (أو None)."""
+    from catalog.models import ProductLink
+
+    link = ProductLink.objects.filter(
+        product_id=product_id, provider_id=provider_id
+    ).only("extra").first()
+    raw = (link.extra or {}).get("price") if link else None
+    if raw in (None, ""):
+        return None
+    try:
+        return Decimal(str(raw).replace(",", "."))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _apply_real_cost(order: Order, result) -> list:
+    """
+    يعتمد التكلفة **الفعلية** التي أعادها المزوّد بدل التكلفة المقدَّرة على
+    المنتج، ويعيد حساب الربح. بدونها يظهر ربح وهمي بينما العملية خاسرة.
+    """
+    if result.cost is None or result.cost < 0:
+        return []
+    order.cost_price = result.cost
+    order.profit = order.sell_price - result.cost
+    return ["cost_price", "profit"]
+
+
 def dispatch_order(order: Order, depth: int = 0) -> Order:
     """
     التنفيذ التلقائي مع التوجيه البديل (Failover):
@@ -129,6 +157,17 @@ def dispatch_order(order: Order, depth: int = 0) -> Order:
         if adapter is None:
             trail.append(f"{provider.name}: منفّذ يدوي — تُخُطّي")
             continue
+
+        # حماية الخسارة (Zarar Ayarı): سعر الباقة المحفوظ وقت الربط مأخوذ من
+        # كتالوج المزوّد. إن تجاوز سعر بيعنا، فالطلب خاسر قبل أن يُرسَل —
+        # نتخطّى هذا المزوّد بدل إنفاق المال. يُعطَّل بإطفاء loss_guard عليه.
+        if provider.loss_guard:
+            known = _link_price(order.product_id, provider.id)
+            if known is not None and known > order.sell_price:
+                trail.append(
+                    f"{provider.name}: حماية الخسارة — تكلفته {known} > سعر البيع {order.sell_price}"
+                )
+                continue
         try:
             result = adapter.place_order(order, provider.config or {}, provider=provider, depth=depth)
         except Exception as e:
@@ -137,6 +176,8 @@ def dispatch_order(order: Order, depth: int = 0) -> Order:
 
         note = (result.note or "").strip()
         ref = f" · ref={result.external_ref}" if result.external_ref else ""
+
+        cost_fields = _apply_real_cost(order, result)
 
         if result.status == "success":
             order.status = Order.Status.SUCCESS
@@ -150,7 +191,7 @@ def dispatch_order(order: Order, depth: int = 0) -> Order:
             order.save(update_fields=[
                 "status", "provider", "pin_result", "api_response",
                 "provider_ref", "provider_note", "approved_at",
-            ])
+            ] + cost_fields)
             return order
 
         if result.status == "processing":
@@ -162,7 +203,7 @@ def dispatch_order(order: Order, depth: int = 0) -> Order:
             order.provider_note = note[:250]
             order.save(update_fields=[
                 "status", "provider", "api_response", "provider_ref", "provider_note",
-            ])
+            ] + cost_fields)
             return order
 
         trail.append(f"{provider.name}: {note or 'فشل'}")
