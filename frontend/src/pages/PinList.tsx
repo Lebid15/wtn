@@ -250,9 +250,9 @@ export default function PinList() {
 /**
  * رقم الباقة لدى المزوّد وسعرها عنده — تحت اسمه مباشرةً في الخلية نفسها.
  *
- * ZNET يرقّم **اللعبة** بـ`oyun` (PUBG = 1) ويميّز الباقات داخلها بـ`kupur`
- * (60 · 325 · 660…) — فالرقمان معاً هما العنوان، وعرض الأول وحده يوهم أن
- * رقم ربط 60 UC هو «1». نعرضهما `1/60` كما تعرضهما صفحة ربط الباقات.
+ * يُعرض **رقم الباقة** وحده: عند ZNET هو `kupur` (60 · 325) لا `oyun` الذي
+ * يرقّم اللعبة كلّها (PUBG = 1) فيتكرّر على كل باقاتها ولا يميّز شيئاً.
+ * وعند ZDK رقم واحد لا `kupur` له، فيُعرض كما هو. الإرسال يستعمل الاثنين.
  */
 function LinkInfo({ link, sell }: { link?: Link; sell: string }) {
   if (!link) return null;
@@ -261,9 +261,8 @@ function LinkInfo({ link, sell }: { link?: Link; sell: string }) {
   const loss = price !== undefined && price !== "" && Number(price) > Number(sell);
   return (
     <div style={{ fontSize: 11, marginTop: 3, lineHeight: 1.5 }}>
-      <span style={{ color: "var(--muted)" }} dir="ltr"
-        title={extra.kupur ? "رقم اللعبة (oyun) / كود الباقة (kupur)" : "رقم الباقة لدى المزوّد"}>
-        ({link.package_id}{extra.kupur ? `/${extra.kupur}` : ""})
+      <span style={{ color: "var(--muted)" }} dir="ltr" title="رقم الباقة لدى المزوّد">
+        ({extra.kupur || link.package_id})
       </span>
       {price ? (
         <b style={{ marginInlineStart: 6, color: loss ? "var(--danger)" : "var(--ok)" }}
