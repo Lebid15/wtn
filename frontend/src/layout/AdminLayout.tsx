@@ -91,20 +91,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <div style={topbar}>
         <div style={{ display: "flex", gap: 1 }}>
           {MAIN_TABS.map((t) => {
-            const home = t.key === "home";
-            const section =
+            // التبويب النشط واحد فقط — يُحدَّد من المسار الحالي
+            const active =
+              (t.key === "home" && loc.pathname.startsWith("/home")) ||
               (t.key === "oyunpin" && loc.pathname.startsWith("/oyunpin")) ||
               (t.key === "raporlar" && loc.pathname.startsWith("/reports")) ||
               (t.key === "ayarlar" &&
                 (loc.pathname === "/dealers" || loc.pathname.startsWith("/ayarlar")));
-            const active = section && !home;
             return (
               <Link
                 key={t.key}
                 to={t.to}
                 style={{
                   ...tab,
-                  ...(home ? tabHome : {}),
                   ...(active ? tabActive : {}),
                 }}
               >
@@ -197,7 +196,6 @@ const tab: React.CSSProperties = {
   color: "#f2fafb",
   fontSize: 16,
 };
-const tabHome: React.CSSProperties = { background: "#f2f5f6", color: "var(--primary)" };
 const tabActive: React.CSSProperties = {
   background: "#f2f5f6",
   color: "var(--tab-active-text)",

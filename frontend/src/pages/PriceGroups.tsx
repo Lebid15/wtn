@@ -10,11 +10,14 @@ interface MatrixProduct {
 interface MatrixGame { game_id: number; game_name: string; products: MatrixProduct[] }
 interface Group { id: number; name: string }
 
+// عمود الخلية قيد التحرير: رقم مجموعة، أو عمودا المنتج نفسه
+type Col = number | "cost" | "rec";
+
 export default function PriceGroups() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [games, setGames] = useState<MatrixGame[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<{ p: number; g: number } | null>(null);
+  const [editing, setEditing] = useState<{ p: number; g: Col } | null>(null);
   const [draft, setDraft] = useState("");
 
   function load() {
@@ -33,21 +36,66 @@ export default function PriceGroups() {
   }
 
   async function saveCell(productId: number, groupId: number) {
-    if (draft.trim() !== "") {
-      await api.post("/catalog/set-price/", { product: productId, price_group: groupId, price: draft });
-    }
+    const value = draft.trim();
     setEditing(null);
+    if (value === "") return;
+    await api.post("/catalog/set-price/", { product: productId, price_group: groupId, price: value });
     // تحديث محلي فوري
     setGames((gs) => gs.map((game) => ({
       ...game,
       products: game.products.map((p) =>
         p.id === productId
-          ? { ...p, prices: { ...p.prices, [groupId]: { price: draft, custom: true } } }
+          ? { ...p, prices: { ...p.prices, [groupId]: { price: value, custom: true } } }
           : p),
     })));
   }
 
+  /** حفظ التكلفة أو السعر الموصى — نفس حقلَي المنتج المُحرَّرين من باقات المنتجات،
+   *  فالتعديل من هنا أو من هناك يصلان إلى السجلّ ذاته. */
+  async function saveProductField(productId: number, field: "cost_price" | "recommended_price") {
+    const value = draft.trim();
+    setEditing(null);
+    if (value === "") return;
+    await api.patch(`/catalog/products/${productId}/`, { [field]: value });
+    setGames((gs) => gs.map((game) => ({
+      ...game,
+      products: game.products.map((p) => {
+        if (p.id !== productId) return p;
+        const next = { ...p, [field]: value };
+        // السعر الموصى هو افتراضي الخلايا غير المخصّصة — فتتبعه فوراً
+        if (field === "recommended_price") {
+          next.prices = Object.fromEntries(
+            Object.entries(p.prices).map(([gid, c]) =>
+              [gid, c.custom ? c : { price: value, custom: false }]),
+          );
+        }
+        return next;
+      }),
+    })));
+  }
+
+  function startEdit(productId: number, col: Col, current: string) {
+    if (editing?.p === productId && editing?.g === col) return;
+    setEditing({ p: productId, g: col });
+    setDraft(current);
+  }
+
   const money = (v: string) => Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 });
+
+  /** حقل التحرير المشترك لكل الخلايا. */
+  function cellInput(commit: () => void) {
+    return (
+      <input autoFocus type="number" step="0.01" value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          // الإلغاء: تفريغ المسودّة يجعل الحفظ (بما فيه onBlur اللاحق) بلا أثر
+          if (e.key === "Escape") { setDraft(""); setEditing(null); }
+        }}
+        style={{ width: 80, height: 26 }} />
+    );
+  }
 
   if (loading) return <div style={{ padding: 30 }}>جارٍ التحميل...</div>;
 
@@ -67,7 +115,8 @@ export default function PriceGroups() {
       </div>
       <div style={note}>
         اضغط على أي خلية سعر لتعديلها. الخلية <b style={{ color: "var(--primary-dark)" }}>الملوّنة</b> = سعر
-        مخصّص، والرمادية = السعر الموصى (افتراضي).
+        مخصّص، والرمادية = السعر الموصى (افتراضي). عمودا <b>التكلفة</b> و<b>الموصى</b> قابلان للتعديل هنا
+        أيضاً، وهما نفس القيمتين في باقات المنتجات — التعديل من أيّ الجهتين يُحدّث الأخرى.
       </div>
 
       <div style={{ overflowX: "auto" }}>
@@ -91,8 +140,18 @@ export default function PriceGroups() {
                   <tr key={p.id} style={{ background: i % 2 ? "var(--row-alt)" : "#fff" }}>
                     <td style={{ ...td, color: "var(--muted)" }}>{p.id}</td>
                     <td style={{ ...td, textAlign: "right", paddingInlineStart: 12, fontWeight: 600 }}>{p.name}</td>
-                    <td style={{ ...td, color: "var(--muted)" }}>{money(p.cost_price)}</td>
-                    <td style={td}>{money(p.recommended_price)}</td>
+                    <td style={{ ...td, color: "var(--muted)", cursor: "pointer" }}
+                      onClick={() => startEdit(p.id, "cost", p.cost_price)}>
+                      {editing?.p === p.id && editing?.g === "cost"
+                        ? cellInput(() => saveProductField(p.id, "cost_price"))
+                        : money(p.cost_price)}
+                    </td>
+                    <td style={{ ...td, cursor: "pointer" }}
+                      onClick={() => startEdit(p.id, "rec", p.recommended_price)}>
+                      {editing?.p === p.id && editing?.g === "rec"
+                        ? cellInput(() => saveProductField(p.id, "recommended_price"))
+                        : money(p.recommended_price)}
+                    </td>
                     {groups.map((g) => {
                       const cell = p.prices[g.id];
                       const isEditing = editing?.p === p.id && editing?.g === g.id;
@@ -100,16 +159,10 @@ export default function PriceGroups() {
                         <td key={g.id} style={{ ...td, cursor: "pointer",
                           color: cell?.custom ? "var(--primary-dark)" : "var(--muted)",
                           fontWeight: cell?.custom ? 700 : 400 }}
-                          onClick={() => { if (!isEditing) { setEditing({ p: p.id, g: g.id }); setDraft(cell?.price ?? ""); } }}>
-                          {isEditing ? (
-                            <input autoFocus type="number" step="0.01" value={draft}
-                              onChange={(e) => setDraft(e.target.value)}
-                              onBlur={() => saveCell(p.id, g.id)}
-                              onKeyDown={(e) => e.key === "Enter" && saveCell(p.id, g.id)}
-                              style={{ width: 80, height: 26 }} />
-                          ) : (
-                            money(cell?.price ?? "0")
-                          )}
+                          onClick={() => startEdit(p.id, g.id, cell?.price ?? "")}>
+                          {isEditing
+                            ? cellInput(() => saveCell(p.id, g.id))
+                            : money(cell?.price ?? "0")}
                         </td>
                       );
                     })}
