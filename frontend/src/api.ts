@@ -93,6 +93,11 @@ export interface Order {
   provider_ref: string;
   provider_note: string;
   last_sync_at: string | null;
+  // أرقام الوكيل: بكم باع لزبونه وكم ربح (شراؤه هو sell_price أعلاه)
+  dealer_sell_price: string;
+  dealer_profit: string;
+  // ملاحظة المشغّل على الطلب — سبب القبول أو الرفض اليدوي، يراها الوكيل
+  dealer_note: string;
   balance_before: string;
   balance_after: string;
   created_at: string;
