@@ -265,7 +265,7 @@ function OrdersTab() {
               <th style={th}>الشراء</th>
               <th style={th}>البيع</th>
               <th style={th}>الربح</th>
-              <th style={th}>الكود / PIN</th>
+              {/* الكود يظهر في نافذة التفاصيل — عمود خاصّ به يوسّع الجدول بلا داعٍ */}
               <th style={th}>الحالة</th>
               <th style={th}>التاريخ</th>
               <th style={th}>تفاصيل</th>
@@ -273,9 +273,9 @@ function OrdersTab() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
+              <tr><td colSpan={9} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={10} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>لا توجد طلبات بعد</td></tr>
+              <tr><td colSpan={9} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>لا توجد طلبات بعد</td></tr>
             ) : rows.map((o) => (
               <tr key={o.id}>
                 <td style={td}>{o.receipt_no}</td>
@@ -294,15 +294,6 @@ function OrdersTab() {
                 }}
                   title={Number(o.dealer_profit) < 0 ? "بعتَ بأقلّ من سعر شرائك" : undefined}>
                   {money(o.dealer_profit)}
-                </td>
-                <td style={{ ...td, direction: "ltr", fontFamily: "monospace", fontSize: 12 }}>
-                  {o.pin_result
-                    ? o.pin_result
-                    : o.status === "success"
-                      ? <span style={{ color: "var(--ok)", fontFamily: "inherit", direction: "rtl" }}>
-                          شُحن مباشرةً ✓
-                        </span>
-                      : "—"}
                 </td>
                 <td style={td}>
                   {o.status === "pending" || o.status === "processing" ? (
