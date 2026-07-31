@@ -9,9 +9,12 @@ const ginitials = (name: string) => (name || "?").split(" ").map((w) => w[0]).jo
 
 const DOT: Record<string, string> = { pending: "wait", processing: "wait", success: "ok", cancelled: "err", stuck: "err" };
 
-// خلفية الصفّ في لوحة المشغّل: ما ينتظر قراره فقط — الانتظار والعالق.
-// المحسوم (ناجح/ملغى) بلا لون كي لا يُغرِق الجدولَ لونٌ لا يستدعي عملاً.
-const ROW_TONE: Record<string, string> = { pending: "row-wait", stuck: "row-stuck" };
+// خلفية الصفّ في لوحة المشغّل — ثلاث حالات حيّة، والمحسوم بلا لون:
+//   أصفر  = ينتظر قرارك      · أزرق = عند المزوّد، ليس دورك
+//   رملي  = عالق، فشل التوجيه فيحتاج تدخّلك
+const ROW_TONE: Record<string, string> = {
+  pending: "row-wait", processing: "row-sent", stuck: "row-stuck",
+};
 
 interface Opt { id: number; name: string; game?: number }
 

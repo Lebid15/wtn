@@ -171,6 +171,7 @@ table.grid tbody tr:hover td { background: var(--primary-tint); }
    تُوضع على الصفّ لكن تلوّن الخلايا: خلفية td معتمة وتغطّي خلفية tr.
    الترتيب مقصود: قاعدة التحديد آخراً فتتقدّم على لون الحالة. */
 table.grid tbody tr.row-wait  td { background: #FAEF77; }
+table.grid tbody tr.row-sent  td { background: #D9E9F7; }
 table.grid tbody tr.row-stuck td { background: #F5DCB8; }
 table.grid tbody tr.row-ok    td { background: #D8F781; }
 table.grid tbody tr.row-no    td { background: #F5BEAC; }
