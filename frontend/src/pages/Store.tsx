@@ -34,6 +34,16 @@ const money = (v: string | number) =>
 const profitOf = (sell: string | number, paid: string | number) =>
   Number(sell || 0) - Number(paid || 0);
 
+/**
+ * خلفية صفّ الطلب في لوحة الوكيل: انتظار · نجاح · رفض.
+ * «قيد التنفيذ» انتظارٌ بعين الوكيل (طلبه لم يُحسم بعد) فيأخذ لونه،
+ * و«العالق» لونه ثالث لأنه ليس رفضاً ولا انتظاراً عادياً.
+ */
+const ROW_BG: Record<string, string> = {
+  pending: "#FAEF77", processing: "#FAEF77",
+  success: "#D8F781", cancelled: "#F5BEAC", stuck: "#F5DCB8",
+};
+
 // كل قسم له رابطه الخاص: /store (الرئيسية) · /store/sell · /store/orders ...
 const SECTIONS: Tab[] = ["sell", "orders", "reports", "wallet", "support", "settings"];
 function tabFromPath(pathname: string): Tab {
@@ -276,26 +286,29 @@ function OrdersTab() {
               <tr><td colSpan={9} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
             ) : rows.length === 0 ? (
               <tr><td colSpan={9} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>لا توجد طلبات بعد</td></tr>
-            ) : rows.map((o) => (
+            ) : rows.map((o) => {
+              // لون الحالة يُطبَّق على كل خلية: خلفية td معتمة تغطّي خلفية tr
+              const c = { ...td, background: ROW_BG[o.status] || td.background };
+              return (
               <tr key={o.id}>
-                <td style={td}>{o.receipt_no}</td>
-                <td style={{ ...td, textAlign: "right", paddingInlineStart: 12 }}>
+                <td style={c}>{o.receipt_no}</td>
+                <td style={{ ...c, textAlign: "right", paddingInlineStart: 12 }}>
                   <b>{o.game_name}</b> — {o.product_name}
                 </td>
-                <td style={{ ...td, lineHeight: 1.35 }}>
+                <td style={{ ...c, lineHeight: 1.35 }}>
                   {o.customer_phone || "—"}<br />
                   <span style={{ color: "var(--muted)" }}>{o.player_id || "—"}</span>
                 </td>
-                <td style={td}>{money(o.paid_price)}</td>
-                <td style={td}>{money(o.dealer_sell_price)}</td>
+                <td style={c}>{money(o.paid_price)}</td>
+                <td style={c}>{money(o.dealer_sell_price)}</td>
                 <td style={{
-                  ...td, fontWeight: 700,
+                  ...c, fontWeight: 700,
                   color: Number(o.dealer_profit) < 0 ? "var(--danger)" : "var(--ok)",
                 }}
                   title={Number(o.dealer_profit) < 0 ? "بعتَ بأقلّ من سعر شرائك" : undefined}>
                   {money(o.dealer_profit)}
                 </td>
-                <td style={td}>
+                <td style={c}>
                   {o.status === "pending" || o.status === "processing" ? (
                     <span className={`stspin${o.status === "processing" ? " proc" : ""}`}
                       style={{ width: 12, height: 12, marginInlineEnd: 6 }} />
@@ -307,14 +320,15 @@ function OrdersTab() {
                   )}
                   {o.status_label}
                 </td>
-                <td style={{ ...td, color: "var(--muted)", fontSize: 12 }}>{o.created_at}</td>
-                <td style={td}>
+                <td style={{ ...c, color: "var(--muted)", fontSize: 12 }}>{o.created_at}</td>
+                <td style={c}>
                   <button onClick={() => setDetails(o)} title="تفاصيل الطلب" style={detailsBtn}>
                     <Icon name="search" size={14} />
                   </button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

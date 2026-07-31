@@ -166,6 +166,16 @@ table.grid th:last-child,  table.grid td:last-child  { border-inline-end: 0; }
 table.grid tbody tr { border-bottom: 3px solid var(--row-sep); }
 table.grid tbody tr:last-child { border-bottom: 0; }
 table.grid tbody tr:hover td { background: var(--primary-tint); }
+
+/* ── ألوان صفوف الطلبات بحسب الحالة ──
+   تُوضع على الصفّ لكن تلوّن الخلايا: خلفية td معتمة وتغطّي خلفية tr.
+   الترتيب مقصود: قاعدة التحديد آخراً فتتقدّم على لون الحالة. */
+table.grid tbody tr.row-wait  td { background: #FAEF77; }
+table.grid tbody tr.row-stuck td { background: #F5DCB8; }
+table.grid tbody tr.row-ok    td { background: #D8F781; }
+table.grid tbody tr.row-no    td { background: #F5BEAC; }
+table.grid tbody tr[class*="row-"]:hover td { filter: brightness(.96); }
+table.grid tbody tr.row-pick  td { background: var(--primary-tint); filter: none; }
 table.grid input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; }
 .cell-start { text-align: start !important; padding-inline-start: 14px !important; }
 .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }

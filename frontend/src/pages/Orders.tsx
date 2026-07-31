@@ -9,6 +9,10 @@ const ginitials = (name: string) => (name || "?").split(" ").map((w) => w[0]).jo
 
 const DOT: Record<string, string> = { pending: "wait", processing: "wait", success: "ok", cancelled: "err", stuck: "err" };
 
+// خلفية الصفّ في لوحة المشغّل: ما ينتظر قراره فقط — الانتظار والعالق.
+// المحسوم (ناجح/ملغى) بلا لون كي لا يُغرِق الجدولَ لونٌ لا يستدعي عملاً.
+const ROW_TONE: Record<string, string> = { pending: "row-wait", stuck: "row-stuck" };
+
 interface Opt { id: number; name: string; game?: number }
 
 const EMPTY = { game: "", product: "", dealer: "", provider: "", q: "", phone: "", min: "", max: "", date_from: "", date_to: "", player: "" };
@@ -308,7 +312,8 @@ export default function Orders() {
                 <tr><td colSpan={13} style={{ padding: 26, color: "var(--muted)" }}>لا توجد طلبات</td></tr>
               ) : orders.map((o) => (
                 <Fragment key={o.id}>
-                  <tr style={picked.includes(o.id) ? { background: "rgba(26,127,140,.07)" } : undefined}>
+                  <tr className={[ROW_TONE[o.status] || "", picked.includes(o.id) ? "row-pick" : ""]
+                    .filter(Boolean).join(" ")}>
                     <td>
                       {/* الطلب المحسوم بلا مربّع — إلا في وضع عكس القرار */}
                       {selectable(o) && (
