@@ -277,7 +277,15 @@ function OrdersTab() {
                 <td style={td}>{money(o.cost_price)}</td>
                 <td style={td}>{money(o.sell_price)}</td>
                 <td style={{ ...td, color: "var(--ok)", fontWeight: 700 }}>{money(o.profit)}</td>
-                <td style={{ ...td, direction: "ltr", fontFamily: "monospace", fontSize: 12 }}>{o.pin_result || "—"}</td>
+                <td style={{ ...td, direction: "ltr", fontFamily: "monospace", fontSize: 12 }}>
+                  {o.pin_result
+                    ? o.pin_result
+                    : o.status === "success"
+                      ? <span style={{ color: "var(--ok)", fontFamily: "inherit", direction: "rtl" }}>
+                          شُحن مباشرةً ✓
+                        </span>
+                      : "—"}
+                </td>
                 <td style={td}>
                   {o.status === "pending" || o.status === "processing" ? (
                     <span className={`stspin${o.status === "processing" ? " proc" : ""}`}
@@ -554,6 +562,16 @@ function BuyModal({ product, requirePlayer, onClose, onBought, onFinish }:
                 <div style={{ marginTop: 12, background: "#e7f6ec", border: "1px solid #b6e0c4", borderRadius: 8, padding: "12px 14px" }}>
                   <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>الكود / PIN</div>
                   <b style={{ fontSize: 18, letterSpacing: 1, color: "var(--ok)", direction: "ltr", display: "block" }}>{done.pin_result}</b>
+                </div>
+              ) : done.status === "success" ? (
+                <div style={{ marginTop: 12, background: "#e7f6ec", border: "1px solid #b6e0c4", borderRadius: 8, padding: "12px 14px" }}>
+                  <b style={{ color: "var(--ok)", fontSize: 15 }}>شُحن مباشرةً إلى حساب اللاعب ✓</b>
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+                    هذا المنتج يُشحن على معرّف اللاعب مباشرةً — لا كود لإدخاله.
+                  </div>
+                  {done.provider_note && (
+                    <div style={{ fontSize: 12.5, marginTop: 6 }}>{done.provider_note}</div>
+                  )}
                 </div>
               ) : (
                 <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 8 }}>
