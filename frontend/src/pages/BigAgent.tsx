@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import Icon from "../components/Icon";
-import { useBaseSymbol } from "../currency";
+import { symbolOf } from "../currency";
 
 type Tab = "home" | "dealers" | "margins" | "orders";
 const TABS: { key: Tab; label: string; icon: string }[] = [
@@ -54,11 +54,12 @@ export default function BigAgent() {
 
 /* ===== الرئيسية ===== */
 function Home() {
-  const cur = useBaseSymbol();
   const [s, setS] = useState<any>(null);
   useEffect(() => { api.get("/agent/summary/").then((r) => setS(r.data)); }, []);
   const money = (v: string) => Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 });
   if (!s) return <div style={{ padding: 20 }}>جارٍ التحميل...</div>;
+  // عملة عرض الوكيل الكبير — يضبطها صاحب المتجر، والأرقام تصل محوَّلةً إليها
+  const cur = symbolOf(s.currency || "");
   return (
     <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
       <Stat icon="wallet" label="رصيدي" value={money(s.balance) + " " + cur} />

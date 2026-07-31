@@ -79,6 +79,8 @@ def _dealer_row(u):
         "id": u.id,
         "login_id": u.login_id,
         "name": u.name,
+        "role": u.role,
+        "role_label": u.get_role_display(),
         "oyun_load_limit": str(u.oyun_load_limit),
         "foreign_ip_allowed": u.foreign_ip_allowed,
         "price_group": u.price_group_id,
@@ -91,9 +93,10 @@ def _dealer_row(u):
 def dealer_prices_view(request):
     """قائمة إعدادات أسعار الوكلاء (Bayi Fiyat Ayarları)."""
     tenant = request.user.tenant
+    # الوكيل الكبير له محفظة ولوحة كالوكيل، فله عملة عرض كذلك
     dealers = (
-        User.objects.filter(tenant=tenant, role=User.Role.BAYI)
-        .select_related("price_group").order_by("name")
+        User.objects.filter(tenant=tenant, role__in=[User.Role.BAYI, User.Role.ANA_BAYI])
+        .select_related("price_group").order_by("-role", "name")
     )
     return Response({
         "groups": [
@@ -114,7 +117,8 @@ def dealer_prices_view(request):
 def dealer_price_update_view(request, dealer_id):
     """تحديث إعدادات سعر وكيل واحد."""
     try:
-        u = User.objects.get(pk=dealer_id, tenant=request.user.tenant, role=User.Role.BAYI)
+        u = User.objects.get(pk=dealer_id, tenant=request.user.tenant,
+                             role__in=[User.Role.BAYI, User.Role.ANA_BAYI])
     except User.DoesNotExist:
         return Response({"detail": "الوكيل غير موجود"}, status=404)
 

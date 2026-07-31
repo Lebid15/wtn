@@ -8,6 +8,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
+from core import currency
 from core.models import User, Wallet
 from catalog.models import AgentMargin, Product
 from orders.models import Order
@@ -36,11 +37,13 @@ def summary_view(request):
     orders = Order.objects.filter(dealer_id__in=ids, status=Order.Status.SUCCESS)
     agg = orders.aggregate(count=Count("id"), profit=Sum("profit"))
     wallet = getattr(agent, "wallet", None)
+    show = currency.to_display
     return Response({
-        "balance": str(wallet.balance) if wallet else "0.00",
+        "balance": str(show(agent, wallet.balance)) if wallet else "0.00",
         "dealers": len(ids),
         "orders": agg["count"] or 0,
-        "profit": str(agg["profit"] or 0),
+        "profit": str(show(agent, agg["profit"] or 0)),
+        "currency": currency.display_currency(agent),
     })
 
 
@@ -69,10 +72,14 @@ def dealers_view(request):
         w = getattr(u, "wallet", None)
         rows.append({
             "id": u.id, "login_id": u.login_id, "name": u.name,
-            "balance": str(w.balance) if w else "0.00",
+            # أرصدة دكاكينه بعملة **عرضه هو** — لوحته كلّها بعملة واحدة
+            "balance": str(currency.to_display(agent, w.balance)) if w else "0.00",
             "status": u.status,
         })
-    return Response({"count": len(rows), "results": rows})
+    return Response({
+        "count": len(rows), "results": rows,
+        "currency": currency.display_currency(agent),
+    })
 
 
 @api_view(["GET"])
@@ -83,14 +90,19 @@ def orders_view(request):
     st = request.query_params.get("status")
     if st and st != "all":
         qs = qs.filter(status=st)
+    show = currency.to_display
     rows = [{
         "id": o.id, "receipt_no": o.receipt_no, "dealer_name": o.dealer.name,
         "product_name": o.product.name, "game_name": o.game.name,
-        "sell_price": str(o.sell_price), "profit": str(o.profit),
+        "sell_price": str(show(request.user, o.sell_price)),
+        "profit": str(show(request.user, o.profit)),
         "status": o.status, "status_label": o.get_status_display(),
         "created_at": o.created_at.strftime("%Y-%m-%d %H:%M"),
     } for o in qs[:200]]
-    return Response({"count": qs.count(), "results": rows})
+    return Response({
+        "count": qs.count(), "results": rows,
+        "currency": currency.display_currency(request.user),
+    })
 
 
 @api_view(["GET"])
@@ -107,9 +119,12 @@ def margins_view(request):
         dealer_price = (cost * (Decimal("1") + pct / Decimal("100"))).quantize(Decimal("0.01"))
         rows.append({
             "product": p.id, "name": p.name, "game": p.game.name,
-            "cost": str(cost), "margin_percent": str(pct), "dealer_price": str(dealer_price),
+            # الهامش نسبة مئوية فلا يُحوَّل — والسعران بعملة عرضه
+            "cost": str(currency.to_display(agent, cost)),
+            "margin_percent": str(pct),
+            "dealer_price": str(currency.to_display(agent, dealer_price)),
         })
-    return Response({"results": rows})
+    return Response({"results": rows, "currency": currency.display_currency(agent)})
 
 
 def resolve_sell_price_for_agent(agent, product):

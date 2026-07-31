@@ -7,7 +7,7 @@ interface Group { id: number; name: string }
 interface DealerRow {
   id: number; login_id: string; name: string;
   oyun_load_limit: string; foreign_ip_allowed: boolean; price_group: number | null;
-  display_currency: string;
+  display_currency: string; role: string; role_label: string;
 }
 
 const LIMIT_OPTIONS = ["1000", "5000", "10000", "25000", "50000", "100000"];
@@ -100,6 +100,7 @@ export default function DealerPrices() {
           <tr>
             <th style={{ ...th, width: 70 }}>رقم الوكيل</th>
             <th style={{ ...th, textAlign: "right", paddingInlineStart: 12 }}>اسم الوكيل</th>
+            <th style={th}>الدور</th>
             <th style={th}>حد تحميل الألعاب</th>
             <th style={th}>إذن IP خارجي</th>
             <th style={th}>مجموعة الأسعار</th>
@@ -114,6 +115,7 @@ export default function DealerPrices() {
               <td style={{ ...td, textAlign: "right", paddingInlineStart: 12, fontWeight: 600, color: "var(--primary-dark)" }}>
                 {d.name}
               </td>
+              <td style={{ ...td, fontSize: 12, color: "var(--muted)" }}>{d.role_label}</td>
               <td style={td}>
                 <select value={d.oyun_load_limit.split(".")[0]}
                   onChange={(e) => update(d.id, { oyun_load_limit: e.target.value })}>
