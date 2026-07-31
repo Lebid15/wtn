@@ -26,7 +26,7 @@ export default function Providers() {
   const money = (v: string) => Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 }) + " ل.ت";
   const typeColor: Record<string, string> = {
     same_system: "var(--primary)", pool: "#c1692a", card_store: "#33454a", loader: "var(--primary-dark)",
-    znet: "#1a7f8c", barakat: "#7a3ba0", apstore: "#7a3ba0",
+    znet: "#1a7f8c", zdk: "#7a3ba0", barakat: "#7a3ba0", apstore: "#7a3ba0",
   };
   const kindKey = (p: Provider) => (p.config?.code || "").toLowerCase() || p.type;
 
@@ -153,7 +153,7 @@ export default function Providers() {
       </table>
 
       <div style={note}>
-        أنواع المزوّدين: <b>نفس النظام</b> (متجر داخلي على منصّتنا) · <b>متجر بطاقات</b> (ZNET/Barakat خارجي)
+        أنواع المزوّدين: <b>نفس النظام</b> (متجر داخلي على منصّتنا) · <b>متجر بطاقات</b> (ZNET/ZDK خارجي)
         · <b>بنك الأكواد</b> (مخزون داخلي) · <b>منفّذ يدوي</b> (بشري). التوجيه بثلاثة
         مستويات (رئيسي + بديلين) يُربط من صفحة توجيه الباقات.
       </div>
@@ -195,10 +195,11 @@ export default function Providers() {
 }
 
 /* ===== نموذج إضافة/تعديل مزوّد — حقول ذكية حسب النوع ===== */
-type Kind = "pool" | "tenant" | "znet" | "barakat" | "loader";
+type Kind = "pool" | "tenant" | "znet" | "zdk" | "loader";
 const KINDS: { k: Kind; label: string; hint: string }[] = [
   { k: "znet", label: "ZNET (خارجي)", hint: "مزوّد تركي — kod/sifre" },
-  { k: "barakat", label: "Barakat / Apstore (خارجي)", hint: "توكن API في الهيدر" },
+  // النوع هو البرمجية لا اسم المتجر: Barakat وApstore وغيرهما تعمل بـ ZDK
+  { k: "zdk", label: "ZDK (خارجي)", hint: "برمجية ZDK — Barakat · Apstore وغيرهما · توكن API في الهيدر" },
   { k: "tenant", label: "متجر داخلي (نفس النظام)", hint: "متجر آخر على منصّتنا" },
   { k: "pool", label: "بنك الأكواد (بطاقات)", hint: "مخزون داخلي — تسليم فوري" },
   { k: "loader", label: "منفّذ يدوي", hint: "بلا تنفيذ آلي" },
@@ -207,11 +208,12 @@ const KINDS: { k: Kind; label: string; hint: string }[] = [
 function kindOf(p?: Provider): Kind {
   const code = (p?.config?.code || "").toLowerCase();
   if (code === "znet") return "znet";
-  if (code === "barakat" || code === "apstore") return "barakat";
+  // الكودان القديمان لمتجرين على برمجية ZDK نفسها
+  if (code === "zdk" || code === "barakat" || code === "apstore") return "zdk";
   if (p?.type === "pool") return "pool";
   if (p?.type === "same_system") return "tenant";
   if (p?.type === "loader") return "loader";
-  return p?.type === "card_store" ? "barakat" : "pool";
+  return p?.type === "card_store" ? "zdk" : "pool";
 }
 
 function ProviderModal({ edit, onClose, onDone }:
@@ -234,9 +236,9 @@ function ProviderModal({ edit, onClose, onDone }:
       body.type = "card_store";
       body.config = { code: "znet", base_url: c("base_url"), kod: c("kod"), sifre: c("sifre") };
       if (!c("base_url") || !c("kod") || !c("sifre")) { setErr("كل حقول ZNET مطلوبة"); setBusy(false); return; }
-    } else if (kind === "barakat") {
+    } else if (kind === "zdk") {
       body.type = "card_store";
-      body.config = { code: "barakat", base_url: c("base_url"), api_token: c("api_token") };
+      body.config = { code: "zdk", base_url: c("base_url"), api_token: c("api_token") };
       if (!c("base_url") || !c("api_token")) { setErr("رابط الخدمة والتوكن مطلوبان"); setBusy(false); return; }
     } else if (kind === "tenant") {
       body.type = "same_system";
@@ -282,7 +284,7 @@ function ProviderModal({ edit, onClose, onDone }:
               <input style={inp} dir="ltr" type="password" value={c("sifre")} onChange={(e) => setC("sifre", e.target.value)} />
             </>
           )}
-          {kind === "barakat" && (
+          {kind === "zdk" && (
             <>
               <label style={lbl}>رابط الخدمة (base_url) *</label>
               <input style={inp} dir="ltr" placeholder="https://api.x-stor.net" value={c("base_url")} onChange={(e) => setC("base_url", e.target.value)} />

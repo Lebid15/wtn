@@ -3,12 +3,15 @@ from rest_framework import serializers
 
 from .models import Provider
 
-# تسميات العرض حسب config.code — تميّز المزوّد الخارجي الفعلي (ZNET/Barakat...)
-# عن نوعه التخزيني العام (card_store).
+# تسميات العرض حسب config.code — تميّز البرمجية التي يعمل بها المزوّد الخارجي
+# (ZNET / ZDK) عن نوعه التخزيني العام (card_store).
+# `barakat` و`apstore` متجران على برمجية ZDK — يُعرضان بها لا باسميهما، فاسم
+# المتجر نفسه محفوظ في حقل `name`.
 KIND_LABELS = {
     "znet": "ZNET",
-    "barakat": "Barakat",
-    "apstore": "Apstore",
+    "zdk": "ZDK",
+    "barakat": "ZDK",
+    "apstore": "ZDK",
 }
 
 

@@ -340,13 +340,19 @@ def fetch_status(self, creds: ZnetCredentials, referans: str):
 
 ---
 
-## 2. Barakat / Apstore
+## 2. ZDK (Barakat / Apstore)
+
+> **تنبيه تسمية:** `Barakat` و`Apstore` ليسا برمجيتين، بل **متجران يعملان
+> ببرمجية ZDK** نفسها — ولذلك API واحد لهما. في نظامنا النوع اسمه `zdk` لا
+> اسم متجر بعينه، فكل متجر جديد على البرمجية نفسها يُضاف بلا محوّل جديد.
+> المحوّل عندنا: `backend/providers/adapters/zdk.py` (`ZdkAdapter`).
+> الكودان القديمان `barakat`/`apstore` ما زالا مقبولَين للمزوّدين السابقين.
 
 ### معلومات عامة
 - **النوع**: مزود API حديث لبيع المنتجات الرقمية
 - **Base URL**: `https://api.x-stor.net` (افتراضي) أو يُعرّف في Integration.base_url
-- **كود المزود**: `barakat` أو `apstore` (نفس الـ adapter)
-- **ملف الكود**: `djangoo/apps/providers/adapters/barakat.py`
+- **كود المزود**: `zdk` (وقديماً `barakat` أو `apstore` — نفس الـ adapter)
+- **ملف الكود المرجعي**: `djangoo/apps/providers/adapters/barakat.py`
 
 ### طريقة المصادقة (Authentication)
 - **النوع**: Header

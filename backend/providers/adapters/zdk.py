@@ -1,4 +1,12 @@
-"""محوّل Barakat/Apstore — مصادقة بـ api-token في الهيدر، استجابات JSON."""
+"""
+محوّل **ZDK** — البرمجية التي تُدار بها متاجر بطاقات عدّة (Barakat · Apstore
+وغيرها). المتجر يتغيّر، والـ API واحد: مصادقة بـ `api-token` في الهيدر
+واستجابات JSON تحت `/client/api/`.
+
+لذلك النوع عندنا `zdk` لا اسم متجر بعينه — فكل متجر جديد على البرمجية نفسها
+يُضاف بلا محوّل جديد ولا اسم نوع جديد. الكودان القديمان `barakat`/`apstore`
+ما زالا يُقبَلان في `registry.adapter_for` حفاظاً على المزوّدين المُعدّين سابقاً.
+"""
 from decimal import Decimal, InvalidOperation
 from urllib.parse import quote
 
@@ -23,13 +31,13 @@ def _map_status(s: str) -> str:
     return "processing"
 
 
-class BarakatAdapter(BaseAdapter):
+class ZdkAdapter(BaseAdapter):
     """
     config المتوقّع: {base_url, api_token}
     place_order → GET {base}/client/api/newOrder/{package_id}/params?qty&phone&extra&order_uuid
     """
 
-    code = "barakat"
+    code = "zdk"
 
     def _base(self, config: dict) -> str:
         return (config.get("base_url") or "").rstrip("/")
@@ -38,7 +46,7 @@ class BarakatAdapter(BaseAdapter):
         base = self._base(config)
         token = config.get("api_token")
         if not base or not token:
-            return ExecutionResult(status="failed", note="إعداد Barakat ناقص (base_url/api_token)")
+            return ExecutionResult(status="failed", note="إعداد ZDK ناقص (base_url/api_token)")
 
         package_id, _extra = self.link_for(order, provider)
         pkg = quote(str(package_id))
@@ -55,18 +63,18 @@ class BarakatAdapter(BaseAdapter):
             )
             data = resp.json()
         except requests.RequestException as e:
-            return ExecutionResult(status="failed", note=f"تعذّر الاتصال بـ Barakat: {e}")
+            return ExecutionResult(status="failed", note=f"تعذّر الاتصال بـ ZDK: {e}")
         except ValueError:
-            return ExecutionResult(status="failed", note="استجابة Barakat غير صالحة", raw=resp.text)
+            return ExecutionResult(status="failed", note="استجابة ZDK غير صالحة", raw=resp.text)
 
         return self.parse_place(data)
 
     def list_packages(self, config: dict, provider=None) -> PackageList:
-        """كتالوج Barakat/Apstore: GET {base}/client/api/products بترويسة api-token."""
+        """كتالوج ZDK: GET {base}/client/api/products بترويسة api-token."""
         base = self._base(config)
         token = config.get("api_token")
         if not base or not token:
-            return PackageList(ok=False, note="إعداد Barakat ناقص (base_url/api_token)")
+            return PackageList(ok=False, note="إعداد ZDK ناقص (base_url/api_token)")
         try:
             resp = requests.get(
                 f"{base}/client/api/products",
@@ -74,9 +82,9 @@ class BarakatAdapter(BaseAdapter):
             )
             data = resp.json()
         except requests.RequestException as e:
-            return PackageList(ok=False, note=f"تعذّر الاتصال بـ Barakat: {e}")
+            return PackageList(ok=False, note=f"تعذّر الاتصال بـ ZDK: {e}")
         except ValueError:
-            return PackageList(ok=False, note="استجابة Barakat غير صالحة", raw=resp.text)
+            return PackageList(ok=False, note="استجابة ZDK غير صالحة", raw=resp.text)
 
         rows = data if isinstance(data, list) else (data or {}).get("data") or []
         packages = [
@@ -91,7 +99,7 @@ class BarakatAdapter(BaseAdapter):
             for it in rows if isinstance(it, dict)
         ]
         if not packages:
-            return PackageList(ok=False, note="لم يُعِد Barakat أي باقة")
+            return PackageList(ok=False, note="لم يُعِد المزوّد أي باقة")
         return PackageList(ok=True, packages=packages)
 
     def get_balance(self, config: dict, provider=None) -> BalanceResult:
@@ -99,7 +107,7 @@ class BarakatAdapter(BaseAdapter):
         base = self._base(config)
         token = config.get("api_token")
         if not base or not token:
-            return BalanceResult(ok=False, note="إعداد Barakat ناقص (base_url/api_token)")
+            return BalanceResult(ok=False, note="إعداد ZDK ناقص (base_url/api_token)")
         try:
             resp = requests.get(
                 f"{base}/client/api/profile",
@@ -107,9 +115,9 @@ class BarakatAdapter(BaseAdapter):
             )
             data = resp.json()
         except requests.RequestException as e:
-            return BalanceResult(ok=False, note=f"تعذّر الاتصال بـ Barakat: {e}")
+            return BalanceResult(ok=False, note=f"تعذّر الاتصال بـ ZDK: {e}")
         except ValueError:
-            return BalanceResult(ok=False, note="استجابة Barakat غير صالحة", raw=resp.text)
+            return BalanceResult(ok=False, note="استجابة ZDK غير صالحة", raw=resp.text)
 
         d = data.get("data", data) if isinstance(data, dict) else {}
         raw_balance = d.get("balance") if isinstance(d, dict) else None
@@ -142,5 +150,5 @@ class BarakatAdapter(BaseAdapter):
             )
         return ExecutionResult(
             status="failed",
-            note=str(data.get("message") or "فشل الطلب لدى Barakat"), raw=str(data),
+            note=str(data.get("message") or "فشل الطلب لدى المزوّد"), raw=str(data),
         )

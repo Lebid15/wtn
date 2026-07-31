@@ -1,9 +1,9 @@
 """اختيار المحوّل المناسب لمزوّد حسب نوعه/كوده."""
 from providers.models import Provider
 
-from .barakat import BarakatAdapter
 from .internal import InternalPoolAdapter
 from .tenant import InternalTenantAdapter
+from .zdk import ZdkAdapter
 from .znet import ZnetAdapter
 
 
@@ -14,8 +14,11 @@ def adapter_for(provider: Provider):
 
     # كود صريح في config يتقدّم على النوع
     code = (provider.config or {}).get("code", "").lower()
-    by_code = {"znet": ZnetAdapter, "barakat": BarakatAdapter,
-               "apstore": BarakatAdapter, "internal": InternalPoolAdapter,
+    # `barakat`/`apstore` متجران يعملان ببرمجية ZDK نفسها — يبقيان مقبولَين
+    # للمزوّدين المُعدّين قبل التوحيد، والجديد يُحفظ بالكود `zdk`.
+    by_code = {"znet": ZnetAdapter, "zdk": ZdkAdapter,
+               "barakat": ZdkAdapter, "apstore": ZdkAdapter,
+               "internal": InternalPoolAdapter,
                "tenant": InternalTenantAdapter}
     if code in by_code:
         return by_code[code]()
@@ -23,7 +26,7 @@ def adapter_for(provider: Provider):
     by_type = {
         Provider.Type.POOL: InternalPoolAdapter,
         Provider.Type.SAME_SYSTEM: InternalTenantAdapter,  # متجر ← متجر داخل المنصّة
-        Provider.Type.CARD_STORE: BarakatAdapter,
+        Provider.Type.CARD_STORE: ZdkAdapter,
         # LOADER = تنفيذ يدوي → لا محوّل آلي
     }
     cls = by_type.get(provider.type)
