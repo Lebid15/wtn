@@ -347,7 +347,10 @@ export default function Orders() {
                         <MiniBtn name="chat" title="إرسال SMS" />
                       </div>
                     </td>
-                    <td style={{ color: "var(--muted)" }}>{o.provider_name || "—"}</td>
+                    {/* بلا مزوّد = تنفيذ يدوي — أصرح من شرطة تحتمل معنيين */}
+                    <td style={{ color: o.provider_name ? "var(--muted)" : "var(--debt)" }}>
+                      {o.provider_name || <b>يدوي</b>}
+                    </td>
                     <td>
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                         {/* القبول والرفض والتوجيه كلّها من شريط الإجراءات بعد
