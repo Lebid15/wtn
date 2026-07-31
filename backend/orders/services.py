@@ -278,18 +278,24 @@ def _failover_after_rejection(order: Order, trail: list) -> bool:
     تُعيد True إن التقطه بديل (نجح أو قيد تنفيذ) فيبقى الطلب حيّاً.
 
     يُبدأ من **موضع المزوّد الحالي** لا من رأس السلسلة، فلا يُعاد الإرسال إلى
-    من جُرِّب سلفاً — وهو ما قد يشحن اللاعب مرّتين.
-    وإن كان المزوّد الحالي خارج السلسلة (وجّهه المشغّل بيده) فلا سلسلة تُتبَع:
-    توجيهه قرار إنسان، ولا يُبنى عليه تسلسل آلي لم يطلبه.
+    من جُرِّب سلفاً — وهو ما قد يشحن اللاعب مرّتين ويدفع التكلفة مرّتين.
+
+    وإن كان المزوّد الحالي خارج السلسلة (وجّهه المشغّل بيده إلى مزوّد لم
+    يُعَدّ على الباقة) تُجرَّب السلسلة كاملةً ما عدا مَن ألغى للتوّ — بقرار
+    المالك: الطلب المُوجَّه يدوياً يُكمل السلسلة آلياً كأي طلب.
     """
     product = order.product
     chain = [p for p in (product.provider, product.provider_alt1, product.provider_alt2) if p]
     ids = [p.id for p in chain]
-    if order.provider_id not in ids:
-        trail.append("لا سلسلة بديلة من هذا الموضع")
+    rest = (
+        chain[ids.index(order.provider_id) + 1:] if order.provider_id in ids
+        else [p for p in chain if p.id != order.provider_id]
+    )
+    if not rest:
+        trail.append("لا بديل بعد هذا الموضع")
         return False
 
-    for nxt in chain[ids.index(order.provider_id) + 1:]:
+    for nxt in rest:
         if _send_to(order, nxt, trail):
             return True
     return False
