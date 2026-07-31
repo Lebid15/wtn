@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { api } from "../api";
 import Icon from "../components/Icon";
-import { money, symbolOf } from "../currency";
+import { money, symbolOf, useBaseCurrency } from "../currency";
 
 interface Req {
   id: number; dealer: number; dealer_name: string; dealer_login: string;
@@ -19,6 +19,7 @@ const ROW_TONE: Record<string, string> = { pending: "row-wait" };
 const EMPTY = { dealer: "", method: "", q: "", min: "", max: "", date_from: "", date_to: "" };
 
 export default function PaymentTracking() {
+  const base = useBaseCurrency();
   const [reqs, setReqs] = useState<Req[]>([]);
   const [status, setStatus] = useState("pending");
   const [f, setF] = useState({ ...EMPTY });
@@ -219,7 +220,7 @@ export default function PaymentTracking() {
                 <th>الوكيل</th>
                 <th className="cell-start">طريقة الدفع</th>
                 <th>المبلغ المُرسل</th>
-                <th>سعر الصرف</th>
+                <th>1 {base} =</th>
                 <th>العمولة</th>
                 <th>المُضاف للمحفظة</th>
                 <th>التاريخ</th>
@@ -246,7 +247,9 @@ export default function PaymentTracking() {
                     <td>{r.dealer_name}<div style={{ fontSize: 11, color: "var(--faint)" }}>{r.dealer_login}</div></td>
                     <td className="cell-start" style={{ fontWeight: 600 }}>{r.method_name || r.account_title || "—"}</td>
                     <td className="num" style={{ fontWeight: 700 }}>{money(r.amount)} {symbolOf(r.currency)}</td>
-                    <td className="num" style={{ color: "var(--muted)" }}>{money(r.rate, 4)}</td>
+                    <td className="num" style={{ color: "var(--muted)" }}>
+                      {money(r.rate, 4)} {symbolOf(r.currency)}
+                    </td>
                     <td className="num" style={{ color: "var(--muted)" }}>{money(r.commission_percent)}%</td>
                     <td className="sell num" style={{ fontWeight: 800 }}>{money(r.credit_amount)}</td>
                     <td style={{ fontSize: 12, color: "var(--muted)" }}>{r.created_at}</td>

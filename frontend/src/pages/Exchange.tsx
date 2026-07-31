@@ -15,7 +15,7 @@ export default function Exchange() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // محوّل سريع للتحقّق من صحّة السعر قبل اعتماده
-  const [test, setTest] = useState({ amount: "100", from: "USD" });
+  const [test, setTest] = useState({ amount: "100", to: "TRY" });
 
   function load() {
     setLoading(true);
@@ -51,7 +51,7 @@ export default function Exchange() {
   const rateOf = (code: string) => Number(rates[code] || 0);
   const missing = others.filter((c) => !rateOf(c.code)).length;
 
-  const testRate = test.from === base ? 1 : rateOf(test.from);
+  const testRate = test.to === base ? 1 : rateOf(test.to);
   const testResult = Number(test.amount || 0) * testRate;
 
   if (loading) return <div style={{ padding: 30 }}>جارٍ التحميل...</div>;
@@ -81,9 +81,10 @@ export default function Exchange() {
             )}
           </div>
           <div style={note}>
-            كل مبلغ في النظام محفوظ بـ<b> {labelOf(base)} </b>. أسعار الصرف أدناه هي
-            الجسر بين هذه العملة وبقية العملات: يستعملها اليوم قسم <b>طرق الدفع</b> في
-            حساب ما يُضاف لمحفظة الوكيل، وسيبني عليها لاحقاً <b>عملة عرض الوكيل</b> وتسعير الباقات.
+            كل مبلغ في النظام محفوظ بـ<b> {labelOf(base)} </b>. اكتب لكل عملة
+            <b> كم منها يساوي {symbolOf(base)} 1 </b> — نفس الرقم الذي تسمعه في السوق.
+            يستعملها قسم <b>طرق الدفع</b> في حساب ما يُضاف لمحفظة الوكيل، و<b>عملة عرض
+            الوكيل</b> في كل ما يراه في لوحته.
           </div>
         </div>
       </div>
@@ -104,7 +105,7 @@ export default function Exchange() {
               <tr>
                 <th className="cell-start">العملة</th>
                 <th>الرمز</th>
-                <th>1 وحدة منها = كم {base}؟</th>
+                <th>كل 1 {base} يساوي…</th>
                 <th>الاتجاه المعاكس</th>
                 <th>الحالة</th>
               </tr>
@@ -119,16 +120,16 @@ export default function Exchange() {
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
                         <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>
-                          1 {c.code} =
+                          1 {symbolOf(base)} {base} =
                         </span>
                         <input type="number" step="0.0001" value={rates[c.code] ?? ""}
                           onChange={(e) => setRates((o) => ({ ...o, [c.code]: e.target.value }))}
-                          placeholder="—" style={{ ...inp, width: 140 }} />
-                        <span style={{ fontSize: 12, color: "var(--muted)" }}>{base}</span>
+                          placeholder="—" style={{ ...inp, width: 150 }} />
+                        <span style={{ fontSize: 12, color: "var(--muted)" }}>{c.code}</span>
                       </div>
                     </td>
                     <td style={{ color: "var(--muted)", fontSize: 12.5 }}>
-                      {v > 0 ? <>1 {base} = {money(1 / v, 4)} {c.code}</> : "—"}
+                      {v > 0 ? <>1 {c.code} = {money(1 / v, 6)} {base}</> : "—"}
                     </td>
                     <td>
                       {v > 0
@@ -166,26 +167,26 @@ export default function Exchange() {
         </div>
         <div style={{ padding: 16, display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div>
-            <div style={lbl}>المبلغ</div>
+            <div style={lbl}>المبلغ بـ{base}</div>
             <input type="number" value={test.amount}
               onChange={(e) => setTest((o) => ({ ...o, amount: e.target.value }))}
               style={{ ...inp, width: 140 }} />
           </div>
           <div>
-            <div style={lbl}>من عملة</div>
-            <select value={test.from} onChange={(e) => setTest((o) => ({ ...o, from: e.target.value }))}
+            <div style={lbl}>إلى عملة</div>
+            <select value={test.to} onChange={(e) => setTest((o) => ({ ...o, to: e.target.value }))}
               style={{ ...inp, width: 190 }}>
-              {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.symbol} {c.label}</option>)}
+              {others.map((c) => <option key={c.code} value={c.code}>{c.symbol} {c.label}</option>)}
             </select>
           </div>
           <div style={result}>
             {testRate > 0 ? (
               <>
-                {money(test.amount)} {symbolOf(test.from)} ={" "}
-                <b style={{ fontSize: 18 }}>{money(testResult)}</b> {symbolOf(base)} {base}
+                {money(test.amount)} {symbolOf(base)} {base} ={" "}
+                <b style={{ fontSize: 18 }}>{money(testResult)}</b> {symbolOf(test.to)} {test.to}
               </>
             ) : (
-              <span style={{ color: "var(--debt)" }}>لا سعر مضبوط لـ {test.from}</span>
+              <span style={{ color: "var(--debt)" }}>لا سعر مضبوط لـ {test.to}</span>
             )}
           </div>
         </div>

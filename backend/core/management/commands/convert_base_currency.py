@@ -103,14 +103,15 @@ class Command(BaseCommand):
                     for n_ in PaymentNotification.objects.filter(tenant=tenant).iterator():
                         n_.rate = (n_.rate / rate).quantize(Decimal("0.000001"))
                         n_.save(update_fields=["rate"])
-                    # أسعار الصرف المحفوظة كانت مقابل العملة القديمة
+                    # الأسعار محفوظة «كم وحدةً من العملة تساوي وحدةً من الدفتر»،
+                    # ووحدة الدفتر الجديدة تساوي `rate` من القديمة ⇒ تُضرب فيه
                     converted = {
-                        c: str((Decimal(str(v)) / rate).quantize(Decimal("0.000001")))
+                        c: str((Decimal(str(v)) * rate).quantize(Decimal("0.000001")))
                         for c, v in (tenant.exchange_rates or {}).items()
                         if c != new_currency
                     }
                     # العملة القديمة صارت عملةً كأي أخرى، فتحتاج سعراً لنفسها
-                    converted[old] = str((Decimal("1") / rate).quantize(Decimal("0.000001")))
+                    converted[old] = str(rate.quantize(Decimal("0.000001")))
                     tenant.exchange_rates = converted
                     tenant.base_currency = new_currency
                     tenant.save(update_fields=["base_currency", "exchange_rates"])

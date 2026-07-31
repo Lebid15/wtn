@@ -244,7 +244,7 @@ function MethodForm({
             <span style={{ fontSize: 15, color: "#7fd8a0" }}>{symbolOf(walletCurrency)} {walletCurrency}</span>
           </div>
           <div style={{ fontSize: 11.5, color: "#6f8a78", marginTop: 4 }}>
-            سعر الصرف {money(rate, 4)}
+            1 {sym} = {money(rate, 4)} {symbolOf(walletCurrency)}
             {commission > 0 && <> · العمولة {money(commission)}%</>}
           </div>
         </div>

@@ -25,20 +25,13 @@ def _is_admin(user):
     return user.role in (User.Role.TENANT_ADMIN, User.Role.PLATFORM_OWNER)
 
 
-def rate_for(tenant, currency: str) -> Decimal:
-    """سعر صرف عملةٍ إلى عملة المتجر — من جدول أسعار الصرف العام."""
-    base = tenant.base_currency or "TRY"
-    if not currency or currency == base:
-        return Decimal("1")
-    try:
-        return Decimal(str((tenant.exchange_rates or {}).get(currency, "1")))
-    except (InvalidOperation, TypeError):
-        return Decimal("1")
-
-
 def credit_for(method: PaymentMethod, amount: Decimal, rate: Decimal) -> Decimal:
-    """المبلغ الذي يدخل محفظة الوكيل: المبلغ × سعر الصرف − العمولة."""
-    gross = amount * rate
+    """
+    المبلغ الذي يدخل الدفتر: المبلغ ÷ سعر الصرف − العمولة.
+    `rate` = كم وحدةً من عملة الطريقة تساوي وحدةً من عملة الدفتر،
+    فالقسمة هي التي تعيد المبلغ إلى عملة الدفتر.
+    """
+    gross = amount / rate
     net = gross * (Decimal("100") - method.commission_percent) / Decimal("100")
     return net.quantize(Decimal("0.01"))
 
@@ -91,13 +84,16 @@ def store_methods_view(request):
         PaymentMethod.objects.filter(tenant=tenant, status=PaymentMethod.Status.ACTIVE)
         .prefetch_related("fields")
     )
-    # سعر الصرف المعروض للوكيل: من عملة الطريقة إلى **عملة عرضه**، لا إلى
+    # المعامل المعروض للوكيل: من عملة الطريقة إلى **عملة عرضه** مباشرةً، لا إلى
     # عملة الدفتر — فالرقم الذي يراه يجب أن يطابق ما سيظهر في رصيده.
     show_rate = currency.display_rate(request.user)
     data = []
     for m in methods:
         row = PaymentMethodSerializer(m).data
-        row["rate"] = str((rate_for(tenant, m.currency) / show_rate).quantize(Decimal("0.000001")))
+        m_rate = currency.rate_of(tenant, m.currency)
+        row["rate"] = (
+            str((show_rate / m_rate).quantize(Decimal("0.000001"))) if m_rate else "0"
+        )
         data.append(row)
     return Response({
         "base_currency": tenant.base_currency or "TRY",
@@ -155,7 +151,14 @@ def store_deposit_create_view(request):
         if val:
             values[f.label] = val
 
-    rate = rate_for(tenant, method.currency)
+    # طريقة بعملة بلا سعر صرف = مبلغ لا يُحسب — تُرفض بدل قيد خاطئ في الدفتر
+    rate = currency.rate_of(tenant, method.currency)
+    if not rate:
+        return Response(
+            {"detail": f"لا سعر صرف مضبوط للعملة {method.currency} — راجع صاحب المتجر"},
+            status=400,
+        )
+
     notif = PaymentNotification.objects.create(
         tenant=tenant, dealer=request.user, method=method, account=method.account,
         amount=amount, currency=method.currency, rate=rate,
