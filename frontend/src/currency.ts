@@ -1,3 +1,5 @@
+import { useAuth } from "./auth";
+
 /** العملات المدعومة في طرق الدفع وسعر الصرف العام — مطابقة لـ backend/payments/models.py */
 export const CURRENCIES: { code: string; label: string; symbol: string }[] = [
   { code: "TRY", label: "ليرة تركية", symbol: "₺" },
@@ -17,3 +19,17 @@ export const labelOf = (code: string) =>
 
 export const money = (v: string | number, digits = 2) =>
   Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+
+/**
+ * عملة دفتر المتجر كما تصل في `/auth/me/` — تستعملها لوحة الإدارة.
+ * لوحة الوكيل لا تستعملها: أرقامه تصل محوَّلةً إلى عملة عرضه ومعها رمزها.
+ */
+export function useBaseCurrency(): string {
+  const { user } = useAuth();
+  return user?.tenant?.base_currency || "TRY";
+}
+
+/** رمز عملة الدفتر — للإلحاق بأرقام لوحة الإدارة. */
+export function useBaseSymbol(): string {
+  return symbolOf(useBaseCurrency());
+}

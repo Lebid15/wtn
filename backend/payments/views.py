@@ -8,12 +8,17 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from core import currency
 from core import services as wallet_services
 from core.models import User, WalletTransaction
 from .models import PaymentMethod, PaymentNotification, ReceivingAccount
 from .serializers import (
     PaymentMethodSerializer, PaymentNotificationSerializer, ReceivingAccountSerializer,
 )
+
+
+# مبالغ طلب الإيداع التي تمسّ محفظة الوكيل — تُعرض له بعملته
+DEALER_MONEY = ["credit_amount", "balance_before", "balance_after"]
 
 
 def _is_admin(user):
@@ -86,15 +91,17 @@ def store_methods_view(request):
         PaymentMethod.objects.filter(tenant=tenant, status=PaymentMethod.Status.ACTIVE)
         .prefetch_related("fields")
     )
-    wallet = getattr(request.user, "wallet", None)
+    # سعر الصرف المعروض للوكيل: من عملة الطريقة إلى **عملة عرضه**، لا إلى
+    # عملة الدفتر — فالرقم الذي يراه يجب أن يطابق ما سيظهر في رصيده.
+    show_rate = currency.display_rate(request.user)
     data = []
     for m in methods:
         row = PaymentMethodSerializer(m).data
-        row["rate"] = str(rate_for(tenant, m.currency))
+        row["rate"] = str((rate_for(tenant, m.currency) / show_rate).quantize(Decimal("0.000001")))
         data.append(row)
     return Response({
         "base_currency": tenant.base_currency or "TRY",
-        "wallet_currency": wallet.currency if wallet else (tenant.base_currency or "TRY"),
+        "wallet_currency": currency.display_currency(request.user),
         "methods": data,
     })
 
@@ -107,7 +114,12 @@ def store_deposits_view(request):
         PaymentNotification.objects.filter(tenant=request.user.tenant, dealer=request.user)
         .select_related("method", "account")
     )
-    return Response({"results": PaymentNotificationSerializer(qs[:100], many=True).data})
+    # amount بعملة الطريقة فيبقى كما هو؛ ما يمسّ المحفظة يُعرض بعملة الوكيل
+    rows = [
+        currency.convert_keys(dict(r), DEALER_MONEY, request.user)
+        for r in PaymentNotificationSerializer(qs[:100], many=True).data
+    ]
+    return Response({"results": rows, "currency": currency.display_currency(request.user)})
 
 
 @api_view(["POST"])
@@ -151,7 +163,10 @@ def store_deposit_create_view(request):
         credit_amount=credit_for(method, amount, rate),
         values=values, note=str(request.data.get("note") or "")[:255],
     )
-    return Response(PaymentNotificationSerializer(notif).data, status=201)
+    row = currency.convert_keys(
+        dict(PaymentNotificationSerializer(notif).data), DEALER_MONEY, request.user
+    )
+    return Response(row, status=201)
 
 
 # ─────────────────────────── جانب صاحب المتجر ───────────────────────────

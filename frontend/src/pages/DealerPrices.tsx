@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api";
+import { labelOf, symbolOf } from "../currency";
 
 interface Group { id: number; name: string }
 interface DealerRow {
   id: number; login_id: string; name: string;
   oyun_load_limit: string; foreign_ip_allowed: boolean; price_group: number | null;
+  display_currency: string;
 }
 
 const LIMIT_OPTIONS = ["1000", "5000", "10000", "25000", "50000", "100000"];
@@ -14,19 +17,30 @@ export default function DealerPrices() {
   const [dealers, setDealers] = useState<DealerRow[]>([]);
   const [q, setQ] = useState("");
   const [bulkGroup, setBulkGroup] = useState("");
+  const [baseCurrency, setBaseCurrency] = useState("TRY");
+  const [currencies, setCurrencies] = useState<string[]>([]);
+  const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
 
   function load() {
     setLoading(true);
     api.get("/catalog/dealer-prices/")
-      .then((r) => { setGroups(r.data.groups); setDealers(r.data.dealers); })
+      .then((r) => {
+        setGroups(r.data.groups); setDealers(r.data.dealers);
+        setBaseCurrency(r.data.base_currency); setCurrencies(r.data.available_currencies || []);
+      })
       .finally(() => setLoading(false));
   }
   useEffect(() => load(), []);
 
   async function update(id: number, patch: Partial<DealerRow>) {
-    const r = await api.post(`/catalog/dealer-prices/${id}/`, patch);
-    setDealers((ds) => ds.map((d) => (d.id === id ? { ...d, ...r.data } : d)));
+    setErr("");
+    try {
+      const r = await api.post(`/catalog/dealer-prices/${id}/`, patch);
+      setDealers((ds) => ds.map((d) => (d.id === id ? { ...d, ...r.data } : d)));
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || "تعذّر التحديث");
+    }
   }
 
   async function bulkAssign() {
@@ -67,6 +81,20 @@ export default function DealerPrices() {
         الوكيل فلن يوفّر هذا الإعداد الحماية.
       </div>
 
+      <div style={info}>
+        <b>عملة العرض</b> تغيّر ما يراه الوكيل فقط: رصيده وأسعار الباقات وطلباته وتقاريره.
+        دفتر المتجر كلّه يبقى بـ<b> {labelOf(baseCurrency)} </b>، فلا يتأثّر ربحك ولا
+        تختلّ عمليات الإلغاء والإرجاع. تظهر هنا العملات التي لها سعر صرف مضبوط في{" "}
+        <Link to="/ayarlar/exchange" style={{ color: "var(--primary)", fontWeight: 700 }}>
+          أسعار الصرف
+        </Link>{" "}
+        وحدها. ونبّه الوكيل: تغيّر سعر الصرف يغيّر رقم رصيده المعروض بلا أي حركة منه.
+      </div>
+
+      {err && (
+        <div style={{ ...warn, background: "#fdecea" }}>{err}</div>
+      )}
+
       <table style={table}>
         <thead>
           <tr>
@@ -75,6 +103,7 @@ export default function DealerPrices() {
             <th style={th}>حد تحميل الألعاب</th>
             <th style={th}>إذن IP خارجي</th>
             <th style={th}>مجموعة الأسعار</th>
+            <th style={th}>عملة العرض</th>
             <th style={th}>تفاصيل</th>
           </tr>
         </thead>
@@ -109,6 +138,16 @@ export default function DealerPrices() {
                 </select>
               </td>
               <td style={td}>
+                <select value={d.display_currency || ""}
+                  onChange={(e) => update(d.id, { display_currency: e.target.value })}
+                  title="العملة التي يرى بها الوكيل رصيده وأسعار الباقات">
+                  <option value="">{symbolOf(baseCurrency)} عملة الموقع ({baseCurrency})</option>
+                  {currencies.map((c) => (
+                    <option key={c} value={c}>{symbolOf(c)} {labelOf(c)} ({c})</option>
+                  ))}
+                </select>
+              </td>
+              <td style={td}>
                 <button style={detailBtn} title="لوحة أسعار خاصة بهذا الوكيل">✏</button>
               </td>
             </tr>
@@ -119,6 +158,10 @@ export default function DealerPrices() {
   );
 }
 
+const info: React.CSSProperties = {
+  background: "#f6f8f9", border: "1px solid #dbe3e5", color: "var(--muted)",
+  fontSize: 12.5, padding: "10px 14px", borderRadius: 6, marginBottom: 14, lineHeight: 1.9,
+};
 const warn: React.CSSProperties = {
   background: "#fdecea", border: "1px solid #f5c6c2", color: "var(--danger)",
   fontSize: 13, padding: "10px 14px", borderRadius: 6, marginBottom: 14,

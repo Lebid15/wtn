@@ -3,11 +3,13 @@ import { api, type Dealer } from "../api";
 import WalletModal from "../components/WalletModal";
 import DealerCreateModal from "../components/DealerCreateModal";
 import Icon from "../components/Icon";
+import { symbolOf, useBaseSymbol } from "../currency";
 
 const FLAG: Record<string, string> = { SY: "🇸🇾", TR: "🇹🇷", SA: "🇸🇦", IQ: "🇮🇶" };
 type Filter = "all" | "active" | "neg" | "off";
 
 export default function Dealers() {
+  const cur = useBaseSymbol();
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -64,7 +66,7 @@ export default function Dealers() {
         </div>
         <div className="stat">
           <div className="label"><Icon name="wallet" size={15} style={{ color: "var(--primary)" }} /> صافي أرصدة الوكلاء</div>
-          <div className={`value num ${balCls(stats.net)}`}>{money(stats.net)} <small style={{ fontSize: 13, color: "var(--faint)" }}>ل.ت</small></div>
+          <div className={`value num ${balCls(stats.net)}`}>{money(stats.net)} <small style={{ fontSize: 13, color: "var(--faint)" }}>{cur}</small></div>
           <span className="spark" />
         </div>
         <div className="stat">
@@ -135,7 +137,7 @@ export default function Dealers() {
                     </td>
                     <td>
                       <span className={`num ${balCls(bal)}`} style={{ fontSize: 14.5 }}>{money(bal)}</span>
-                      <span style={{ fontSize: 11, color: "var(--faint)", marginInlineStart: 3 }}>{d.currency === "TRY" ? "ل.ت" : d.currency}</span>
+                      <span style={{ fontSize: 11, color: "var(--faint)", marginInlineStart: 3 }}>{symbolOf(d.currency)}</span>
                     </td>
                     <td className="num" style={{ color: "var(--muted)" }}>{money(d.credit_limit)}</td>
                     <td>

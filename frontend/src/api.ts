@@ -24,6 +24,8 @@ export interface Tenant {
   subdomain: string;
   theme: string;
   theme_color: string;
+  /** عملة دفتر المتجر — كل رقم في لوحة الإدارة معروض بها */
+  base_currency?: string;
 }
 export interface User {
   id: number;

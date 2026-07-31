@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { api, type Order } from "../api";
 import Icon from "../components/Icon";
+import { useBaseSymbol } from "../currency";
 
 // ألوان أيقونات الألعاب (حين لا توجد صورة)
 const GCOLORS = ["#101418,#2c343d", "#5b21b6,#8b5cf6", "#b45309,#f59e0b", "#065f46,#10b981", "#9d174d,#ec4899"];
@@ -21,6 +22,7 @@ interface Opt { id: number; name: string; game?: number }
 const EMPTY = { game: "", product: "", dealer: "", provider: "", q: "", phone: "", min: "", max: "", date_from: "", date_to: "", player: "" };
 
 export default function Orders() {
+  const cur = useBaseSymbol();
   const [orders, setOrders] = useState<Order[]>([]);
   const [status, setStatus] = useState("all");
   const [f, setF] = useState({ ...EMPTY });
@@ -341,12 +343,12 @@ export default function Orders() {
                       {o.customer_phone || "—"}<br />
                       <span style={{ color: "var(--faint)" }}>{o.player_id || "—"}</span>
                     </td>
-                    <td className="buy num">{money(o.cost_price)} ل.ت</td>
-                    <td className="sell num">{money(o.sell_price)} ل.ت</td>
+                    <td className="buy num">{money(o.cost_price)} {cur}</td>
+                    <td className="sell num">{money(o.sell_price)} {cur}</td>
                     <td className="profit num"
                       style={Number(o.profit) < 0 ? { color: "var(--danger)", fontWeight: 800 } : undefined}
                       title={Number(o.profit) < 0 ? "خسارة — تكلفة المزوّد أعلى من سعر البيع" : undefined}>
-                      {money(o.profit)} ل.ت
+                      {money(o.profit)} {cur}
                     </td>
                     <td>
                       {o.status === "pending" || o.status === "processing" ? (

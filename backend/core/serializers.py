@@ -19,7 +19,8 @@ class DealerGroupSerializer(serializers.ModelSerializer):
 class TenantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tenant
-        fields = ["id", "name", "subdomain", "status", "theme", "font", "theme_color", "logo_url"]
+        fields = ["id", "name", "subdomain", "status", "theme", "font", "theme_color",
+                  "logo_url", "base_currency"]
 
 
 class SiteSettingsSerializer(serializers.ModelSerializer):

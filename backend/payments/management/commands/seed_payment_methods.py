@@ -9,8 +9,12 @@ from django.core.management.base import BaseCommand
 from core.models import Tenant
 from payments.models import PaymentMethod, PaymentMethodField
 
-# سعر الصرف العام: كم ليرة تركية تساوي وحدةً من كل عملة
-RATES = {"USD": "41.5000", "SYP": "0.0032", "EUR": "45.0000"}
+# أسعار صرف ابتدائية حسب عملة دفتر المتجر — كم وحدةً منها تساوي وحدةً
+# من كل عملة أخرى. تُزرع مرّة واحدة فقط، ثم يضبطها المالك من «أسعار الصرف».
+RATES_BY_BASE = {
+    "USD": {"TRY": "0.0241", "SYP": "0.000077", "EUR": "1.0800"},
+    "TRY": {"USD": "41.5000", "SYP": "0.0032", "EUR": "45.0000"},
+}
 
 METHODS = [
     {
@@ -95,9 +99,10 @@ class Command(BaseCommand):
         created = 0
         for tenant in Tenant.objects.all():
             # سعر الصرف: يُضبط مرّة واحدة ولا يُدهس بعدها
-            if not tenant.exchange_rates:
-                tenant.base_currency = tenant.base_currency or "TRY"
-                tenant.exchange_rates = dict(RATES)
+            base = tenant.base_currency or "USD"
+            if not tenant.exchange_rates and base in RATES_BY_BASE:
+                tenant.base_currency = base
+                tenant.exchange_rates = dict(RATES_BY_BASE[base])
                 tenant.save(update_fields=["base_currency", "exchange_rates"])
 
             for order, spec in enumerate(METHODS):

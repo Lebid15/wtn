@@ -8,6 +8,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from core import currency
 from core.models import User
 from catalog.models import Product
 from providers.models import Provider
@@ -165,9 +166,10 @@ def store_catalog_view(request):
             products.append({
                 "id": p.id,
                 "name": p.name,
-                "price": str(services.resolve_sell_price(user, p)),
+                # الأسعار بعملة عرض الوكيل — الدفتر يبقى بعملة الموقع
+                "price": str(currency.to_display(user, services.resolve_sell_price(user, p))),
                 # السعر الذي يقترحه صاحب المتجر للبيع لزبون الوكيل
-                "recommended_price": str(p.recommended_price),
+                "recommended_price": str(currency.to_display(user, p.recommended_price)),
                 "require_player_id": g.require_player_id,
             })
         if products:
@@ -175,7 +177,18 @@ def store_catalog_view(request):
                 "id": g.id, "name": g.name, "image_url": g.image_url,
                 "require_player_id": g.require_player_id, "products": products,
             })
-    return Response({"games": result})
+    return Response({"games": result, "currency": currency.display_currency(user)})
+
+
+# مبالغ الطلب بمنظور الوكيل — تُحوَّل إلى عملة عرضه عند الخروج
+STORE_ORDER_MONEY = ["paid_price", "dealer_sell_price", "dealer_profit",
+                     "balance_before", "balance_after"]
+
+
+def _store_order_row(order, user):
+    return currency.convert_keys(
+        dict(StoreOrderSerializer(order).data), STORE_ORDER_MONEY, user
+    )
 
 
 @api_view(["POST"])
@@ -188,18 +201,27 @@ def store_buy_view(request):
         )
     except Product.DoesNotExist:
         return Response({"detail": "المنتج غير موجود"}, status=404)
+
+    # سعر بيع الوكيل لزبونه يكتبه بعملة عرضه — يُحفظ بعملة الموقع
+    retail = request.data.get("dealer_sell_price")
+    if retail not in (None, ""):
+        try:
+            retail = currency.from_display(request.user, retail)
+        except (InvalidOperation, TypeError):
+            return Response({"detail": "سعر بيع غير صحيح"}, status=http.HTTP_400_BAD_REQUEST)
+
     try:
         order = services.create_order(
             request.user, product,
             player_id=request.data.get("player_id", ""),
             customer_phone=request.data.get("customer_phone", ""),
             # يتركه الوكيل فارغاً ⇒ سعر التوصية؛ ويكتبه إن باع بسعر آخر.
-            dealer_sell_price=request.data.get("dealer_sell_price"),
+            dealer_sell_price=retail,
         )
     except services.OrderError as e:
         return Response({"detail": str(e)}, status=http.HTTP_400_BAD_REQUEST)
     _maybe_auto_execute(order)
-    return Response(StoreOrderSerializer(order).data, status=http.HTTP_201_CREATED)
+    return Response(_store_order_row(order, request.user), status=http.HTTP_201_CREATED)
 
 
 def _maybe_auto_execute(order):
@@ -226,7 +248,8 @@ def store_orders_view(request):
         qs = qs.filter(receipt_no__icontains=search)
     return Response({
         "count": qs.count(),
-        "results": StoreOrderSerializer(qs[:200], many=True).data,
+        "results": [_store_order_row(o, request.user) for o in qs[:200]],
+        "currency": currency.display_currency(request.user),
     })
 
 
@@ -238,14 +261,16 @@ def store_wallet_view(request):
     if wallet is None:
         return Response({"detail": "لا توجد محفظة"}, status=404)
     txns = wallet.transactions.all()[:100]
+    user = request.user
+    show = currency.to_display
     return Response({
-        "balance": str(wallet.balance),
-        "credit_limit": str(wallet.credit_limit),
-        "available": str(wallet.balance - wallet.credit_limit),
-        "currency": wallet.currency,
+        "balance": str(show(user, wallet.balance)),
+        "credit_limit": str(show(user, wallet.credit_limit)),
+        "available": str(show(user, wallet.balance - wallet.credit_limit)),
+        "currency": currency.display_currency(user),
         "results": [{
             "id": t.id, "type": t.type, "type_label": t.get_type_display(),
-            "amount": str(t.amount), "balance_after": str(t.balance_after),
+            "amount": str(show(user, t.amount)), "balance_after": str(show(user, t.balance_after)),
             "note": t.note, "created_at": t.created_at.strftime("%Y-%m-%d %H:%M"),
         } for t in txns],
     })
@@ -287,17 +312,22 @@ def store_report_view(request):
                   sell=Sum("dealer_sell_price"), profit=Sum("dealer_profit"))
         .order_by("game__name", "-count")
     )
+    show = currency.to_display
     results = [{
         "game": r["game__name"], "product": r["product__name"],
-        "count": r["count"], "cost": str(r["cost"] or 0),
-        "sell": str(r["sell"] or 0), "profit": str(r["profit"] or 0),
+        "count": r["count"], "cost": str(show(user, r["cost"] or 0)),
+        "sell": str(show(user, r["sell"] or 0)), "profit": str(show(user, r["profit"] or 0)),
     } for r in rows]
     totals = qs.aggregate(count=Count("id"), cost=Sum("sell_price"),
                           sell=Sum("dealer_sell_price"), profit=Sum("dealer_profit"))
     return Response({
         "results": results,
         "products": len(results),
-        "totals": {k: str(v or 0) for k, v in totals.items()},
+        "totals": {
+            k: str(v or 0) if k == "count" else str(show(user, v or 0))
+            for k, v in totals.items()
+        },
+        "currency": currency.display_currency(user),
     })
 
 
@@ -312,13 +342,14 @@ def store_summary_view(request):
     agg = mine.filter(status=Order.Status.SUCCESS).aggregate(
         count=Count("id"), profit=Sum("dealer_profit"), sell=Sum("dealer_sell_price")
     )
+    show = currency.to_display
     return Response({
-        "balance": str(wallet.balance) if wallet else "0.00",
-        "credit_limit": str(wallet.credit_limit) if wallet else "0.00",
-        "currency": wallet.currency if wallet else "TRY",
+        "balance": str(show(user, wallet.balance)) if wallet else "0.00",
+        "credit_limit": str(show(user, wallet.credit_limit)) if wallet else "0.00",
+        "currency": currency.display_currency(user),
         "orders": agg["count"] or 0,
-        "profit": str(agg["profit"] or 0),
-        "sell": str(agg["sell"] or 0),
+        "profit": str(show(user, agg["profit"] or 0)),
+        "sell": str(show(user, agg["sell"] or 0)),
         "pending": mine.filter(status=Order.Status.PENDING).count(),
     })
 

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
+import { symbolOf } from "../currency";
 import Icon from "../components/Icon";
 import Tickets from "../components/Tickets";
 import TopUp from "../components/TopUp";
@@ -31,6 +32,13 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
 
 const money = (v: string | number) =>
   Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 });
+
+/**
+ * عملة عرض الوكيل — يحدّدها صاحب المتجر، وتصل من الخادم مع كل أرقامه
+ * محوَّلةً إليها. الدفتر خلف الستار يبقى بعملة الموقع.
+ */
+const CurrencyCtx = createContext("");
+const useCur = () => symbolOf(useContext(CurrencyCtx));
 
 /** ربح الوكيل = سعر بيعه لزبونه − سعر شرائه من المتجر. */
 const profitOf = (sell: string | number, paid: string | number) =>
@@ -84,6 +92,7 @@ export default function Store() {
   const currency = summary?.currency ?? user?.wallet?.currency ?? "";
 
   return (
+    <CurrencyCtx.Provider value={currency}>
     <div style={{ minHeight: "100vh", background: "#eef1f2" }}>
       {/* هيدر — اسم المتجر + الرصيد + خروج آمن */}
       <div style={header}>
@@ -94,7 +103,7 @@ export default function Store() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <span style={walletChip}>
-            الرصيد: <b style={{ color: Number(balance) < 0 ? "#ffd0cb" : "#fff" }}>{money(balance)}</b> {currency}
+            الرصيد: <b style={{ color: Number(balance) < 0 ? "#ffd0cb" : "#fff" }}>{money(balance)}</b> {symbolOf(currency)}
           </span>
           {user?.role === "ana_bayi" && (
             <button onClick={() => nav("/bigagent")} style={linkBtn}>
@@ -131,6 +140,7 @@ export default function Store() {
         {tab === "settings" && <SettingsTab />}
       </div>
     </div>
+    </CurrencyCtx.Provider>
   );
 }
 
@@ -140,10 +150,10 @@ function HomeTab({ summary, onSell }: { summary: Summary | null; onSell: () => v
   return (
     <div>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
-        <Stat icon="wallet" label="رصيدي" value={money(summary.balance) + " " + summary.currency}
+        <Stat icon="wallet" label="رصيدي" value={money(summary.balance) + " " + symbolOf(summary.currency)}
           tone={Number(summary.balance) < 0 ? "danger" : "primary"} />
         <Stat icon="chart" label="طلبات ناجحة" value={summary.orders} />
-        <Stat icon="dollar" label="أرباحي" value={money(summary.profit) + " " + summary.currency} />
+        <Stat icon="dollar" label="أرباحي" value={money(summary.profit) + " " + symbolOf(summary.currency)} />
         <Stat icon="refresh" label="قيد الانتظار" value={summary.pending} />
       </div>
       <div style={announce}>
@@ -175,6 +185,7 @@ function Stat({ icon, label, value, tone = "primary" }:
 
 /* ===== البيع (المتجر) ===== */
 function SellTab({ onBought, onFinish }: { onBought: () => void; onFinish: () => void }) {
+  const cur = useCur();
   const [games, setGames] = useState<SGame[]>([]);
   const [active, setActive] = useState<SGame | null>(null);
   const [buy, setBuy] = useState<SProduct | null>(null);
@@ -218,7 +229,7 @@ function SellTab({ onBought, onFinish }: { onBought: () => void; onFinish: () =>
               <div key={p.id} style={pkgCard}>
                 <div style={{ fontWeight: 700, fontSize: 16 }}>{p.name}</div>
                 <div style={{ color: "var(--primary-dark)", fontSize: 20, fontWeight: 800, margin: "10px 0" }}>
-                  {money(p.price)} <span style={{ fontSize: 13, color: "var(--muted)" }}>ل.ت</span>
+                  {money(p.price)} <span style={{ fontSize: 13, color: "var(--muted)" }}>{cur}</span>
                 </div>
                 <button className="btn g" style={{ width: "100%", height: 38 }} onClick={() => setBuy(p)}>
                   شراء الآن
@@ -342,6 +353,7 @@ function OrdersTab() {
 
 /* نافذة "تفاصيل الطلب" للوكيل — بياناته هو فقط: زبونه وأسعاره وحالة طلبه. */
 function OrderDetails({ order: o, onClose }: { order: any; onClose: () => void }) {
+  const cur = useCur();
   return (
     <div style={overlay} onClick={onClose}>
       <div style={{ ...modal, width: 460 }} onClick={(e) => e.stopPropagation()}>
@@ -359,9 +371,9 @@ function OrderDetails({ order: o, onClose }: { order: any; onClose: () => void }
           <Row label="اللعبة / الباقة" value={`${o.game_name} — ${o.product_name}`} />
           <Row label="معرّف اللاعب" value={o.player_id || "—"} />
           <Row label="هاتف الزبون" value={o.customer_phone || "—"} />
-          <Row label="سعر الشراء" value={money(o.paid_price) + " ل.ت"} />
-          <Row label="سعر البيع لزبونك" value={money(o.dealer_sell_price) + " ل.ت"} />
-          <Row label="ربحك" value={money(o.dealer_profit) + " ل.ت"} />
+          <Row label="سعر الشراء" value={money(o.paid_price) + " " + cur} />
+          <Row label="سعر البيع لزبونك" value={money(o.dealer_sell_price) + " " + cur} />
+          <Row label="ربحك" value={money(o.dealer_profit) + " " + cur} />
           <Row label="الحالة" value={o.status_label} />
           <Row label="التاريخ" value={o.created_at} />
           <Row label="رصيدك قبل → بعد"
@@ -499,10 +511,10 @@ function WalletTab({ onTopUp }: { onTopUp: () => void }) {
   return (
     <div>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
-        <Stat icon="wallet" label="رصيدي" value={money(data.balance) + " " + data.currency}
+        <Stat icon="wallet" label="رصيدي" value={money(data.balance) + " " + symbolOf(data.currency)}
           tone={Number(data.balance) < 0 ? "danger" : "primary"} />
-        <Stat icon="card" label="الحد الائتماني" value={money(data.credit_limit) + " " + data.currency} />
-        <Stat icon="dollar" label="المتاح للصرف" value={money(data.available) + " " + data.currency} />
+        <Stat icon="card" label="الحد الائتماني" value={money(data.credit_limit) + " " + symbolOf(data.currency)} />
+        <Stat icon="dollar" label="المتاح للصرف" value={money(data.available) + " " + symbolOf(data.currency)} />
       </div>
       <div style={{ fontWeight: 800, margin: "6px 2px 12px", display: "flex", alignItems: "center", gap: 8 }}>
         <Icon name="chart" size={18} />كشف الحركات
@@ -613,6 +625,7 @@ function Row({ label, value }: { label: string; value: string }) {
 
 function BuyModal({ product, requirePlayer, onClose, onBought, onFinish }:
   { product: SProduct; requirePlayer: boolean; onClose: () => void; onBought: () => void; onFinish: () => void }) {
+  const cur = useCur();
   const [playerId, setPlayerId] = useState("");
   const [phone, setPhone] = useState("");
   const [sellPrice, setSellPrice] = useState("");
@@ -650,9 +663,9 @@ function BuyModal({ product, requirePlayer, onClose, onBought, onFinish }:
         </div>
         <div style={{ padding: 20 }}>
           <div style={{ fontSize: 14, color: "var(--muted)", marginBottom: 14 }}>
-            سعر الشراء: <b style={{ color: "var(--primary-dark)" }}>{money(product.price)} ل.ت</b>
+            سعر الشراء: <b style={{ color: "var(--primary-dark)" }}>{money(product.price)} {cur}</b>
             <span style={{ marginInlineStart: 10 }}>
-              · التوصية: <b>{money(product.recommended_price)} ل.ت</b>
+              · التوصية: <b>{money(product.recommended_price)} {cur}</b>
             </span>
           </div>
           {requirePlayer && (
@@ -669,7 +682,7 @@ function BuyModal({ product, requirePlayer, onClose, onBought, onFinish }:
             placeholder={`اتركه فارغاً لاعتماد سعر التوصية ${money(product.recommended_price)}`} />
           {sellPrice.trim() !== "" && (
             <div style={{ fontSize: 12.5, marginTop: 6, color: profitOf(sellPrice, product.price) < 0 ? "var(--danger)" : "var(--ok)" }}>
-              ربحك من هذه العملية: <b>{money(profitOf(sellPrice, product.price))} ل.ت</b>
+              ربحك من هذه العملية: <b>{money(profitOf(sellPrice, product.price))} {cur}</b>
             </div>
           )}
           {err && <div style={errBox}>{err}</div>}

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { api, type Provider } from "../api";
 import Icon from "../components/Icon";
+import { useBaseSymbol } from "../currency";
 
 export default function Providers() {
+  const cur = useBaseSymbol();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [totals, setTotals] = useState<{ real_balance: string; balance: string; debt: string } | null>(null);
   const [showPassive, setShowPassive] = useState(false);
@@ -23,7 +25,7 @@ export default function Providers() {
   }
   useEffect(() => load(), [showPassive]);
 
-  const money = (v: string) => Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 }) + " ل.ت";
+  const money = (v: string) => Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 }) + " " + cur;
   const typeColor: Record<string, string> = {
     same_system: "var(--primary)", pool: "#c1692a", card_store: "#33454a", loader: "var(--primary-dark)",
     znet: "#1a7f8c", zdk: "#7a3ba0", barakat: "#7a3ba0", apstore: "#7a3ba0",

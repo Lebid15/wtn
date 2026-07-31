@@ -47,7 +47,7 @@ class Tenant(models.Model):
     # ── سعر الصرف العام للمتجر ──
     # base_currency = عملة محافظ الوكلاء. exchange_rates = {"USD": "41.50", …}
     # أي: كم وحدة من عملة المتجر تساوي وحدةً واحدة من تلك العملة.
-    base_currency = models.CharField(max_length=8, default="TRY")
+    base_currency = models.CharField(max_length=8, default="USD")
     exchange_rates = models.JSONField(default=dict, blank=True)
 
     theme_config = models.JSONField(default=dict, blank=True)  # تخصيص المظهر (لوحة التخصيص)
@@ -136,6 +136,9 @@ class User(AbstractBaseUser, PermissionsMixin):
         "catalog.PriceGroup", null=True, blank=True,
         on_delete=models.SET_NULL, related_name="dealers",
     )
+    # عملة العرض في لوحة الوكيل — فارغة تعني عملة الموقع.
+    # عرضٌ فقط: الدفتر كلّه يبقى بعملة الموقع (انظر core/currency.py).
+    display_currency = models.CharField(max_length=8, blank=True, default="")
 
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
     modules = models.JSONField(default=dict, blank=True)  # تفعيل الموديولات (النقاط الملوّنة)
