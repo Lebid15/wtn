@@ -199,7 +199,7 @@ type Kind = "pool" | "tenant" | "znet" | "zdk" | "loader";
 const KINDS: { k: Kind; label: string; hint: string }[] = [
   { k: "znet", label: "ZNET (خارجي)", hint: "مزوّد تركي — kod/sifre" },
   // النوع هو البرمجية لا اسم المتجر: Barakat وApstore وغيرهما تعمل بـ ZDK
-  { k: "zdk", label: "ZDK (خارجي)", hint: "برمجية ZDK — Barakat · Apstore وغيرهما · توكن API في الهيدر" },
+  { k: "zdk", label: "ZDK (خارجي)", hint: "برمجية ZDK — Ap4Stor · Barakat وغيرهما · توكن فقط" },
   { k: "tenant", label: "متجر داخلي (نفس النظام)", hint: "متجر آخر على منصّتنا" },
   { k: "pool", label: "بنك الأكواد (بطاقات)", hint: "مخزون داخلي — تسليم فوري" },
   { k: "loader", label: "منفّذ يدوي", hint: "بلا تنفيذ آلي" },
@@ -220,6 +220,7 @@ function ProviderModal({ edit, onClose, onDone }:
   { edit?: Provider; onClose: () => void; onDone: () => void }) {
   const [name, setName] = useState(edit?.name || "");
   const [kind, setKind] = useState<Kind>(kindOf(edit));
+  const [status, setStatus] = useState(edit?.status || "active");
   const [cfg, setCfg] = useState<Record<string, string>>({ ...(edit?.config || {}) });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -231,15 +232,16 @@ function ProviderModal({ edit, onClose, onDone }:
     e.preventDefault();
     setErr(""); setBusy(true);
     // اجمع النوع + config حسب الاختيار
-    const body: any = { name };
+    const body: any = { name, status };
     if (kind === "znet") {
       body.type = "card_store";
       body.config = { code: "znet", base_url: c("base_url"), kod: c("kod"), sifre: c("sifre") };
       if (!c("base_url") || !c("kod") || !c("sifre")) { setErr("كل حقول ZNET مطلوبة"); setBusy(false); return; }
     } else if (kind === "zdk") {
       body.type = "card_store";
-      body.config = { code: "zdk", base_url: c("base_url"), api_token: c("api_token") };
-      if (!c("base_url") || !c("api_token")) { setErr("رابط الخدمة والتوكن مطلوبان"); setBusy(false); return; }
+      // ZDK لا اسم مستخدم فيه ولا كلمة سر — التوكن وحده يعرّف الحساب
+      body.config = { code: "zdk", api_token: c("api_token"), base_url: c("base_url").trim() };
+      if (!c("api_token")) { setErr("التوكن مطلوب"); setBusy(false); return; }
     } else if (kind === "tenant") {
       body.type = "same_system";
       body.config = { dealer_login: c("dealer_login") };
@@ -286,10 +288,18 @@ function ProviderModal({ edit, onClose, onDone }:
           )}
           {kind === "zdk" && (
             <>
-              <label style={lbl}>رابط الخدمة (base_url) *</label>
-              <input style={inp} dir="ltr" placeholder="https://api.x-stor.net" value={c("base_url")} onChange={(e) => setC("base_url", e.target.value)} />
-              <label style={lbl}>api-token *</label>
+              <label style={lbl}>التوكن (api-token) *</label>
               <input style={inp} dir="ltr" type="password" value={c("api_token")} onChange={(e) => setC("api_token", e.target.value)} />
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+                ZDK لا يستخدم اسم مستخدم ولا كلمة سر — التوكن وحده يعرّف حسابك.
+              </div>
+              <label style={lbl}>رابط الخدمة (اختياري)</label>
+              <input style={inp} dir="ltr" placeholder="https://api.ap4stor.com (الافتراضي)"
+                value={c("base_url")} onChange={(e) => setC("base_url", e.target.value)} />
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+                اتركه فارغاً للمتجر الافتراضي. اضبطه فقط إن كان متجرك على مضيف
+                آخر يعمل ببرمجية ZDK نفسها.
+              </div>
             </>
           )}
           {kind === "tenant" && (
@@ -307,6 +317,12 @@ function ProviderModal({ edit, onClose, onDone }:
               بعد الحفظ: أنشئ مجموعة أكواد واربطها بهذا المزوّد من صفحة <b>بنك الأكواد</b>.
             </div>
           )}
+
+          <label style={lbl}>الحالة *</label>
+          <select style={inp} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="active">نشط</option>
+            <option value="passive">غير نشط</option>
+          </select>
 
           {err && <div style={errBox}>{err}</div>}
           <div style={{ display: "flex", gap: 10, marginTop: 16 }}>

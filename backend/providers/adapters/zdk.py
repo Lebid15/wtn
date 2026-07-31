@@ -1,12 +1,16 @@
 """
-محوّل **ZDK** — البرمجية التي تُدار بها متاجر بطاقات عدّة (Barakat · Apstore
-وغيرها). المتجر يتغيّر، والـ API واحد: مصادقة بـ `api-token` في الهيدر
-واستجابات JSON تحت `/client/api/`.
+محوّل **ZDK** — البرمجية التي تُدار بها متاجر بطاقات عدّة (Ap4Stor · Barakat
+وغيرها). المتجر يتغيّر، والـ API واحد: مصادقة بـ `api-token` في الهيدر فقط
+(لا اسم مستخدم ولا كلمة سر) واستجابات JSON تحت `/client/api/`.
 
 لذلك النوع عندنا `zdk` لا اسم متجر بعينه — فكل متجر جديد على البرمجية نفسها
 يُضاف بلا محوّل جديد ولا اسم نوع جديد. الكودان القديمان `barakat`/`apstore`
 ما زالا يُقبَلان في `registry.adapter_for` حفاظاً على المزوّدين المُعدّين سابقاً.
+
+الوثيقة الرسمية: <https://api.ap4stor.com/api-docs> — ملخّصها المعتمد في
+`docs/integrations/ZDK_API.md`.
 """
+import uuid
 from decimal import Decimal, InvalidOperation
 from urllib.parse import quote
 
@@ -15,51 +19,95 @@ import requests
 from .base import BalanceResult, BaseAdapter, ExecutionResult, PackageList
 
 
-_SUCCESS = {"success", "ok", "done", "complete", "completed", "accept"}
-_FAILED = {"reject", "rejected", "failed", "fail", "error", "cancelled"}
-_PENDING = {"wait", "pending", "processing", "inprogress", "queued"}
+# المتجر الافتراضي حين لا يضبط الأدمن رابطاً — البرمجية واحدة والمضيف يتغيّر
+DEFAULT_BASE = "https://api.ap4stor.com"
+
+# مفاتيح `ProductLink.extra` الخاصّة بنا — لا تُرسل إلى المزوّد.
+# `price` يكتبه تعلّم حماية الخسارة، و`kupur` خاصّ بـ ZNET.
+_RESERVED_EXTRA = {"price", "kupur", "name", "note"}
+
+# ZDK: accept = نُفّذ · reject = رُفض · wait = قيد المعالجة
+_STATUS_MAP = {
+    "accept": "success", "success": "success", "ok": "success",
+    "done": "success", "complete": "success", "completed": "success",
+    "reject": "failed", "rejected": "failed", "failed": "failed",
+    "fail": "failed", "error": "failed", "cancelled": "failed",
+    "wait": "processing", "pending": "processing", "processing": "processing",
+    "inprogress": "processing", "queued": "processing",
+}
 
 
 def _map_status(s: str) -> str:
-    s = (s or "").lower()
-    if s in _SUCCESS:
-        return "success"
-    if s in _FAILED:
-        return "failed"
-    if s in _PENDING:
-        return "processing"
-    return "processing"
+    """حالة غير معروفة ⇒ processing: نُبقي الطلب تحت المتابعة ولا نحسمه بالظنّ."""
+    return _STATUS_MAP.get((s or "").strip().lower(), "processing")
+
+
+def _replay_note(d: dict) -> str:
+    """
+    `replay_api` رسالة المزوّد للزبون — تأتي بشكلين:
+    `[{"replay": ["نص"]}]` في newOrder و `["نص"]` في check.
+    """
+    rows = d.get("replay_api")
+    if not rows:
+        return ""
+    out = []
+    for it in rows if isinstance(rows, list) else [rows]:
+        if isinstance(it, dict):
+            r = it.get("replay")
+            out += [str(x) for x in r] if isinstance(r, list) else [str(r or "")]
+        else:
+            out.append(str(it))
+    return " · ".join(x for x in out if x.strip())[:250]
 
 
 class ZdkAdapter(BaseAdapter):
     """
-    config المتوقّع: {base_url, api_token}
-    place_order → GET {base}/client/api/newOrder/{package_id}/params?qty&phone&extra&order_uuid
+    config المتوقّع: {api_token} — و`base_url` اختياري لتحديد المتجر.
+    place_order  → GET {base}/client/api/newOrder/{package_id}/params?qty&order_uuid&playerId
+    fetch_status → GET {base}/client/api/check?orders={ref}[&uuid=1]
+    get_balance  → GET {base}/client/api/profile
     """
 
     code = "zdk"
 
     def _base(self, config: dict) -> str:
-        return (config.get("base_url") or "").rstrip("/")
+        return ((config.get("base_url") or "").strip() or DEFAULT_BASE).rstrip("/")
+
+    def _headers(self, config: dict) -> dict:
+        return {"api-token": config.get("api_token") or "", "Accept": "application/json"}
+
+    @staticmethod
+    def _order_uuid(order) -> str:
+        """
+        UUID ثابت مشتقّ من رقم الفيش. الوثيقة تنصّ أن الطلب **idempotent** بالـ
+        uuid — فإعادة إرسال الفيش نفسه لا تُنشئ طلباً مكرّراً لدى المزوّد.
+        عشوائيٌّ جديد كل محاولة كان سيفتح باب الشحن المزدوج.
+        """
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, f"wtn:order:{order.receipt_no}"))
 
     def place_order(self, order, config: dict, provider=None, depth: int = 0) -> ExecutionResult:
         base = self._base(config)
-        token = config.get("api_token")
-        if not base or not token:
-            return ExecutionResult(status="failed", note="إعداد ZDK ناقص (base_url/api_token)")
+        if not config.get("api_token"):
+            return ExecutionResult(status="failed", note="إعداد ZDK ناقص (api-token)")
 
-        package_id, _extra = self.link_for(order, provider)
-        pkg = quote(str(package_id))
-        params = {
-            "qty": "1",
-            "phone": order.customer_phone or order.player_id or "",
-            "extra": order.player_id or "",
-            "order_uuid": order.receipt_no,
-        }
+        package_id, extra = self.link_for(order, provider)
+        if not package_id:
+            return ExecutionResult(status="failed", note="لا رقم ربط لهذه الباقة لدى ZDK")
+
+        order_uuid = self._order_uuid(order)
+        params = {"qty": "1", "order_uuid": order_uuid}
+        if order.player_id:
+            params["playerId"] = order.player_id
+        # معاملات إضافية يطلبها المنتج (حقل `params` في كتالوج ZDK) — يضبطها
+        # الأدمن على الربط. الوثيقة تسمح بمفاتيح إضافية حرّة.
+        for k, v in (extra or {}).items():
+            if k not in _RESERVED_EXTRA and v not in (None, ""):
+                params[k] = str(v)
+
         try:
             resp = requests.get(
-                f"{base}/client/api/newOrder/{pkg}/params", params=params,
-                headers={"api-token": token}, timeout=(5, 30),
+                f"{base}/client/api/newOrder/{quote(str(package_id))}/params",
+                params=params, headers=self._headers(config), timeout=(5, 30),
             )
             data = resp.json()
         except requests.RequestException as e:
@@ -67,18 +115,50 @@ class ZdkAdapter(BaseAdapter):
         except ValueError:
             return ExecutionResult(status="failed", note="استجابة ZDK غير صالحة", raw=resp.text)
 
-        return self.parse_place(data)
+        return self.parse_place(data, order_uuid)
+
+    def fetch_status(self, order, config: dict, provider=None) -> ExecutionResult:
+        """GET client/api/check?orders={order_id} — أو بالـ uuid عند غياب رقم المزوّد."""
+        base = self._base(config)
+        ref = (order.provider_ref or "").strip()
+        if not config.get("api_token"):
+            return ExecutionResult(status="unsupported", note="إعداد ZDK ناقص (api-token)")
+        if not ref:
+            return ExecutionResult(status="unsupported", note="لا مرجع لهذا الطلب لدى ZDK")
+
+        params = {"orders": ref}
+        if self._is_uuid(ref):
+            params["uuid"] = "1"
+        try:
+            resp = requests.get(
+                f"{base}/client/api/check", params=params,
+                headers=self._headers(config), timeout=(5, 20),
+            )
+            data = resp.json()
+        except requests.RequestException as e:
+            return ExecutionResult(status="unsupported", note=f"تعذّر الاتصال بـ ZDK: {e}")
+        except ValueError:
+            return ExecutionResult(status="unsupported", note="استجابة ZDK غير صالحة",
+                                   raw=getattr(resp, "text", ""))
+        return self.parse_status(data)
+
+    @staticmethod
+    def _is_uuid(value: str) -> bool:
+        try:
+            uuid.UUID(value)
+            return True
+        except (ValueError, AttributeError, TypeError):
+            return False
 
     def list_packages(self, config: dict, provider=None) -> PackageList:
         """كتالوج ZDK: GET {base}/client/api/products بترويسة api-token."""
         base = self._base(config)
-        token = config.get("api_token")
-        if not base or not token:
-            return PackageList(ok=False, note="إعداد ZDK ناقص (base_url/api_token)")
+        if not config.get("api_token"):
+            return PackageList(ok=False, note="إعداد ZDK ناقص (api-token)")
         try:
             resp = requests.get(
                 f"{base}/client/api/products",
-                headers={"api-token": token}, timeout=(5, 30),
+                headers=self._headers(config), timeout=(5, 30),
             )
             data = resp.json()
         except requests.RequestException as e:
@@ -95,6 +175,9 @@ class ZdkAdapter(BaseAdapter):
                 "kupur": "",
                 "price": str(it.get("price") or ""),
                 "available": bool(it.get("available", True)),
+                # المعاملات التي يطلبها هذا المنتج (playerId مثلاً) — تُعين
+                # الأدمن على معرفة ما يجب ضبطه على الربط.
+                "note": ", ".join(str(x) for x in (it.get("params") or []))[:160],
             }
             for it in rows if isinstance(it, dict)
         ]
@@ -103,15 +186,14 @@ class ZdkAdapter(BaseAdapter):
         return PackageList(ok=True, packages=packages)
 
     def get_balance(self, config: dict, provider=None) -> BalanceResult:
-        """GET {base}/client/api/profile بترويسة api-token → JSON فيه balance."""
+        """GET {base}/client/api/profile → {"balance": "...", "email": "..."}."""
         base = self._base(config)
-        token = config.get("api_token")
-        if not base or not token:
-            return BalanceResult(ok=False, note="إعداد ZDK ناقص (base_url/api_token)")
+        if not config.get("api_token"):
+            return BalanceResult(ok=False, note="إعداد ZDK ناقص (api-token)")
         try:
             resp = requests.get(
                 f"{base}/client/api/profile",
-                headers={"api-token": token}, timeout=(5, 20),
+                headers=self._headers(config), timeout=(5, 20),
             )
             data = resp.json()
         except requests.RequestException as e:
@@ -122,33 +204,65 @@ class ZdkAdapter(BaseAdapter):
         d = data.get("data", data) if isinstance(data, dict) else {}
         raw_balance = d.get("balance") if isinstance(d, dict) else None
         if raw_balance is None:
-            return BalanceResult(
-                ok=False, raw=str(data),
-                note=str((data or {}).get("message") or "لم يُعِد المزوّد رصيداً"),
-            )
+            return BalanceResult(ok=False, raw=str(data), note=self._error_note(data))
         try:
             return BalanceResult(ok=True, balance=Decimal(str(raw_balance)), raw=str(data))
         except (InvalidOperation, ValueError):
             return BalanceResult(ok=False, note=f"رصيد غير مفهوم: {raw_balance}", raw=str(data))
 
-    def parse_place(self, data: dict) -> ExecutionResult:
-        """تحليل استجابة newOrder: {status:'OK', data:{order_id,status,price,note}} أو {status:'ERROR',message}."""
-        top = str(data.get("status", "")).upper()
-        if top == "OK" or "data" in data:
-            d = data.get("data", data)
-            mapped = _map_status(str(d.get("status", "pending")))
-            cost = None
-            try:
-                if d.get("price") is not None:
-                    cost = Decimal(str(d["price"]))
-            except (InvalidOperation, ValueError):
-                cost = None
-            return ExecutionResult(
-                status=mapped, pin=str(d.get("pin") or ""),
-                external_ref=str(d.get("order_id") or ""),
-                note=str(d.get("note") or ""), cost=cost, raw=str(data),
-            )
+    @staticmethod
+    def _error_note(data) -> str:
+        """رسالة الخطأ كما يعيدها ZDK — مع كودها إن وُجد (120 · 100 …)."""
+        if not isinstance(data, dict):
+            return "استجابة غير متوقّعة من ZDK"
+        msg = data.get("message") or data.get("error") or data.get("msg") or ""
+        code = data.get("code") or data.get("error_code") or ""
+        if msg and code:
+            return f"{code} — {msg}"[:250]
+        return str(msg or code or "لم يُعِد المزوّد رسالة")[:250]
+
+    @staticmethod
+    def _cost_of(d: dict):
+        try:
+            return Decimal(str(d["price"])) if d.get("price") is not None else None
+        except (InvalidOperation, ValueError):
+            return None
+
+    def parse_place(self, data: dict, order_uuid: str = "") -> ExecutionResult:
+        """
+        استجابة newOrder: {status, data:{order_id, status, price, data, replay_api}}.
+        الحالة تُقرأ من `data.status` (accept/reject/wait).
+        """
+        if not isinstance(data, dict) or "data" not in data or not isinstance(data.get("data"), dict):
+            return ExecutionResult(status="failed", note=self._error_note(data), raw=str(data))
+
+        d = data["data"]
+        # المرجع للمتابعة: رقم الطلب لدى المزوّد، وإلا الـ uuid (check يقبل كليهما)
+        ref = str(d.get("order_id") or "") or order_uuid
         return ExecutionResult(
-            status="failed",
-            note=str(data.get("message") or "فشل الطلب لدى المزوّد"), raw=str(data),
+            status=_map_status(str(d.get("status") or data.get("status") or "wait")),
+            pin=str(d.get("pin") or ""),
+            external_ref=ref,
+            note=_replay_note(d) or str(d.get("note") or ""),
+            cost=self._cost_of(d),
+            raw=str(data)[:2000],
+        )
+
+    def parse_status(self, data: dict) -> ExecutionResult:
+        """استجابة check: {status:"OK", data:[{order_id, status, price, replay_api, …}]}."""
+        rows = data.get("data") if isinstance(data, dict) else None
+        if isinstance(rows, dict):
+            rows = [rows]
+        if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+            # فشل **الاستعلام** لا فشل الطلب — لا نحسم حالة الطلب بالظنّ
+            return ExecutionResult(status="unsupported", note=self._error_note(data),
+                                   raw=str(data)[:2000])
+        d = rows[0]
+        return ExecutionResult(
+            status=_map_status(str(d.get("status") or "wait")),
+            pin=str(d.get("pin") or ""),
+            external_ref=str(d.get("order_id") or ""),
+            note=_replay_note(d),
+            cost=self._cost_of(d),
+            raw=str(data)[:2000],
         )
