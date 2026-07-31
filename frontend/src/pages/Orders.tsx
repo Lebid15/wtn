@@ -77,11 +77,6 @@ export default function Orders() {
   function setStatusAndLoad(st: string) { setStatus(st); load(st); }
   function clearFilters() { setF({ ...EMPTY }); setStatus("all"); load("all", { ...EMPTY }); }
 
-  async function act(id: number, action: "execute" | "cancel") {
-    await api.post(`/orders/${id}/${action}/`, {});
-    load();
-  }
-
   const toggleOne = (id: number) =>
     setPicked((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   const allPicked = orders.length > 0 && picked.length === orders.length;
@@ -312,14 +307,10 @@ export default function Orders() {
                     <td style={{ color: "var(--muted)" }}>{o.provider_name || "—"}</td>
                     <td>
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                        {/* القبول والرفض والتوجيه كلّها من شريط الإجراءات بعد
+                            التحديد — لا أزرار حاسمة داخل الصفّ تُضغط سهواً. */}
                         <MiniBtn name="search" color="var(--primary)" title="تفاصيل المسار"
                           onClick={() => setTrace(o.id)} />
-                        {(o.status === "pending" || o.status === "stuck") && (
-                          <>
-                            <MiniBtn name="check" color="var(--ok)" title="تنفيذ" onClick={() => act(o.id, "execute")} />
-                            <MiniBtn name="x" color="var(--danger)" title="إلغاء" onClick={() => act(o.id, "cancel")} />
-                          </>
-                        )}
                       </div>
                     </td>
                   </tr>

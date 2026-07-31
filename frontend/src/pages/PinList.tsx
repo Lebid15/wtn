@@ -37,6 +37,21 @@ export default function PinList() {
     setProducts((ps) => ps.map((x) => (x.id === id ? { ...x, ...r.data } : x)));
   }
 
+  /**
+   * توجيه الباقة الرئيسي: مزوّد بعينه، أو **يدوي**.
+   * «يدوي» ⇒ لا إرسال آلي إطلاقاً: يبقى الطلب «قيد الانتظار» بانتظار المشغّل
+   * (يشحنه بيده ويقبله، أو يوجّهه لمزوّد من شريط الإجراءات في متابعة الطلبات).
+   * والبديلان يُغلقان معه، فلا معنى لسلسلة احتياطية بلا توجيه أصلي.
+   */
+  async function setMainRoute(id: number, value: string) {
+    const body =
+      value === "manual"
+        ? { execution_type: "manual", provider: null, provider_alt1: null, provider_alt2: null }
+        : { execution_type: "auto", provider: Number(value) };
+    const r = await api.patch(`/catalog/products/${id}/`, body);
+    setProducts((ps) => ps.map((x) => (x.id === id ? { ...x, ...r.data } : x)));
+  }
+
   if (loading) return <div style={{ padding: 30 }}>جارٍ التحميل...</div>;
 
   return (
@@ -83,7 +98,8 @@ export default function PinList() {
                       <td className="buy num">{money(p.cost_price)}</td>
                       <td className="sell num">{money(p.recommended_price)}</td>
                       <td>
-                        <ApiSelect providers={providers} value={p.provider} onPick={(v) => patch(p.id, "provider", v)} />
+                        <MainRouteSelect providers={providers} product={p}
+                          onPick={(v) => setMainRoute(p.id, v)} />
                         <input defaultValue={p.provider_package_id}
                           onBlur={(e) => e.target.value !== p.provider_package_id && patch(p.id, "provider_package_id", e.target.value)}
                           placeholder="معرّف الباقة لدى المزوّد"
@@ -103,8 +119,26 @@ export default function PinList() {
       <div style={note}>
         توجيه بثلاثة مستويات: يُرسل الطلب للمزوّد الرئيسي، وعند فشله يُجرّب البديل الأول
         ثم الثاني تلقائياً. المزوّدون تُدارون من قسم <b>مزوّدي API</b>.
+        <br />
+        <b style={{ color: "var(--debt)" }}>يدوي:</b> لا إرسال آلي — يبقى الطلب
+        «قيد الانتظار» في متابعة الطلبات، فتشحنه بيدك وتقبله أو ترفضه، أو توجّهه
+        إلى مزوّد وقتها من شريط الإجراءات.
       </div>
     </div>
+  );
+}
+
+/** التوجيه الرئيسي: «يدوي» أو مزوّد. المصدر الوحيد لحالة الباقة. */
+function MainRouteSelect({ providers, product, onPick }:
+  { providers: Provider[]; product: Product; onPick: (v: string) => void }) {
+  const manual = product.execution_type === "manual" || !product.provider;
+  return (
+    <select style={{ width: 150, height: 30, ...(manual ? { color: "var(--debt)", fontWeight: 700 } : {}) }}
+      value={manual ? "manual" : String(product.provider)}
+      onChange={(e) => onPick(e.target.value)}>
+      <option value="manual">يدوي (بلا مزوّد)</option>
+      {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+    </select>
   );
 }
 
