@@ -19,6 +19,8 @@ export default function Orders() {
   const [f, setF] = useState({ ...EMPTY });
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<number | null>(null);
+  // لوحة الفلاتر مطويّة افتراضياً — الجدول هو المقصود، لا نموذج البحث
+  const [showFilters, setShowFilters] = useState(false);
   const [games, setGames] = useState<Opt[]>([]);
   const [products, setProducts] = useState<Opt[]>([]);
   const [dealers, setDealers] = useState<Opt[]>([]);
@@ -76,6 +78,8 @@ export default function Orders() {
 
   const money = (v: string) => Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 });
   const set = (k: string, v: string) => setF((old) => ({ ...old, [k]: v }));
+  // عدد الفلاتر المفعّلة — يظهر على الزر فلا تختفي فلترة قائمة عن العين
+  const activeFilters = Object.values(f).filter(Boolean).length;
   const shownProducts = f.game ? products.filter((p) => String(p.game) === f.game) : products;
 
   return (
@@ -93,8 +97,16 @@ export default function Orders() {
               <button key={k} title={t} onClick={() => setStatusAndLoad(k)}
                 style={{ ...qdot, background: c, outline: status === k ? "2px solid var(--primary)" : "none" }} />
             ))}
+            <button onClick={() => setShowFilters((v) => !v)} style={filterToggle}
+              title={showFilters ? "إخفاء الفلترة" : "إظهار الفلترة"}>
+              <Icon name="filter" size={13} style={{ marginInlineEnd: 5, verticalAlign: -2 }} />
+              فلتر
+              {activeFilters > 0 && <span style={fcount}>{activeFilters}</span>}
+              <span style={{ marginInlineStart: 5, fontSize: 10 }}>{showFilters ? "▲" : "▼"}</span>
+            </button>
           </span>
         </div>
+        {showFilters && (
         <div style={fgrid}>
           <Field label="اللعبة">
             <select value={f.game} onChange={(e) => setF((o) => ({ ...o, game: e.target.value, product: "" }))} style={inp}>
@@ -138,6 +150,7 @@ export default function Orders() {
             <button className="btn r" style={{ height: 36, flex: 1 }} onClick={clearFilters}>إزالة الفلتر</button>
           </div>
         </div>
+        )}
       </div>
 
       {/* ===== الجدول (أعمدة المرجع الـ13 + إجراء) — النمط المعتمد ===== */}
@@ -433,6 +446,15 @@ const inp: React.CSSProperties = { width: "100%", height: 36, borderRadius: 8 };
 const qdot: React.CSSProperties = {
   width: 16, height: 16, borderRadius: "50%", border: "1px solid rgba(0,0,0,.15)",
   cursor: "pointer", boxShadow: "inset 0 -2px 3px rgba(0,0,0,.2)",
+};
+const filterToggle: React.CSSProperties = {
+  marginInlineStart: 10, background: "var(--surface)", border: "1px solid var(--border)",
+  borderRadius: 6, color: "var(--text)", fontSize: 12.5, fontWeight: 700,
+  padding: "5px 10px", cursor: "pointer", display: "inline-flex", alignItems: "center",
+};
+const fcount: React.CSSProperties = {
+  background: "var(--primary)", color: "#fff", borderRadius: 9, fontSize: 10,
+  fontWeight: 800, padding: "1px 6px", marginInlineStart: 5,
 };
 
 
