@@ -74,13 +74,33 @@ export default function Orders() {
     return () => clearInterval(t);
   }, [watch, pendingCount, status, f]);
 
-  function setStatusAndLoad(st: string) { setStatus(st); load(st); }
-  function clearFilters() { setF({ ...EMPTY }); setStatus("all"); load("all", { ...EMPTY }); }
+  function setStatusAndLoad(st: string) {
+    setStatus(st); setPicked([]); setBulkMsg(null); load(st);
+  }
+  function clearFilters() {
+    setF({ ...EMPTY }); setStatus("all"); setPicked([]); load("all", { ...EMPTY });
+  }
+
+  /**
+   * وضع الإجراءات تابع لفلتر الحالة:
+   * • الكرة الخضراء (ناجح)  → عكس قرار: **إبطال** فقط.
+   * • الكرة الحمراء (ملغى) → عكس قرار: **قبول** فقط (ويُعاد خصم المبلغ).
+   * • غير ذلك → التصرّف بطلب لم يُحسَم: توجيه · إعادة ليدوي · قبول · رفض.
+   */
+  const mode: "revoke" | "restore" | "open" =
+    status === "success" ? "revoke" : status === "cancelled" ? "restore" : "open";
+
+  /** الطلب المحسوم لا يُحدَّد إلا في وضع عكس القرار الموافق لحالته. */
+  const selectable = (o: Order) =>
+    mode === "revoke" ? o.status === "success"
+      : mode === "restore" ? o.status === "cancelled"
+        : o.status === "pending" || o.status === "stuck";
 
   const toggleOne = (id: number) =>
     setPicked((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
-  const allPicked = orders.length > 0 && picked.length === orders.length;
-  const toggleAll = () => setPicked(allPicked ? [] : orders.map((o) => o.id));
+  const pickable = orders.filter(selectable);
+  const allPicked = pickable.length > 0 && picked.length === pickable.length;
+  const toggleAll = () => setPicked(allPicked ? [] : pickable.map((o) => o.id));
 
   /** إجراء جماعي على المحدَّد: قبول · رفض · توجيه لمزوّد · إعادة إلى يدوي. */
   async function bulk(action: "approve" | "reject" | "dispatch" | "manual") {
@@ -198,34 +218,54 @@ export default function Orders() {
             <input value={bulkNote} onChange={(e) => setBulkNote(e.target.value)}
               placeholder="ملاحظة للوكيل (سبب القبول أو الرفض) — اختيارية"
               style={{ ...inp, flex: "1 1 260px", height: 34 }} />
-            <select value={bulkProvider} onChange={(e) => setBulkProvider(e.target.value)}
-              style={{ ...inp, width: 170, height: 34 }}>
-              <option value="">اختر مزوّداً…</option>
-              {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <button className="btn" style={bulkBtn("#c1692a")} disabled={!!bulkBusy}
-              onClick={() => bulk("dispatch")} title="إرسال الطلب إلى المزوّد المختار">
-              {bulkBusy === "dispatch" ? "جارٍ التوجيه..." : "توجيه للمزوّد"}
-            </button>
-            <button className="btn" style={bulkBtn("#7d8f94")} disabled={!!bulkBusy}
-              onClick={() => bulk("manual")} title="فكّ الطلب عن مزوّده وإعادته قيد الانتظار">
-              {bulkBusy === "manual" ? "جارٍ..." : "إعادة إلى يدوي"}
-            </button>
-            <button className="btn g" style={{ height: 34 }} disabled={!!bulkBusy}
-              onClick={() => bulk("approve")} title="تنفيذ يدوي — يصير الطلب ناجحاً">
-              {bulkBusy === "approve" ? "جارٍ..." : "قبول"}
-            </button>
-            <button className="btn r" style={{ height: 34 }} disabled={!!bulkBusy}
-              onClick={() => bulk("reject")} title="إلغاء واسترجاع المبلغ للوكيل">
-              {bulkBusy === "reject" ? "جارٍ..." : "رفض"}
-            </button>
+
+            {mode === "open" && (
+              <>
+                <select value={bulkProvider} onChange={(e) => setBulkProvider(e.target.value)}
+                  style={{ ...inp, width: 170, height: 34 }}>
+                  <option value="">اختر مزوّداً…</option>
+                  {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <button className="btn" style={bulkBtn("#c1692a")} disabled={!!bulkBusy}
+                  onClick={() => bulk("dispatch")} title="إرسال الطلب إلى المزوّد المختار">
+                  {bulkBusy === "dispatch" ? "جارٍ التوجيه..." : "توجيه للمزوّد"}
+                </button>
+                <button className="btn" style={bulkBtn("#7d8f94")} disabled={!!bulkBusy}
+                  onClick={() => bulk("manual")} title="فكّ الطلب عن مزوّده وإعادته قيد الانتظار">
+                  {bulkBusy === "manual" ? "جارٍ..." : "إعادة إلى يدوي"}
+                </button>
+              </>
+            )}
+
+            {mode !== "revoke" && (
+              <button className="btn g" style={{ height: 34 }} disabled={!!bulkBusy}
+                onClick={() => bulk("approve")}
+                title={mode === "restore"
+                  ? "إعادة قبول الطلب — يُعاد خصم المبلغ من محفظة الوكيل"
+                  : "تنفيذ يدوي — يصير الطلب ناجحاً"}>
+                {bulkBusy === "approve" ? "جارٍ..." : mode === "restore" ? "قبول الطلب" : "قبول"}
+              </button>
+            )}
+            {mode !== "restore" && (
+              <button className="btn r" style={{ height: 34 }} disabled={!!bulkBusy}
+                onClick={() => bulk("reject")} title="إلغاء واسترجاع المبلغ للوكيل">
+                {bulkBusy === "reject" ? "جارٍ..." : mode === "revoke" ? "إبطال الطلب" : "رفض"}
+              </button>
+            )}
             <button className="btn" style={bulkBtn("#8a999e")} onClick={() => setPicked([])}>
               إلغاء التحديد
             </button>
           </div>
           <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>
-            «توجيه للمزوّد» يعمل على الطلبات <b>قيد الانتظار</b> أو <b>العالقة</b> فقط.
-            الطلب العالق لدى مزوّد: أعِده إلى يدوي أولاً ثم وجّهه إلى مزوّد آخر.
+            {mode === "revoke" ? (
+              <>عكس قرار: هذه طلبات <b>ناجحة</b> — إبطالها يسترجع المبلغ لمحفظة الوكيل.</>
+            ) : mode === "restore" ? (
+              <>عكس قرار: هذه طلبات <b>ملغاة</b> — قبولها <b>يعيد خصم المبلغ</b> من
+                محفظة الوكيل، لأن الإلغاء كان قد أرجعه.</>
+            ) : (
+              <>«توجيه للمزوّد» يعمل على الطلبات <b>قيد الانتظار</b> أو <b>العالقة</b> فقط.
+                الطلب العالق لدى مزوّد: أعِده إلى يدوي أولاً ثم وجّهه إلى مزوّد آخر.</>
+            )}
           </div>
           {bulkMsg && (
             <div style={{
@@ -245,7 +285,7 @@ export default function Orders() {
               <tr>
                 <th>
                   <input type="checkbox" title="تحديد الكل" checked={allPicked}
-                    onChange={toggleAll} />
+                    onChange={toggleAll} disabled={pickable.length === 0} />
                 </th>
                 <th>اللعبة</th>
                 <th>رقم الفيش</th>
@@ -270,8 +310,11 @@ export default function Orders() {
                 <Fragment key={o.id}>
                   <tr style={picked.includes(o.id) ? { background: "rgba(26,127,140,.07)" } : undefined}>
                     <td>
-                      <input type="checkbox" checked={picked.includes(o.id)}
-                        onChange={() => toggleOne(o.id)} />
+                      {/* الطلب المحسوم بلا مربّع — إلا في وضع عكس القرار */}
+                      {selectable(o) && (
+                        <input type="checkbox" checked={picked.includes(o.id)}
+                          onChange={() => toggleOne(o.id)} />
+                      )}
                     </td>
                     <td><span className="gicon" style={{ background: `linear-gradient(135deg,${gcolor(o.game_name)})` }}>{ginitials(o.game_name)}</span></td>
                     <td className="num" style={{ color: "var(--primary-dark)", fontWeight: 700, cursor: "pointer" }}

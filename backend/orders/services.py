@@ -112,13 +112,33 @@ def execute_order(order: Order, *, provider=None, pin="") -> Order:
     تنفيذ الطلب يدوياً (ناجح): يسجّل المزوّد والـ PIN إن أُعطي.
     بلا PIN يبقى الحقل فارغاً وتُعرض «شُحن مباشرةً ✓» — لا يجوز اختلاق كود
     وهمي يُسلَّم للوكيل على أنه كود شحن حقيقي.
+
+    ويقبل **عكس قرار سابق**: طلب ملغى يُعاد قبوله. وحينها يُعاد خصم المبلغ
+    لأن الإلغاء أرجعه — بدون ذلك يشحن الوكيل مجاناً.
     """
-    if order.status not in (Order.Status.PENDING, Order.Status.PROCESSING, Order.Status.STUCK):
+    reinstated = order.status == Order.Status.CANCELLED
+    if not reinstated and order.status not in (
+        Order.Status.PENDING, Order.Status.PROCESSING, Order.Status.STUCK
+    ):
         raise OrderError("لا يمكن تنفيذ طلب بحالته الحالية")
+
+    if reinstated:
+        try:
+            wallet_services.apply_transaction(
+                order.dealer.wallet.id, -order.sell_price, WalletTransaction.Type.ORDER_DEBIT,
+                note=f"إعادة خصم طلب {order.receipt_no} بعد قبوله",
+                ref_type="order", ref_id=order.id,
+            )
+        except wallet_services.WalletError as e:
+            raise OrderError(f"تعذّر إعادة خصم المبلغ: {e}")
+
     order.status = Order.Status.SUCCESS
     order.provider = provider or order.provider
     order.pin_result = pin or order.pin_result
-    order.api_response = "نفّذه المشغّل يدوياً"
+    order.api_response = (
+        "أعاد المشغّل قبوله بعد إلغائه — أُعيد خصم المبلغ" if reinstated
+        else "نفّذه المشغّل يدوياً"
+    )
     order.approved_at = timezone.now()
     order.save(update_fields=["status", "provider", "pin_result", "api_response", "approved_at"])
     return order
@@ -306,11 +326,13 @@ def dispatch_order(order: Order, depth: int = 0) -> Order:
 
 @transaction.atomic
 def cancel_order(order: Order) -> Order:
-    """إلغاء الطلب: يسترجع المبلغ لمحفظة الوكيل."""
+    """
+    إلغاء الطلب: يسترجع المبلغ لمحفظة الوكيل.
+    ويقبل **عكس قرار سابق**: طلب نُفّذ بالخطأ يُبطله المشغّل ويُستَرجع مبلغه.
+    """
     if order.status == Order.Status.CANCELLED:
         raise OrderError("الطلب ملغى مسبقاً")
-    if order.status == Order.Status.SUCCESS:
-        raise OrderError("لا يمكن إلغاء طلب ناجح")
+    revoked = order.status == Order.Status.SUCCESS
 
     wallet = order.dealer.wallet
     wallet_services.apply_transaction(
@@ -319,7 +341,10 @@ def cancel_order(order: Order) -> Order:
         ref_type="order", ref_id=order.id, allow_below_limit=True,
     )
     order.status = Order.Status.CANCELLED
-    order.api_response = "أُلغي واسترُجع المبلغ"
+    order.api_response = (
+        "أبطله المشغّل بعد نجاحه — استُرجع المبلغ" if revoked
+        else "أُلغي واسترُجع المبلغ"
+    )
     order.save(update_fields=["status", "api_response"])
     return order
 
