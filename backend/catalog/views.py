@@ -329,3 +329,64 @@ def product_links_view(request):
         "package_id": link.package_id, "package_name": link.package_name,
         "extra": link.extra,
     }, status=201)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def refresh_link_prices_view(request):
+    """
+    تحديث أسعار كل الباقات المربوطة من كتالوجات المزوّدين.
+
+    كتالوج كل مزوّد يُجلب **مرّة واحدة** ثم تُطابَق كل روابطه محلياً — لا طلب
+    شبكي لكل باقة. السعر المحفوظ في `extra.price` هو مرجع حماية الخسارة،
+    فتقادُمه يعني أن الحماية تحرس بسعر لم يعد قائماً.
+    """
+    from providers.adapters.registry import adapter_for
+
+    tenant = request.user.tenant
+    links = list(ProductLink.objects.filter(tenant=tenant).select_related("provider"))
+    if not links:
+        return Response({"detail": "لا توجد باقات مربوطة"}, status=400)
+
+    by_provider = {}
+    for link in links:
+        by_provider.setdefault(link.provider, []).append(link)
+
+    report, total = [], 0
+    for provider, rows in by_provider.items():
+        adapter = adapter_for(provider)
+        if adapter is None:
+            report.append({"provider": provider.name, "ok": False,
+                           "note": "منفّذ يدوي — لا كتالوج"})
+            continue
+        try:
+            catalog = adapter.list_packages(provider.config or {}, provider=provider)
+        except Exception as e:
+            report.append({"provider": provider.name, "ok": False, "note": f"خطأ محوّل: {e}"})
+            continue
+        if not catalog.ok:
+            report.append({"provider": provider.name, "ok": False,
+                           "note": catalog.note or "تعذّر جلب الكتالوج"})
+            continue
+
+        prices = {str(p.get("id")): p for p in catalog.packages if p.get("id")}
+        changed = 0
+        for link in rows:
+            found = prices.get(str(link.package_id))
+            if not found:
+                continue
+            extra = dict(link.extra or {})
+            price = str(found.get("price") or "").strip()
+            name = str(found.get("name") or "")[:200]
+            if not price or (extra.get("price") == price and link.package_name == name):
+                continue
+            extra["price"] = price
+            link.extra = extra
+            link.package_name = name or link.package_name
+            link.save(update_fields=["extra", "package_name", "updated_at"])
+            changed += 1
+        total += changed
+        report.append({"provider": provider.name, "ok": True, "updated": changed,
+                       "checked": len(rows), "catalog": len(prices)})
+
+    return Response({"updated": total, "providers": report})
