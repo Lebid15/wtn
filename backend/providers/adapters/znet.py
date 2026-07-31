@@ -131,9 +131,17 @@ class ZnetAdapter(BaseAdapter):
         if isinstance(data, list):
             rows = data
         elif isinstance(data, dict):
-            rows = data.get("result") or data.get("data") or data.get("products")
+            # الوثيقة: عند الخطأ success=false وشرحه في الحقل error
+            if data.get("success") is False:
+                msg = data.get("error") or data.get("message") or "رفض ZNET الطلب"
+                return PackageList(ok=False, note=str(msg), raw=text)
+            rows = data.get("result")
             if rows is None:
-                msg = data.get("message") or data.get("error") or "استجابة ZNET غير متوقّعة"
+                rows = data.get("data")
+            if rows is None:
+                rows = data.get("products")
+            if rows is None:
+                msg = data.get("error") or data.get("message") or "استجابة ZNET غير متوقّعة"
                 return PackageList(ok=False, note=str(msg), raw=text)
 
         packages = []
@@ -148,6 +156,7 @@ class ZnetAdapter(BaseAdapter):
                     "game": str(it.get("oyun_adi") or it.get("game") or ""),
                     "kupur": str(it.get("kupur") or ""),
                     "price": str(it.get("fiyat") or it.get("price") or ""),
+                    "note": str(it.get("aciklama") or "")[:160],
                 })
         else:
             # ارتداد: أسطر pipe-separated — id|الاسم|اللعبة|kupur|السعر
@@ -184,7 +193,13 @@ class ZnetAdapter(BaseAdapter):
                 except (IndexError, InvalidOperation, ValueError):
                     return None
             return BalanceResult(ok=True, balance=dec(1), debt=dec(2), raw=text)
-        msg = parts[1] if len(parts) > 1 else (text or "استجابة فارغة من ZNET")
+        if not (text or "").strip():
+            # الوثيقة: الوكيل غير موجود · API غير مفعّل · IP الثابت غير مطابق
+            return BalanceResult(ok=False, raw=text, note=(
+                "ردّ ZNET فارغ — أحد ثلاثة: الحساب غير موجود · صلاحية API غير "
+                "مفعّلة · الـ IP الثابت غير مطابق"
+            ))
+        msg = parts[1] if len(parts) > 1 else text
         return BalanceResult(ok=False, note=msg.strip(), raw=text)
 
     def parse_place(self, text: str, referans: str, http_status: int = 200) -> ExecutionResult:

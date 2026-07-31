@@ -242,10 +242,20 @@ def sync_order(order: Order) -> dict:
         fields += ["status", "pin_result", "approved_at", "api_response"]
         out["changed"] = True
     elif result.status == "failed":
-        order.status = Order.Status.STUCK
-        order.api_response = (f"رفض المزوّد · {note}" if note else "رفض المزوّد الطلب")[:250]
-        fields += ["status", "api_response"]
-        out["changed"] = True
+        # ZNET: الحالة 3 = IPTAL (ملغى) — والمزوّد يعيد المبلغ إلى رصيدنا لديه
+        # (مؤكَّد عملياً: 581.60 → 625.00). فلا يجوز إبقاء مبلغ الوكيل محجوزاً:
+        # نلغي الطلب ونسترجع له تلقائياً بدل تركه "عالقاً" بانتظار الأدمن.
+        order.save(update_fields=fields)          # نثبّت الملاحظة قبل الإلغاء
+        cancel_order(order)
+        order.api_response = (
+            f"ألغى المزوّد الطلب — استُرجع المبلغ · {note}" if note
+            else "ألغى المزوّد الطلب — استُرجع المبلغ"
+        )[:250]
+        order.save(update_fields=["api_response"])
+        out.update(changed=True, status=order.status, note=note,
+                   provider_note=order.provider_note, refunded=True,
+                   raw=(result.raw or "")[:300], parsed=result.status)
+        return out
 
     order.save(update_fields=fields)
     out.update(
