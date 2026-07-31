@@ -368,6 +368,14 @@ function OrderDetails({ order: o, onClose }: { order: any; onClose: () => void }
               <b style={{ color: "var(--ok)", fontSize: 14 }}>شُحن مباشرةً إلى حساب اللاعب ✓</b>
             </div>
           ) : null}
+          {o.dealer_note && (
+            <div style={{
+              marginTop: 10, fontSize: 13, background: "#fff8e6",
+              border: "1px solid #f0dca8", borderRadius: 8, padding: "10px 12px",
+            }}>
+              <b>ملاحظة الإدارة:</b> {o.dealer_note}
+            </div>
+          )}
           {o.provider_note && (
             <div style={{ marginTop: 10, fontSize: 13, color: "var(--muted)" }}>
               <b style={{ color: "var(--text)" }}>ملاحظة:</b> {o.provider_note}

@@ -20,7 +20,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "cost_price", "sell_price", "profit", "status", "status_label",
             "provider", "provider_name", "pin_result", "api_response",
             "provider_ref", "provider_note", "last_sync_at",
-            "dealer_sell_price", "dealer_profit",
+            "dealer_sell_price", "dealer_profit", "dealer_note",
             "balance_before", "balance_after", "created_at",
         ]
 
@@ -46,5 +46,7 @@ class StoreOrderSerializer(serializers.ModelSerializer):
             "player_id", "customer_phone",
             "paid_price", "dealer_sell_price", "dealer_profit",
             "status", "status_label", "pin_result", "provider_note",
+            # ملاحظة المشغّل على الطلب — سبب القبول أو الرفض اليدوي
+            "dealer_note",
             "last_sync_at", "balance_before", "balance_after", "created_at",
         ]

@@ -108,15 +108,36 @@ def create_order(dealer: User, product: Product, *, player_id="", customer_phone
 
 @transaction.atomic
 def execute_order(order: Order, *, provider=None, pin="") -> Order:
-    """تنفيذ الطلب (ناجح): يسجّل المزوّد والـ PIN."""
+    """
+    تنفيذ الطلب يدوياً (ناجح): يسجّل المزوّد والـ PIN إن أُعطي.
+    بلا PIN يبقى الحقل فارغاً وتُعرض «شُحن مباشرةً ✓» — لا يجوز اختلاق كود
+    وهمي يُسلَّم للوكيل على أنه كود شحن حقيقي.
+    """
     if order.status not in (Order.Status.PENDING, Order.Status.PROCESSING, Order.Status.STUCK):
         raise OrderError("لا يمكن تنفيذ طلب بحالته الحالية")
     order.status = Order.Status.SUCCESS
     order.provider = provider or order.provider
-    order.pin_result = pin or f"PIN-{random.randint(100000, 999999)}"
-    order.api_response = "تم التنفيذ بنجاح"
+    order.pin_result = pin or order.pin_result
+    order.api_response = "نفّذه المشغّل يدوياً"
     order.approved_at = timezone.now()
     order.save(update_fields=["status", "provider", "pin_result", "api_response", "approved_at"])
+    return order
+
+
+@transaction.atomic
+def set_manual(order: Order) -> Order:
+    """
+    إعادة الطلب إلى **التنفيذ اليدوي**: يعود «قيد الانتظار» ويُفكّ عن مزوّده.
+    مخرج الطلب العالق: يُعاد يدوياً ثم يُنفَّذ أو يُوجَّه إلى مزوّد آخر.
+    مرجع المزوّد وملاحظته يبقيان — هما سجلّ ما جرى، ولا يُستعلَم عنهما بعد
+    الآن لأن حلقة المراقبة لا تلمس إلا «قيد التنفيذ».
+    """
+    if order.status in (Order.Status.SUCCESS, Order.Status.CANCELLED):
+        raise OrderError("لا يمكن إعادة طلب محسوم إلى اليدوي")
+    order.status = Order.Status.PENDING
+    order.provider = None
+    order.api_response = "أُعيد إلى التنفيذ اليدوي بقرار المشغّل"
+    order.save(update_fields=["status", "provider", "api_response"])
     return order
 
 
@@ -172,6 +193,84 @@ def _learn_link_price(product_id: int, provider_id, cost) -> None:
     link.save(update_fields=["extra", "updated_at"])
 
 
+def _send_to(order: Order, provider, trail: list, depth: int = 0) -> bool:
+    """
+    محاولة إرسال واحدة لدى مزوّد بعينه.
+    تُعيد True إن حُسمت المحاولة (ناجح أو قيد تنفيذ) فتتوقّف السلسلة،
+    وFalse إن فشلت أو تُخُطّيت — ويُسجَّل السبب في `trail`.
+    """
+    from providers.adapters.registry import adapter_for
+
+    adapter = adapter_for(provider)
+    if adapter is None:
+        trail.append(f"{provider.name}: منفّذ يدوي — تُخُطّي")
+        return False
+
+    # حماية الخسارة (Zarar Ayarı): سعر الباقة المحفوظ وقت الربط مأخوذ من
+    # كتالوج المزوّد. إن تجاوز سعر بيعنا، فالطلب خاسر قبل أن يُرسَل —
+    # نتخطّى هذا المزوّد بدل إنفاق المال. يُعطَّل بإطفاء loss_guard عليه.
+    if provider.loss_guard:
+        known = _link_price(order.product_id, provider.id)
+        if known is None:
+            # لا سعر مرجعي بعد (ربط يدوي مثلاً) — نمرّر ونتعلّم التكلفة من
+            # ردّ المزوّد، فتحمي الطلبَ التالي.
+            trail.append(f"{provider.name}: حماية الخسارة بلا سعر مرجعي — أول طلب يحدّده")
+        elif known > order.sell_price:
+            trail.append(
+                f"{provider.name}: حماية الخسارة — تكلفته {known} > سعر البيع {order.sell_price}"
+            )
+            return False
+
+    try:
+        result = adapter.place_order(order, provider.config or {}, provider=provider, depth=depth)
+    except Exception as e:
+        trail.append(f"{provider.name}: خطأ محوّل ({e})")
+        return False
+
+    note = (result.note or "").strip()
+    ref = f" · ref={result.external_ref}" if result.external_ref else ""
+    cost_fields = _apply_real_cost(order, result, provider)
+
+    if result.status in ("success", "processing"):
+        order.status = (
+            Order.Status.SUCCESS if result.status == "success" else Order.Status.PROCESSING
+        )
+        order.provider = provider
+        prefix = f"[بديل بعد: {' | '.join(trail)}] " if trail else ""
+        order.api_response = f"{prefix}{note}{ref}"[:250]
+        order.provider_ref = result.external_ref or ""
+        order.provider_note = note[:250]
+        fields = ["status", "provider", "api_response", "provider_ref", "provider_note"]
+        if result.status == "success":
+            order.pin_result = result.pin or ""
+            order.approved_at = timezone.now()
+            fields += ["pin_result", "approved_at"]
+        order.save(update_fields=fields + cost_fields)
+        return True
+
+    trail.append(f"{provider.name}: {note or 'فشل'}")
+    return False
+
+
+def dispatch_to_provider(order: Order, provider, depth: int = 0) -> Order:
+    """
+    توجيه **يدوي** إلى مزوّد يختاره المشغّل — يتخطّى سلسلة المنتج.
+    مخرج الطلب العالق أو المُعدّ يدوياً: يُرسَل إلى من يراه المشغّل مناسباً.
+    """
+    if order.status not in (Order.Status.PENDING, Order.Status.STUCK):
+        raise OrderError("لا يُوجَّه إلا طلب قيد الانتظار أو عالق")
+
+    trail = []
+    if _send_to(order, provider, trail, depth):
+        return order
+
+    order.status = Order.Status.STUCK
+    order.provider = provider
+    order.api_response = ("فشل التوجيه اليدوي → " + " | ".join(trail))[:250]
+    order.save(update_fields=["status", "provider", "api_response"])
+    return order
+
+
 def dispatch_order(order: Order, depth: int = 0) -> Order:
     """
     التنفيذ التلقائي مع التوجيه البديل (Failover):
@@ -181,8 +280,6 @@ def dispatch_order(order: Order, depth: int = 0) -> Order:
     - فشل الكل → عالق، مع سجلّ محاولات كامل في api_response.
     depth يمنع حلقات التوجيه الداخلي بين المتاجر (متجر → متجر → ...).
     """
-    from providers.adapters.registry import adapter_for
-
     if depth > 2:
         order.status = Order.Status.STUCK
         order.api_response = "تجاوز عمق التوجيه الداخلي المسموح (حلقة متاجر؟)"
@@ -196,64 +293,8 @@ def dispatch_order(order: Order, depth: int = 0) -> Order:
 
     trail = []  # سجلّ المحاولات: "المزوّد: السبب"
     for provider in chain:
-        adapter = adapter_for(provider)
-        if adapter is None:
-            trail.append(f"{provider.name}: منفّذ يدوي — تُخُطّي")
-            continue
-
-        # حماية الخسارة (Zarar Ayarı): سعر الباقة المحفوظ وقت الربط مأخوذ من
-        # كتالوج المزوّد. إن تجاوز سعر بيعنا، فالطلب خاسر قبل أن يُرسَل —
-        # نتخطّى هذا المزوّد بدل إنفاق المال. يُعطَّل بإطفاء loss_guard عليه.
-        if provider.loss_guard:
-            known = _link_price(order.product_id, provider.id)
-            if known is None:
-                # لا سعر مرجعي بعد (ربط يدوي مثلاً) — نمرّر ونتعلّم التكلفة من
-                # ردّ المزوّد، فتحمي الطلبَ التالي.
-                trail.append(f"{provider.name}: حماية الخسارة بلا سعر مرجعي — أول طلب يحدّده")
-            elif known > order.sell_price:
-                trail.append(
-                    f"{provider.name}: حماية الخسارة — تكلفته {known} > سعر البيع {order.sell_price}"
-                )
-                continue
-        try:
-            result = adapter.place_order(order, provider.config or {}, provider=provider, depth=depth)
-        except Exception as e:
-            trail.append(f"{provider.name}: خطأ محوّل ({e})")
-            continue
-
-        note = (result.note or "").strip()
-        ref = f" · ref={result.external_ref}" if result.external_ref else ""
-
-        cost_fields = _apply_real_cost(order, result, provider)
-
-        if result.status == "success":
-            order.status = Order.Status.SUCCESS
-            order.provider = provider
-            order.pin_result = result.pin or ""
-            order.approved_at = timezone.now()
-            prefix = f"[بديل بعد: {' | '.join(trail)}] " if trail else ""
-            order.api_response = f"{prefix}{note}{ref}"[:250]
-            order.provider_ref = result.external_ref or ""
-            order.provider_note = note[:250]
-            order.save(update_fields=[
-                "status", "provider", "pin_result", "api_response",
-                "provider_ref", "provider_note", "approved_at",
-            ] + cost_fields)
+        if _send_to(order, provider, trail, depth):
             return order
-
-        if result.status == "processing":
-            order.status = Order.Status.PROCESSING
-            order.provider = provider
-            prefix = f"[بديل بعد: {' | '.join(trail)}] " if trail else ""
-            order.api_response = f"{prefix}{note}{ref}"[:250]
-            order.provider_ref = result.external_ref or ""
-            order.provider_note = note[:250]
-            order.save(update_fields=[
-                "status", "provider", "api_response", "provider_ref", "provider_note",
-            ] + cost_fields)
-            return order
-
-        trail.append(f"{provider.name}: {note or 'فشل'}")
 
     # فشلت كل التوجيهات → عالق مع السجلّ الكامل
     order.status = Order.Status.STUCK

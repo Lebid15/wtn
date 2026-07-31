@@ -1,6 +1,7 @@
 """API للطلبات (Takip): قائمة + إنشاء + تنفيذ + إلغاء + تقارير."""
 from decimal import Decimal, InvalidOperation
 
+from django.db import transaction
 from django.db.models import Count, Sum
 from rest_framework import status as http
 from rest_framework.decorators import api_view, permission_classes
@@ -352,6 +353,95 @@ def order_cancel_view(request, order_id):
     except services.OrderError as e:
         return Response({"detail": str(e)}, status=http.HTTP_400_BAD_REQUEST)
     return Response(OrderSerializer(order).data)
+
+
+#: إجراءات المشغّل الجماعية على الطلبات المحدَّدة (Toplu İşlem)
+BULK_ACTIONS = ("approve", "reject", "dispatch", "manual")
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def orders_bulk_action_view(request):
+    """
+    إجراء جماعي على الطلبات المحدَّدة:
+      • `approve`  → تنفيذ يدوي (ناجح) — مع PIN اختياري
+      • `reject`   → إلغاء واسترجاع المبلغ للوكيل
+      • `dispatch` → توجيه إلى مزوّد يختاره المشغّل (يتخطّى سلسلة المنتج)
+      • `manual`   → إعادة إلى «قيد الانتظار» وفكّ الطلب عن مزوّده
+
+    `note` تُحفظ في `dealer_note` — **يراها الوكيل**، فهي سبب القبول أو الرفض.
+    كل طلب يُعالَج على حدة وتُعاد نتيجته، فلا يُسقِط طلبٌ فاشل البقيةَ.
+    """
+    tenant = request.user.tenant
+    action = (request.data.get("action") or "").strip()
+    ids = request.data.get("orders") or []
+    note = (request.data.get("note") or "").strip()[:255]
+    pin = (request.data.get("pin") or "").strip()
+
+    if action not in BULK_ACTIONS:
+        return Response({"detail": "إجراء غير معروف"}, status=http.HTTP_400_BAD_REQUEST)
+    if not isinstance(ids, list) or not ids:
+        return Response({"detail": "لم تُحدَّد أي طلبات"}, status=http.HTTP_400_BAD_REQUEST)
+
+    provider = None
+    if action == "dispatch":
+        provider = Provider.objects.filter(
+            pk=request.data.get("provider"), tenant=tenant
+        ).first()
+        if provider is None:
+            return Response({"detail": "اختر مزوّداً للتوجيه"}, status=http.HTTP_400_BAD_REQUEST)
+        if provider.status != Provider.Status.ACTIVE:
+            return Response({"detail": f"المزوّد «{provider.name}» معطّل"},
+                            status=http.HTTP_400_BAD_REQUEST)
+
+    results = []
+    for oid in ids[:100]:
+        order = Order.objects.filter(pk=oid, tenant=tenant).select_related("product").first()
+        if order is None:
+            results.append({"order": oid, "ok": False, "detail": "غير موجود"})
+            continue
+        try:
+            _apply_bulk_action(order, action, provider=provider, note=note, pin=pin)
+        except services.OrderError as e:
+            results.append({"order": oid, "receipt_no": order.receipt_no,
+                            "ok": False, "detail": str(e)})
+            continue
+        except Exception as e:                    # لا يُسقِط مزوّدٌ متعثّر البقية
+            results.append({"order": oid, "receipt_no": order.receipt_no,
+                            "ok": False, "detail": f"خطأ غير متوقّع: {e}"})
+            continue
+        order.refresh_from_db()
+        results.append({"order": oid, "receipt_no": order.receipt_no, "ok": True,
+                        "status": order.status, "status_label": order.get_status_display()})
+
+    done = sum(1 for r in results if r["ok"])
+    return Response({"done": done, "failed": len(results) - done, "results": results})
+
+
+def _apply_bulk_action(order, action, *, provider, note, pin):
+    """
+    ينفّذ إجراءً واحداً على طلب واحد.
+
+    التوجيه (`dispatch`) يُستدعى **خارج** معاملة قاعدة البيانات عمداً: فيه نداء
+    HTTP خارجي قد يستغرق ثوانيَ، وقفل صفّ الطلب طوالها يخنق القاعدة.
+    """
+    if action == "dispatch":
+        services.dispatch_to_provider(order, provider)
+    else:
+        with transaction.atomic():
+            # قفل الصف يمنع تنفيذ إجراءين متزامنين على الطلب نفسه —
+            # وأخطرها استرجاعان للمبلغ ذاته.
+            locked = Order.objects.select_for_update().get(pk=order.pk)
+            if action == "approve":
+                services.execute_order(locked, pin=pin)
+            elif action == "reject":
+                services.cancel_order(locked)
+            elif action == "manual":
+                services.set_manual(locked)
+    if note:
+        order.refresh_from_db()
+        order.dealer_note = note
+        order.save(update_fields=["dealer_note"])
 
 
 @api_view(["POST"])

@@ -29,6 +29,12 @@ export default function Orders() {
   const [watch, setWatch] = useState(true);
   const [lastSync, setLastSync] = useState("");
   const [trace, setTrace] = useState<number | null>(null);
+  // إجراءات المشغّل الجماعية على الطلبات المحدَّدة (Toplu İşlem)
+  const [picked, setPicked] = useState<number[]>([]);
+  const [bulkNote, setBulkNote] = useState("");
+  const [bulkProvider, setBulkProvider] = useState("");
+  const [bulkBusy, setBulkBusy] = useState("");
+  const [bulkMsg, setBulkMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   function load(st = status, filters = f) {
     setLoading(true);
@@ -74,6 +80,40 @@ export default function Orders() {
   async function act(id: number, action: "execute" | "cancel") {
     await api.post(`/orders/${id}/${action}/`, {});
     load();
+  }
+
+  const toggleOne = (id: number) =>
+    setPicked((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const allPicked = orders.length > 0 && picked.length === orders.length;
+  const toggleAll = () => setPicked(allPicked ? [] : orders.map((o) => o.id));
+
+  /** إجراء جماعي على المحدَّد: قبول · رفض · توجيه لمزوّد · إعادة إلى يدوي. */
+  async function bulk(action: "approve" | "reject" | "dispatch" | "manual") {
+    if (picked.length === 0) return;
+    if (action === "dispatch" && !bulkProvider) {
+      setBulkMsg({ ok: false, text: "اختر مزوّداً من القائمة أولاً" });
+      return;
+    }
+    setBulkBusy(action); setBulkMsg(null);
+    try {
+      const r = await api.post("/orders/bulk-action/", {
+        orders: picked, action, note: bulkNote.trim(),
+        ...(action === "dispatch" ? { provider: bulkProvider } : {}),
+      });
+      const failed = (r.data.results || []).filter((x: any) => !x.ok);
+      setBulkMsg({
+        ok: failed.length === 0,
+        text: `تمّ على ${r.data.done} طلباً` +
+          (failed.length
+            ? ` · تعذّر على ${failed.length}: ` +
+              failed.slice(0, 3).map((x: any) => `${x.receipt_no || x.order} (${x.detail})`).join(" · ")
+            : ""),
+      });
+      setPicked([]); setBulkNote("");
+      load();
+    } catch (e: any) {
+      setBulkMsg({ ok: false, text: e?.response?.data?.detail || "فشل تنفيذ الإجراء" });
+    } finally { setBulkBusy(""); }
   }
 
   const money = (v: string) => Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -153,13 +193,65 @@ export default function Orders() {
         )}
       </div>
 
+      {/* ===== إجراءات المشغّل على المحدَّد (Toplu İşlem) — تظهر عند التحديد ===== */}
+      {picked.length > 0 && (
+        <div className="card" style={bulkBar}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <b style={{ fontSize: 13.5, whiteSpace: "nowrap" }}>
+              محدَّد: <span style={{ color: "var(--primary)" }}>{picked.length}</span>
+            </b>
+            <input value={bulkNote} onChange={(e) => setBulkNote(e.target.value)}
+              placeholder="ملاحظة للوكيل (سبب القبول أو الرفض) — اختيارية"
+              style={{ ...inp, flex: "1 1 260px", height: 34 }} />
+            <select value={bulkProvider} onChange={(e) => setBulkProvider(e.target.value)}
+              style={{ ...inp, width: 170, height: 34 }}>
+              <option value="">اختر مزوّداً…</option>
+              {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <button className="btn" style={bulkBtn("#c1692a")} disabled={!!bulkBusy}
+              onClick={() => bulk("dispatch")} title="إرسال الطلب إلى المزوّد المختار">
+              {bulkBusy === "dispatch" ? "جارٍ التوجيه..." : "توجيه للمزوّد"}
+            </button>
+            <button className="btn" style={bulkBtn("#7d8f94")} disabled={!!bulkBusy}
+              onClick={() => bulk("manual")} title="فكّ الطلب عن مزوّده وإعادته قيد الانتظار">
+              {bulkBusy === "manual" ? "جارٍ..." : "إعادة إلى يدوي"}
+            </button>
+            <button className="btn g" style={{ height: 34 }} disabled={!!bulkBusy}
+              onClick={() => bulk("approve")} title="تنفيذ يدوي — يصير الطلب ناجحاً">
+              {bulkBusy === "approve" ? "جارٍ..." : "قبول"}
+            </button>
+            <button className="btn r" style={{ height: 34 }} disabled={!!bulkBusy}
+              onClick={() => bulk("reject")} title="إلغاء واسترجاع المبلغ للوكيل">
+              {bulkBusy === "reject" ? "جارٍ..." : "رفض"}
+            </button>
+            <button className="btn" style={bulkBtn("#8a999e")} onClick={() => setPicked([])}>
+              إلغاء التحديد
+            </button>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>
+            «توجيه للمزوّد» يعمل على الطلبات <b>قيد الانتظار</b> أو <b>العالقة</b> فقط.
+            الطلب العالق لدى مزوّد: أعِده إلى يدوي أولاً ثم وجّهه إلى مزوّد آخر.
+          </div>
+          {bulkMsg && (
+            <div style={{
+              marginTop: 8, fontSize: 12.5, padding: "7px 10px", borderRadius: 6,
+              background: bulkMsg.ok ? "rgba(53,194,69,.10)" : "rgba(221,68,68,.10)",
+              color: bulkMsg.ok ? "var(--ok)" : "var(--danger)",
+            }}>{bulkMsg.text}</div>
+          )}
+        </div>
+      )}
+
       {/* ===== الجدول (أعمدة المرجع الـ13 + إجراء) — النمط المعتمد ===== */}
       <div className="card">
         <div className="table-scroll">
           <table className="grid">
             <thead>
               <tr>
-                <th><input type="checkbox" title="تحديد الكل" /></th>
+                <th>
+                  <input type="checkbox" title="تحديد الكل" checked={allPicked}
+                    onChange={toggleAll} />
+                </th>
                 <th>اللعبة</th>
                 <th>رقم الفيش</th>
                 <th>الوكيل</th>
@@ -181,8 +273,11 @@ export default function Orders() {
                 <tr><td colSpan={13} style={{ padding: 26, color: "var(--muted)" }}>لا توجد طلبات</td></tr>
               ) : orders.map((o) => (
                 <Fragment key={o.id}>
-                  <tr>
-                    <td><input type="checkbox" /></td>
+                  <tr style={picked.includes(o.id) ? { background: "rgba(26,127,140,.07)" } : undefined}>
+                    <td>
+                      <input type="checkbox" checked={picked.includes(o.id)}
+                        onChange={() => toggleOne(o.id)} />
+                    </td>
                     <td><span className="gicon" style={{ background: `linear-gradient(135deg,${gcolor(o.game_name)})` }}>{ginitials(o.game_name)}</span></td>
                     <td className="num" style={{ color: "var(--primary-dark)", fontWeight: 700, cursor: "pointer" }}
                       onClick={() => setExpanded(expanded === o.id ? null : o.id)} title="عرض التفاصيل">
@@ -238,6 +333,9 @@ export default function Orders() {
                         {o.provider_ref && <> · مرجع المزوّد: <code style={{ direction: "ltr" }}>{o.provider_ref}</code></>}
                         {o.provider_note && (
                           <> · <b style={{ color: "var(--primary)" }}>ملاحظة المزوّد: {o.provider_note}</b></>
+                        )}
+                        {o.dealer_note && (
+                          <> · <b style={{ color: "var(--primary-dark)" }}>ملاحظتك للوكيل: {o.dealer_note}</b></>
                         )}
                         {o.last_sync_at && (
                           <> · آخر استعلام: {new Date(o.last_sync_at).toLocaleString("en-GB")}</>
@@ -447,6 +545,11 @@ const qdot: React.CSSProperties = {
   width: 16, height: 16, borderRadius: "50%", border: "1px solid rgba(0,0,0,.15)",
   cursor: "pointer", boxShadow: "inset 0 -2px 3px rgba(0,0,0,.2)",
 };
+const bulkBar: React.CSSProperties = {
+  padding: "12px 14px", marginBottom: 12,
+  borderInlineStart: "4px solid var(--primary)",
+};
+const bulkBtn = (bg: string): React.CSSProperties => ({ height: 34, background: bg });
 const filterToggle: React.CSSProperties = {
   marginInlineStart: 10, background: "var(--surface)", border: "1px solid var(--border)",
   borderRadius: 6, color: "var(--text)", fontSize: 12.5, fontWeight: 700,
