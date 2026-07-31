@@ -608,101 +608,66 @@ function BuyModal({ product, requirePlayer, onClose, onBought, onFinish }:
   const [playerId, setPlayerId] = useState("");
   const [phone, setPhone] = useState("");
   const [sellPrice, setSellPrice] = useState("");
-  const [done, setDone] = useState<any | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
+  /**
+   * تأكيد الشراء ⇒ الانتقال **فوراً** إلى «طلباتي».
+   * لا شاشة تأكيد وسطى: نتيجة الطلب وكودُه إن وُجد يظهران في صفّه وتفاصيله،
+   * فشاشةٌ تعرض ما سيراه بعد ثانية ثمّ تطلب ضغطة أخرى للمتابعة عملٌ زائد.
+   */
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setErr("");
     try {
-      const r = await api.post("/store/buy/", {
+      await api.post("/store/buy/", {
         product: product.id, player_id: playerId, customer_phone: phone,
         // فارغ ⇒ يعتمد الخادم سعر التوصية
         dealer_sell_price: sellPrice.trim(),
       });
-      setDone(r.data);
       onBought();
+      onClose();
+      onFinish();
     } catch (e: any) {
       setErr(e?.response?.data?.detail || "فشل الشراء");
-    } finally { setBusy(false); }
-  }
-
-  // بعد إنشاء الطلب: الإغلاق يوجّه تلقائياً إلى قسم "طلباتي"
-  function close() {
-    onClose();
-    if (done) onFinish();
+      setBusy(false);
+    }
   }
 
   return (
-    <div style={overlay} onClick={close}>
+    <div style={overlay} onClick={busy ? undefined : onClose}>
       <form style={modal} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div style={{ background: "var(--primary)", color: "#fff", padding: "14px 18px", fontWeight: 700 }}>
           شراء: {product.name}
         </div>
         <div style={{ padding: 20 }}>
-          {done ? (
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 42 }}>{done.status === "success" ? "✅" : "🕓"}</div>
-              <p style={{ margin: "10px 0", fontSize: 16 }}>
-                {done.status === "success" ? "تم التنفيذ بنجاح!" : "تم إنشاء الطلب!"}
-              </p>
-              <p style={{ color: "var(--muted)" }}>رقم الطلب: <b>{done.receipt_no}</b></p>
-              {done.pin_result ? (
-                <div style={{ marginTop: 12, background: "#e7f6ec", border: "1px solid #b6e0c4", borderRadius: 8, padding: "12px 14px" }}>
-                  <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>الكود / PIN</div>
-                  <b style={{ fontSize: 18, letterSpacing: 1, color: "var(--ok)", direction: "ltr", display: "block" }}>{done.pin_result}</b>
-                </div>
-              ) : done.status === "success" ? (
-                <div style={{ marginTop: 12, background: "#e7f6ec", border: "1px solid #b6e0c4", borderRadius: 8, padding: "12px 14px" }}>
-                  <b style={{ color: "var(--ok)", fontSize: 15 }}>شُحن مباشرةً إلى حساب اللاعب ✓</b>
-                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
-                    هذا المنتج يُشحن على معرّف اللاعب مباشرةً — لا كود لإدخاله.
-                  </div>
-                  {done.provider_note && (
-                    <div style={{ fontSize: 12.5, marginTop: 6 }}>{done.provider_note}</div>
-                  )}
-                </div>
-              ) : (
-                <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 8 }}>
-                  {done.status_label} — ستظهر النتيجة في "طلباتي".
-                </p>
-              )}
-              <button type="button" className="btn g" style={{ marginTop: 14 }} onClick={close}>
-                عرض طلباتي ←
-              </button>
-            </div>
-          ) : (
+          <div style={{ fontSize: 14, color: "var(--muted)", marginBottom: 14 }}>
+            سعر الشراء: <b style={{ color: "var(--primary-dark)" }}>{money(product.price)} ل.ت</b>
+            <span style={{ marginInlineStart: 10 }}>
+              · التوصية: <b>{money(product.recommended_price)} ل.ت</b>
+            </span>
+          </div>
+          {requirePlayer && (
             <>
-              <div style={{ fontSize: 14, color: "var(--muted)", marginBottom: 14 }}>
-                سعر الشراء: <b style={{ color: "var(--primary-dark)" }}>{money(product.price)} ل.ت</b>
-                <span style={{ marginInlineStart: 10 }}>
-                  · التوصية: <b>{money(product.recommended_price)} ل.ت</b>
-                </span>
-              </div>
-              {requirePlayer && (
-                <>
-                  <label style={lbl}>معرّف اللاعب (ID)</label>
-                  <input style={inp} value={playerId} onChange={(e) => setPlayerId(e.target.value)} required autoFocus />
-                </>
-              )}
-              <label style={lbl}>رقم الهاتف (اختياري)</label>
-              <input style={inp} value={phone} onChange={(e) => setPhone(e.target.value)} />
-              <label style={lbl}>سعر بيعك للزبون (اختياري)</label>
-              <input style={inp} type="number" step="0.01" min="0" value={sellPrice}
-                onChange={(e) => setSellPrice(e.target.value)}
-                placeholder={`اتركه فارغاً لاعتماد سعر التوصية ${money(product.recommended_price)}`} />
-              {sellPrice.trim() !== "" && (
-                <div style={{ fontSize: 12.5, marginTop: 6, color: profitOf(sellPrice, product.price) < 0 ? "var(--danger)" : "var(--ok)" }}>
-                  ربحك من هذه العملية: <b>{money(profitOf(sellPrice, product.price))} ل.ت</b>
-                </div>
-              )}
-              {err && <div style={errBox}>{err}</div>}
-              <button className="btn g" style={{ width: "100%", height: 42, marginTop: 16 }} disabled={busy}>
-                {busy ? "جارٍ..." : "تأكيد الشراء"}
-              </button>
+              <label style={lbl}>معرّف اللاعب (ID)</label>
+              <input style={inp} value={playerId} onChange={(e) => setPlayerId(e.target.value)} required autoFocus />
             </>
           )}
+          <label style={lbl}>رقم الهاتف (اختياري)</label>
+          <input style={inp} value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <label style={lbl}>سعر بيعك للزبون (اختياري)</label>
+          <input style={inp} type="number" step="0.01" min="0" value={sellPrice}
+            onChange={(e) => setSellPrice(e.target.value)}
+            placeholder={`اتركه فارغاً لاعتماد سعر التوصية ${money(product.recommended_price)}`} />
+          {sellPrice.trim() !== "" && (
+            <div style={{ fontSize: 12.5, marginTop: 6, color: profitOf(sellPrice, product.price) < 0 ? "var(--danger)" : "var(--ok)" }}>
+              ربحك من هذه العملية: <b>{money(profitOf(sellPrice, product.price))} ل.ت</b>
+            </div>
+          )}
+          {err && <div style={errBox}>{err}</div>}
+          <button className="btn g" style={{ width: "100%", height: 42, marginTop: 16 }} disabled={busy}>
+            {busy ? "جارٍ..." : "تأكيد الشراء"}
+          </button>
         </div>
       </form>
     </div>
