@@ -377,6 +377,14 @@ def sync_order(order: Order) -> dict:
         out["note"] = f"خطأ محوّل: {e}"
         return out
 
+    # الاستعلام يستغرق ثوانيَ، وقد يحسم المشغّل الطلب خلالها. قرار الإنسان
+    # يتقدّم: نتخلّى بلا كتابة، وإلا داس ردُّ المزوّد قراره — وقد يعني ذلك
+    # استرجاعاً ثانياً لمبلغ استُرجع أو أُقرّ.
+    order.refresh_from_db(fields=["status"])
+    if order.status != Order.Status.PROCESSING:
+        out.update(status=order.status, note="حسمه المشغّل أثناء الاستعلام — تُرك كما قرّر")
+        return out
+
     note = (result.note or "").strip()
     fields = ["last_sync_at"]
     order.last_sync_at = timezone.now()
