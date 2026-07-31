@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api";
 import Icon from "../components/Icon";
-import { CURRENCIES, labelOf, money, symbolOf } from "../currency";
+import { CURRENCIES, money, symbolOf } from "../currency";
 
 /* ═════════ الأنواع ═════════ */
 interface MField {
@@ -40,7 +41,6 @@ export default function PaymentMethods() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Method | null>(null);
-  const [rates, setRates] = useState(false);
 
   function load() {
     setLoading(true);
@@ -72,10 +72,10 @@ export default function PaymentMethods() {
         <div className="card-title">
           <Icon name="card" size={16} style={{ color: "var(--primary)" }} /> طرق الدفع — قسم «إضافة رصيد» لدى الوكيل
           <span style={{ marginInlineStart: "auto", display: "flex", gap: 8 }}>
-            <button className="btn" style={{ height: 32 }} onClick={() => setRates(true)}>
+            <Link to="/ayarlar/exchange" className="btn" style={{ height: 32, textDecoration: "none" }}>
               <Icon name="dollar" size={14} style={{ marginInlineEnd: 5, verticalAlign: -2 }} />
-              سعر الصرف العام
-            </button>
+              أسعار الصرف
+            </Link>
             <button className="btn g" style={{ height: 32 }} onClick={() => setEditing(BLANK())}>
               <Icon name="plus" size={14} style={{ marginInlineEnd: 5, verticalAlign: -2 }} />
               طريقة دفع جديدة
@@ -156,7 +156,6 @@ export default function PaymentMethods() {
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); load(); }} />
       )}
-      {rates && <RatesEditor onClose={() => setRates(false)} />}
     </div>
   );
 }
@@ -345,78 +344,6 @@ function MethodEditor({
               {busy ? "جارٍ الحفظ..." : "حفظ طريقة الدفع"}
             </button>
             <button className="btn" style={{ background: "#8a999e" }} onClick={onClose}>إلغاء</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ═════════ محرّر سعر الصرف العام ═════════ */
-function RatesEditor({ onClose }: { onClose: () => void }) {
-  const [base, setBase] = useState("TRY");
-  const [rates, setRates] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  useEffect(() => {
-    api.get("/settings/exchange/").then((r) => {
-      setBase(r.data.base_currency);
-      setRates(r.data.exchange_rates || {});
-    });
-  }, []);
-
-  async function save() {
-    setBusy(true); setMsg(null);
-    try {
-      const r = await api.put("/settings/exchange/", { base_currency: base, exchange_rates: rates });
-      setRates(r.data.exchange_rates || {});
-      setMsg({ ok: true, text: "حُفظت أسعار الصرف" });
-    } catch (e: any) {
-      setMsg({ ok: false, text: e?.response?.data?.detail || "تعذّر الحفظ" });
-    } finally { setBusy(false); }
-  }
-
-  return (
-    <div style={ovl} onClick={onClose}>
-      <div style={{ ...box, width: 560 }} onClick={(e) => e.stopPropagation()}>
-        <div style={boxHead}>
-          سعر الصرف العام للمتجر
-          <button type="button" onClick={onClose} style={xBtn}>✕</button>
-        </div>
-        <div style={{ padding: 16, display: "grid", gap: 14 }}>
-          <Fld label="عملة المتجر (عملة محافظ الوكلاء)">
-            <select value={base} onChange={(e) => setBase(e.target.value)} style={inp}>
-              {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.symbol} {c.label} ({c.code})</option>)}
-            </select>
-          </Fld>
-          <div style={{ fontSize: 12.5, color: "var(--muted)" }}>
-            اكتب لكل عملة: <b>كم {labelOf(base)} تساوي وحدةً واحدة منها</b>.
-            هذا السعر تستعمله كل طرق الدفع في حساب «القيمة التي سيتم إرسالها».
-          </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            {CURRENCIES.filter((c) => c.code !== base).map((c) => (
-              <div key={c.code} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ width: 150, fontSize: 13 }}>
-                  1 {c.symbol} <b>{c.code}</b> =
-                </span>
-                <input type="number" step="0.0001" value={rates[c.code] ?? ""}
-                  onChange={(e) => setRates((o) => ({ ...o, [c.code]: e.target.value }))}
-                  placeholder="—" style={{ ...inp, flex: 1 }} />
-                <span style={{ width: 60, fontSize: 13, color: "var(--muted)" }}>{symbolOf(base)} {base}</span>
-              </div>
-            ))}
-          </div>
-          {msg && (
-            <div style={{
-              fontSize: 12.5, padding: "7px 10px", borderRadius: 6,
-              background: msg.ok ? "rgba(53,194,69,.10)" : "rgba(221,68,68,.10)",
-              color: msg.ok ? "var(--ok)" : "var(--danger)",
-            }}>{msg.text}</div>
-          )}
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn g" onClick={save} disabled={busy}>{busy ? "جارٍ الحفظ..." : "حفظ"}</button>
-            <button className="btn" style={{ background: "#8a999e" }} onClick={onClose}>إغلاق</button>
           </div>
         </div>
       </div>
