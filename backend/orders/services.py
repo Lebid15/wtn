@@ -227,8 +227,11 @@ def sync_order(order: Order) -> dict:
     fields = ["last_sync_at"]
     order.last_sync_at = timezone.now()
 
-    if note and note != order.provider_note:
-        order.provider_note = note[:250]
+    # نسجّل ملاحظة المزوّد؛ وإن ردّ بلا رسالة (مثل "OK|3||") نحفظ الردّ الخام
+    # بدل إبقاء ردّ الإرسال القديم الذي يوهم بأن الطلب ما زال مقبولاً.
+    fresh = note or (result.raw or "").strip()
+    if fresh and fresh != order.provider_note:
+        order.provider_note = fresh[:250]
         fields.append("provider_note")
 
     if result.status == "success":

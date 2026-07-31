@@ -26,6 +26,7 @@ export default function Orders() {
   // حلقة المراقبة: تتابع الطلبات "قيد التنفيذ" لدى مزوّديها
   const [watch, setWatch] = useState(true);
   const [lastSync, setLastSync] = useState("");
+  const [trace, setTrace] = useState<number | null>(null);
 
   function load(st = status, filters = f) {
     setLoading(true);
@@ -157,15 +158,14 @@ export default function Orders() {
                 <th>حالة العملية</th>
                 <th>طباعة / SMS</th>
                 <th>API</th>
-                <th>الانتظار</th>
                 <th>إجراء</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={14} style={{ padding: 26, color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
+                <tr><td colSpan={13} style={{ padding: 26, color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
               ) : orders.length === 0 ? (
-                <tr><td colSpan={14} style={{ padding: 26, color: "var(--muted)" }}>لا توجد طلبات</td></tr>
+                <tr><td colSpan={13} style={{ padding: 26, color: "var(--muted)" }}>لا توجد طلبات</td></tr>
               ) : orders.map((o) => (
                 <Fragment key={o.id}>
                   <tr>
@@ -198,21 +198,22 @@ export default function Orders() {
                       </div>
                     </td>
                     <td style={{ color: "var(--muted)" }}>{o.provider_name || "—"}</td>
-                    <td style={{ color: "var(--muted)", fontSize: 12.5 }}>
-                      {o.status === "success" ? "مكتمل" : o.status === "cancelled" ? "ملغى" : o.created_at.split(" ")[1] || "—"}
-                    </td>
                     <td>
-                      {o.status === "pending" || o.status === "stuck" ? (
-                        <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                          <MiniBtn name="check" color="var(--ok)" title="تنفيذ" onClick={() => act(o.id, "execute")} />
-                          <MiniBtn name="x" color="var(--danger)" title="إلغاء" onClick={() => act(o.id, "cancel")} />
-                        </div>
-                      ) : "—"}
+                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                        <MiniBtn name="search" color="var(--primary)" title="تفاصيل المسار"
+                          onClick={() => setTrace(o.id)} />
+                        {(o.status === "pending" || o.status === "stuck") && (
+                          <>
+                            <MiniBtn name="check" color="var(--ok)" title="تنفيذ" onClick={() => act(o.id, "execute")} />
+                            <MiniBtn name="x" color="var(--danger)" title="إلغاء" onClick={() => act(o.id, "cancel")} />
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                   {expanded === o.id && (
                     <tr>
-                      <td colSpan={14} className="cell-start" style={{ background: "var(--surface-2)", fontSize: 13 }}>
+                      <td colSpan={13} className="cell-start" style={{ background: "var(--surface-2)", fontSize: 13 }}>
                         <b>تفاصيل الطلب:</b>{" "}
                         التاريخ: {o.created_at} · الرصيد قبل: {money(o.balance_before)} → بعد: {money(o.balance_after)}
                         {o.pin_result && <> · <b style={{ color: "var(--ok)" }}>PIN: {o.pin_result}</b></>}
@@ -233,9 +234,171 @@ export default function Orders() {
           </table>
         </div>
       </div>
+
+      {trace !== null && (
+        <TraceModal orderId={trace} onClose={() => setTrace(null)} onChanged={refreshQuiet} />
+      )}
     </div>
   );
 }
+
+/** نافذة "تفاصيل المسار": هل وُجِّهت الباقة؟ لأي مزوّد؟ برقم ربط أي؟ وبأي ردّ؟ */
+function TraceModal({
+  orderId, onClose, onChanged,
+}: { orderId: number; onClose: () => void; onChanged: () => void }) {
+  const [data, setData] = useState<any>(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function load() {
+    api.get(`/orders/${orderId}/trace/`)
+      .then((r) => setData(r.data))
+      .catch((e) => setErr(e?.response?.data?.detail || "تعذّر جلب التفاصيل"));
+  }
+  useEffect(load, [orderId]);
+
+  async function syncNow() {
+    setBusy(true);
+    try {
+      await api.post(`/orders/${orderId}/sync/`, {});
+      load();
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const o = data?.order;
+  const ok = data?.routing_summary === "موجَّهة وجاهزة";
+
+  return (
+    <div style={ovl} onClick={onClose}>
+      <div style={box} onClick={(e) => e.stopPropagation()}>
+        <div style={boxHead}>
+          تفاصيل المسار {o ? `— فيش ${o.receipt_no}` : ""}
+          <button type="button" onClick={onClose} style={xBtn}>✕</button>
+        </div>
+
+        {err ? (
+          <div style={{ padding: 20, color: "var(--danger)" }}>{err}</div>
+        ) : !data ? (
+          <div style={{ padding: 20, color: "var(--muted)" }}>جارٍ التحميل...</div>
+        ) : (
+          <div style={{ padding: 16, display: "grid", gap: 14 }}>
+            {/* خلاصة التوجيه */}
+            <div style={{
+              padding: "9px 12px", borderRadius: 6, fontSize: 13, fontWeight: 700,
+              background: ok ? "rgba(53,194,69,.10)" : "rgba(221,68,68,.10)",
+              color: ok ? "var(--ok)" : "var(--danger)",
+              border: `1px solid ${ok ? "rgba(53,194,69,.35)" : "rgba(221,68,68,.35)"}`,
+            }}>
+              {ok ? "✅" : "⚠"} {data.routing_summary}
+            </div>
+
+            <Grid2>
+              <Cell k="الباقة" v={`${data.product.game} / ${data.product.name}`} />
+              <Cell k="نوع التنفيذ" v={data.product.execution_type === "auto" ? "تلقائي" : "يدوي"} />
+              <Cell k="الحالة" v={o.status_label} />
+              <Cell k="المزوّد المستخدم" v={o.provider_name || "—"} />
+              <Cell k="معرّف اللاعب" v={o.player_id || "—"} />
+              <Cell k="المرجع لدى المزوّد" v={o.provider_ref || "—"} mono />
+            </Grid2>
+
+            {/* سلسلة التوجيه */}
+            <div>
+              <div style={ttl}>سلسلة التوجيه</div>
+              <table className="grid" style={{ fontSize: 12.5 }}>
+                <thead>
+                  <tr><th>الخانة</th><th>المزوّد</th><th>رقم الربط</th><th>Küpür</th><th>الحالة</th></tr>
+                </thead>
+                <tbody>
+                  {data.chain.map((c: any) => (
+                    <tr key={c.slot} style={c.used ? { background: "rgba(53,194,69,.08)" } : undefined}>
+                      <td>{c.slot}</td>
+                      <td>{c.provider_name}</td>
+                      <td style={{ direction: "ltr" }}>
+                        {c.package_id ? <code>{c.package_id}</code> : "—"}
+                        {c.package_name && (
+                          <div style={{ fontSize: 11, color: "var(--muted)" }}>{c.package_name}</div>
+                        )}
+                      </td>
+                      <td style={{ direction: "ltr" }}>{c.extra?.kupur || "—"}</td>
+                      <td>
+                        {!c.provider ? <span style={{ color: "var(--muted)" }}>مغلق</span>
+                          : c.used ? <b style={{ color: "var(--ok)" }}>استُخدم</b>
+                          : c.linked ? <span style={{ color: "var(--ok)" }}>مربوط</span>
+                          : <span style={{ color: "var(--danger)" }}>بلا رقم ربط ⚠</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ردّ المزوّد */}
+            <div>
+              <div style={ttl}>ردّ المزوّد</div>
+              <pre style={pre}>{o.provider_note || "— لا ردّ مسجَّل —"}</pre>
+              <div style={{ fontSize: 12.5, marginTop: 6 }}>
+                <b>رد النظام:</b> {o.api_response || "—"}
+              </div>
+              {o.pin_result && (
+                <div style={{ fontSize: 13, marginTop: 4, color: "var(--ok)" }}>
+                  <b>PIN:</b> <code style={{ direction: "ltr" }}>{o.pin_result}</code>
+                </div>
+              )}
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>
+                آخر استعلام: {o.last_sync_at ? new Date(o.last_sync_at).toLocaleString("en-GB") : "لم يُستعلَم بعد"}
+                {" · "}الرصيد قبل {o.balance_before} → بعد {o.balance_after}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn g" onClick={syncNow} disabled={busy}>
+                {busy ? "جارٍ الاستعلام..." : "استعلم من المزوّد الآن"}
+              </button>
+              <button className="btn" style={{ background: "#8a999e" }} onClick={onClose}>إغلاق</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const Grid2 = ({ children }: { children: React.ReactNode }) => (
+  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 18px" }}>{children}</div>
+);
+const Cell = ({ k, v, mono }: { k: string; v: string; mono?: boolean }) => (
+  <div style={{ fontSize: 12.5 }}>
+    <span style={{ color: "var(--muted)" }}>{k}: </span>
+    <b style={mono ? { direction: "ltr", display: "inline-block" } : undefined}>{v}</b>
+  </div>
+);
+
+const ovl: React.CSSProperties = {
+  position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 70,
+  display: "flex", alignItems: "center", justifyContent: "center",
+};
+const box: React.CSSProperties = {
+  background: "#fff", borderRadius: 8, width: 700, maxWidth: "94vw",
+  maxHeight: "90vh", overflow: "auto", boxShadow: "0 10px 40px rgba(0,0,0,.3)",
+};
+const boxHead: React.CSSProperties = {
+  background: "var(--primary)", color: "#fff", padding: "10px 16px",
+  fontSize: 15, fontWeight: 700, display: "flex", justifyContent: "space-between",
+};
+const xBtn: React.CSSProperties = {
+  background: "none", border: 0, color: "#fff", cursor: "pointer", fontSize: 15,
+};
+const ttl: React.CSSProperties = {
+  fontSize: 12.5, fontWeight: 800, color: "var(--muted)", marginBottom: 6,
+};
+const pre: React.CSSProperties = {
+  background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 6,
+  padding: "8px 10px", fontSize: 12.5, direction: "ltr", textAlign: "left",
+  whiteSpace: "pre-wrap", wordBreak: "break-all", margin: 0,
+};
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

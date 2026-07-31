@@ -374,3 +374,73 @@ def orders_sync_pending_view(request):
     return Response({
         "checked": len(results), "changed": len(changed), "results": results,
     })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def order_trace_view(request, order_id):
+    """
+    تتبّع مسار الطلب: هل وُجِّهت الباقة؟ إلى أي مزوّد؟ برقم ربط أي؟ وبأي ردّ؟
+    تغذّي نافذة "تفاصيل" في متابعة الطلبات.
+    """
+    from catalog.models import ProductLink
+
+    try:
+        order = Order.objects.select_related(
+            "product", "provider", "dealer", "game",
+            "product__provider", "product__provider_alt1", "product__provider_alt2",
+        ).get(pk=order_id, tenant=request.user.tenant)
+    except Order.DoesNotExist:
+        return Response({"detail": "الطلب غير موجود"}, status=404)
+
+    product = order.product
+    chain_providers = [
+        ("الرئيسي", product.provider),
+        ("API 1", product.provider_alt1),
+        ("API 2", product.provider_alt2),
+    ]
+    links = {
+        l.provider_id: l
+        for l in ProductLink.objects.filter(product=product).select_related("provider")
+    }
+
+    chain = []
+    for slot, prov in chain_providers:
+        if prov is None:
+            chain.append({"slot": slot, "provider": None, "provider_name": "بديل مغلق",
+                          "linked": False, "package_id": "", "extra": {}})
+            continue
+        link = links.get(prov.id)
+        pkg = link.package_id if link else (product.provider_package_id or "")
+        chain.append({
+            "slot": slot,
+            "provider": prov.id,
+            "provider_name": prov.name,
+            "provider_kind": (prov.config or {}).get("code") or prov.type,
+            "linked": bool(pkg),
+            "package_id": pkg,
+            "package_name": link.package_name if link else "",
+            "extra": dict(link.extra or {}) if link else {},
+            "used": order.provider_id == prov.id,
+        })
+
+    auto = product.execution_type == Product.Execution.AUTO
+    any_provider = any(c["provider"] for c in chain)
+    if not auto:
+        routing = "تنفيذ يدوي — لا إرسال آلي للمزوّد"
+    elif not any_provider:
+        routing = "لا مزوّد على الباقة — تبقى قيد الانتظار للتنفيذ اليدوي"
+    elif not any(c["linked"] for c in chain if c["provider"]):
+        routing = "موجَّهة لمزوّد لكن **بلا رقم ربط** — لن يعرف المزوّد أي باقة"
+    else:
+        routing = "موجَّهة وجاهزة"
+
+    return Response({
+        "order": OrderSerializer(order).data,
+        "product": {
+            "id": product.id, "name": product.name, "game": order.game.name,
+            "kupur": product.kupur, "execution_type": product.execution_type,
+        },
+        "routing_summary": routing,
+        "chain": chain,
+    })
