@@ -29,9 +29,16 @@ class Order(models.Model):
     player_id = models.CharField(max_length=60, blank=True, default="")     # Oyuncu ID
     customer_phone = models.CharField(max_length=20, blank=True, default="")  # Müşteri Tel
 
+    # أرقام **صاحب المتجر**: ما دفعه للمزوّد، وما قبضه من الوكيل، وربحه هو.
     cost_price = models.DecimalField(max_digits=12, decimal_places=2)   # Alış
     sell_price = models.DecimalField(max_digits=12, decimal_places=2)   # Satış
     profit = models.DecimalField(max_digits=12, decimal_places=2)       # Kazanç
+
+    # أرقام **الوكيل**: بكم باع لزبونه وكم ربح. شراؤه هو `sell_price` أعلاه.
+    # سعر التوصية تخمين من صاحب المتجر، والوكيل قد يبيع أغلى أو أرخص — لذا
+    # يُثبَّت السعر الفعلي وقت البيع ولا يُشتقّ لاحقاً من المنتج.
+    dealer_sell_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    dealer_profit = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
 
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
     provider = models.ForeignKey(

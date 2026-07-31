@@ -6,7 +6,10 @@ import Icon from "../components/Icon";
 import Tickets from "../components/Tickets";
 import { applyThemeConfig } from "../theme";
 
-interface SProduct { id: number; name: string; price: string; require_player_id: boolean }
+interface SProduct {
+  id: number; name: string; price: string;
+  recommended_price: string; require_player_id: boolean;
+}
 interface SGame { id: number; name: string; image_url: string; require_player_id: boolean; products: SProduct[] }
 interface Summary {
   balance: string; credit_limit: string; currency: string;
@@ -26,6 +29,10 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
 
 const money = (v: string | number) =>
   Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 });
+
+/** ربح الوكيل = سعر بيعه لزبونه − سعر شرائه من المتجر. */
+const profitOf = (sell: string | number, paid: string | number) =>
+  Number(sell || 0) - Number(paid || 0);
 
 // كل قسم له رابطه الخاص: /store (الرئيسية) · /store/sell · /store/orders ...
 const SECTIONS: Tab[] = ["sell", "orders", "reports", "wallet", "support", "settings"];
@@ -222,6 +229,7 @@ function OrdersTab() {
   const [rows, setRows] = useState<any[]>([]);
   const [status, setStatus] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [details, setDetails] = useState<any | null>(null);
 
   function load() {
     setLoading(true);
@@ -253,30 +261,40 @@ function OrdersTab() {
             <tr>
               <th style={th}>رقم الفيش</th>
               <th style={{ ...th, textAlign: "right", paddingInlineStart: 12 }}>اللعبة / الباقة</th>
-              <th style={th}>معرّف اللاعب</th>
-              <th style={th}>التكلفة</th>
+              <th style={th}>هاتف الزبون / معرّف اللاعب</th>
+              <th style={th}>الشراء</th>
               <th style={th}>البيع</th>
               <th style={th}>الربح</th>
               <th style={th}>الكود / PIN</th>
               <th style={th}>الحالة</th>
               <th style={th}>التاريخ</th>
+              <th style={th}>تفاصيل</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
+              <tr><td colSpan={10} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={9} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>لا توجد طلبات بعد</td></tr>
+              <tr><td colSpan={10} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>لا توجد طلبات بعد</td></tr>
             ) : rows.map((o) => (
               <tr key={o.id}>
                 <td style={td}>{o.receipt_no}</td>
                 <td style={{ ...td, textAlign: "right", paddingInlineStart: 12 }}>
                   <b>{o.game_name}</b> — {o.product_name}
                 </td>
-                <td style={td}>{o.player_id || "—"}</td>
-                <td style={td}>{money(o.cost_price)}</td>
-                <td style={td}>{money(o.sell_price)}</td>
-                <td style={{ ...td, color: "var(--ok)", fontWeight: 700 }}>{money(o.profit)}</td>
+                <td style={{ ...td, lineHeight: 1.35 }}>
+                  {o.customer_phone || "—"}<br />
+                  <span style={{ color: "var(--muted)" }}>{o.player_id || "—"}</span>
+                </td>
+                <td style={td}>{money(o.paid_price)}</td>
+                <td style={td}>{money(o.dealer_sell_price)}</td>
+                <td style={{
+                  ...td, fontWeight: 700,
+                  color: Number(o.dealer_profit) < 0 ? "var(--danger)" : "var(--ok)",
+                }}
+                  title={Number(o.dealer_profit) < 0 ? "بعتَ بأقلّ من سعر شرائك" : undefined}>
+                  {money(o.dealer_profit)}
+                </td>
                 <td style={{ ...td, direction: "ltr", fontFamily: "monospace", fontSize: 12 }}>
                   {o.pin_result
                     ? o.pin_result
@@ -299,10 +317,66 @@ function OrdersTab() {
                   {o.status_label}
                 </td>
                 <td style={{ ...td, color: "var(--muted)", fontSize: 12 }}>{o.created_at}</td>
+                <td style={td}>
+                  <button onClick={() => setDetails(o)} title="تفاصيل الطلب" style={detailsBtn}>
+                    <Icon name="search" size={14} />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+      {details && <OrderDetails order={details} onClose={() => setDetails(null)} />}
+    </div>
+  );
+}
+
+/* نافذة "تفاصيل الطلب" للوكيل — بياناته هو فقط: زبونه وأسعاره وحالة طلبه. */
+function OrderDetails({ order: o, onClose }: { order: any; onClose: () => void }) {
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={{ ...modal, width: 460 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{
+          background: "var(--primary)", color: "#fff", padding: "14px 18px", fontWeight: 700,
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <span>تفاصيل الطلب — فيش {o.receipt_no}</span>
+          <button type="button" onClick={onClose}
+            style={{ background: "transparent", border: "none", color: "#fff", fontSize: 18, cursor: "pointer" }}>
+            ✕
+          </button>
+        </div>
+        <div style={{ padding: "8px 18px 18px" }}>
+          <Row label="اللعبة / الباقة" value={`${o.game_name} — ${o.product_name}`} />
+          <Row label="معرّف اللاعب" value={o.player_id || "—"} />
+          <Row label="هاتف الزبون" value={o.customer_phone || "—"} />
+          <Row label="سعر الشراء" value={money(o.paid_price) + " ل.ت"} />
+          <Row label="سعر البيع لزبونك" value={money(o.dealer_sell_price) + " ل.ت"} />
+          <Row label="ربحك" value={money(o.dealer_profit) + " ل.ت"} />
+          <Row label="الحالة" value={o.status_label} />
+          <Row label="التاريخ" value={o.created_at} />
+          <Row label="رصيدك قبل → بعد"
+            value={`${money(o.balance_before)} → ${money(o.balance_after)}`} />
+          {o.pin_result ? (
+            <div style={{ marginTop: 12, background: "#e7f6ec", border: "1px solid #b6e0c4", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>الكود / PIN</div>
+              <b style={{ fontSize: 17, letterSpacing: 1, color: "var(--ok)", direction: "ltr", display: "block" }}>{o.pin_result}</b>
+            </div>
+          ) : o.status === "success" ? (
+            <div style={{ marginTop: 12, background: "#e7f6ec", border: "1px solid #b6e0c4", borderRadius: 8, padding: "12px 14px" }}>
+              <b style={{ color: "var(--ok)", fontSize: 14 }}>شُحن مباشرةً إلى حساب اللاعب ✓</b>
+            </div>
+          ) : null}
+          {o.provider_note && (
+            <div style={{ marginTop: 10, fontSize: 13, color: "var(--muted)" }}>
+              <b style={{ color: "var(--text)" }}>ملاحظة:</b> {o.provider_note}
+            </div>
+          )}
+          <button type="button" className="btn g" style={{ width: "100%", height: 40, marginTop: 16 }} onClick={onClose}>
+            إغلاق
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -357,7 +431,7 @@ function ReportsTab() {
               <th style={{ ...th, textAlign: "right", paddingInlineStart: 12 }}>اللعبة</th>
               <th style={{ ...th, textAlign: "right", paddingInlineStart: 12 }}>الباقة</th>
               <th style={th}>العدد</th>
-              <th style={th}>التكلفة</th>
+              <th style={th}>الشراء</th>
               <th style={th}>المبيعات</th>
               <th style={th}>الربح</th>
             </tr>
@@ -520,6 +594,7 @@ function BuyModal({ product, requirePlayer, onClose, onBought, onFinish }:
   { product: SProduct; requirePlayer: boolean; onClose: () => void; onBought: () => void; onFinish: () => void }) {
   const [playerId, setPlayerId] = useState("");
   const [phone, setPhone] = useState("");
+  const [sellPrice, setSellPrice] = useState("");
   const [done, setDone] = useState<any | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -530,6 +605,8 @@ function BuyModal({ product, requirePlayer, onClose, onBought, onFinish }:
     try {
       const r = await api.post("/store/buy/", {
         product: product.id, player_id: playerId, customer_phone: phone,
+        // فارغ ⇒ يعتمد الخادم سعر التوصية
+        dealer_sell_price: sellPrice.trim(),
       });
       setDone(r.data);
       onBought();
@@ -585,7 +662,10 @@ function BuyModal({ product, requirePlayer, onClose, onBought, onFinish }:
           ) : (
             <>
               <div style={{ fontSize: 14, color: "var(--muted)", marginBottom: 14 }}>
-                السعر: <b style={{ color: "var(--primary-dark)" }}>{money(product.price)} ل.ت</b>
+                سعر الشراء: <b style={{ color: "var(--primary-dark)" }}>{money(product.price)} ل.ت</b>
+                <span style={{ marginInlineStart: 10 }}>
+                  · التوصية: <b>{money(product.recommended_price)} ل.ت</b>
+                </span>
               </div>
               {requirePlayer && (
                 <>
@@ -595,6 +675,15 @@ function BuyModal({ product, requirePlayer, onClose, onBought, onFinish }:
               )}
               <label style={lbl}>رقم الهاتف (اختياري)</label>
               <input style={inp} value={phone} onChange={(e) => setPhone(e.target.value)} />
+              <label style={lbl}>سعر بيعك للزبون (اختياري)</label>
+              <input style={inp} type="number" step="0.01" min="0" value={sellPrice}
+                onChange={(e) => setSellPrice(e.target.value)}
+                placeholder={`اتركه فارغاً لاعتماد سعر التوصية ${money(product.recommended_price)}`} />
+              {sellPrice.trim() !== "" && (
+                <div style={{ fontSize: 12.5, marginTop: 6, color: profitOf(sellPrice, product.price) < 0 ? "var(--danger)" : "var(--ok)" }}>
+                  ربحك من هذه العملية: <b>{money(profitOf(sellPrice, product.price))} ل.ت</b>
+                </div>
+              )}
               {err && <div style={errBox}>{err}</div>}
               <button className="btn g" style={{ width: "100%", height: 42, marginTop: 16 }} disabled={busy}>
                 {busy ? "جارٍ..." : "تأكيد الشراء"}
@@ -671,6 +760,10 @@ const td: React.CSSProperties = {
   padding: 10, textAlign: "center", whiteSpace: "nowrap", verticalAlign: "middle",
   background: "var(--surface)", border: "1px solid var(--border)",
   borderBottom: "3px solid var(--row-sep)",
+};
+const detailsBtn: React.CSSProperties = {
+  background: "transparent", border: "1px solid var(--border)", borderRadius: 5,
+  color: "var(--primary)", padding: "4px 8px", cursor: "pointer", lineHeight: 1,
 };
 const overlay: React.CSSProperties = {
   position: "fixed", inset: 0, background: "rgba(0,0,0,.45)",

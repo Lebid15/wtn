@@ -12,7 +12,7 @@ from catalog.models import Product
 from providers.models import Provider
 from . import services
 from .models import Order
-from .serializers import OrderSerializer
+from .serializers import OrderSerializer, StoreOrderSerializer
 
 
 def _filtered_orders(request):
@@ -81,6 +81,7 @@ def orders_view(request):
                 dealer, product,
                 player_id=request.data.get("player_id", ""),
                 customer_phone=request.data.get("customer_phone", ""),
+                dealer_sell_price=request.data.get("dealer_sell_price"),
             )
         except services.OrderError as e:
             return Response({"detail": str(e)}, status=http.HTTP_400_BAD_REQUEST)
@@ -164,6 +165,8 @@ def store_catalog_view(request):
                 "id": p.id,
                 "name": p.name,
                 "price": str(services.resolve_sell_price(user, p)),
+                # السعر الذي يقترحه صاحب المتجر للبيع لزبون الوكيل
+                "recommended_price": str(p.recommended_price),
                 "require_player_id": g.require_player_id,
             })
         if products:
@@ -189,11 +192,13 @@ def store_buy_view(request):
             request.user, product,
             player_id=request.data.get("player_id", ""),
             customer_phone=request.data.get("customer_phone", ""),
+            # يتركه الوكيل فارغاً ⇒ سعر التوصية؛ ويكتبه إن باع بسعر آخر.
+            dealer_sell_price=request.data.get("dealer_sell_price"),
         )
     except services.OrderError as e:
         return Response({"detail": str(e)}, status=http.HTTP_400_BAD_REQUEST)
     _maybe_auto_execute(order)
-    return Response(OrderSerializer(order).data, status=http.HTTP_201_CREATED)
+    return Response(StoreOrderSerializer(order).data, status=http.HTTP_201_CREATED)
 
 
 def _maybe_auto_execute(order):
@@ -220,7 +225,7 @@ def store_orders_view(request):
         qs = qs.filter(receipt_no__icontains=search)
     return Response({
         "count": qs.count(),
-        "results": OrderSerializer(qs[:200], many=True).data,
+        "results": StoreOrderSerializer(qs[:200], many=True).data,
     })
 
 
@@ -274,10 +279,11 @@ def store_report_view(request):
         qs = qs.filter(created_at__date__gte=p["date_from"])
     if p.get("date_to"):
         qs = qs.filter(created_at__date__lte=p["date_to"])
+    # بمنظور الوكيل: تكلفته = ما دفعه لصاحب المتجر · مبيعاته وربحه له وحده
     rows = (
         qs.values("game__name", "product__name")
-        .annotate(count=Count("id"), cost=Sum("cost_price"),
-                  sell=Sum("sell_price"), profit=Sum("profit"))
+        .annotate(count=Count("id"), cost=Sum("sell_price"),
+                  sell=Sum("dealer_sell_price"), profit=Sum("dealer_profit"))
         .order_by("game__name", "-count")
     )
     results = [{
@@ -285,8 +291,8 @@ def store_report_view(request):
         "count": r["count"], "cost": str(r["cost"] or 0),
         "sell": str(r["sell"] or 0), "profit": str(r["profit"] or 0),
     } for r in rows]
-    totals = qs.aggregate(count=Count("id"), cost=Sum("cost_price"),
-                          sell=Sum("sell_price"), profit=Sum("profit"))
+    totals = qs.aggregate(count=Count("id"), cost=Sum("sell_price"),
+                          sell=Sum("dealer_sell_price"), profit=Sum("dealer_profit"))
     return Response({
         "results": results,
         "products": len(results),
@@ -301,8 +307,9 @@ def store_summary_view(request):
     user = request.user
     wallet = getattr(user, "wallet", None)
     mine = Order.objects.filter(tenant=user.tenant, dealer=user)
+    # «أرباحي» في لوحة الوكيل = ربحه هو، لا ربح صاحب المتجر منه
     agg = mine.filter(status=Order.Status.SUCCESS).aggregate(
-        count=Count("id"), profit=Sum("profit"), sell=Sum("sell_price")
+        count=Count("id"), profit=Sum("dealer_profit"), sell=Sum("dealer_sell_price")
     )
     return Response({
         "balance": str(wallet.balance) if wallet else "0.00",

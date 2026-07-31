@@ -47,8 +47,25 @@ def resolve_sell_price(dealer: User, product: Product) -> Decimal:
     return base.quantize(Decimal("0.01"))
 
 
+def resolve_dealer_sell_price(product: Product, raw=None) -> Decimal:
+    """
+    سعر بيع الوكيل **لزبونه**: ما كتبه بيده إن كتبه، وإلا سعر التوصية.
+    سعر التوصية تخمين من صاحب المتجر؛ الوكيل حرّ أن يبيع أغلى أو أرخص.
+    """
+    if raw in (None, ""):
+        return product.recommended_price.quantize(Decimal("0.01"))
+    try:
+        value = Decimal(str(raw).replace(",", "."))
+    except (InvalidOperation, ValueError):
+        raise OrderError("سعر البيع غير صالح")
+    if value < 0:
+        raise OrderError("سعر البيع لا يصحّ أن يكون سالباً")
+    return value.quantize(Decimal("0.01"))
+
+
 @transaction.atomic
-def create_order(dealer: User, product: Product, *, player_id="", customer_phone="") -> Order:
+def create_order(dealer: User, product: Product, *, player_id="", customer_phone="",
+                 dealer_sell_price=None) -> Order:
     """ينشئ طلباً: يحسب السعر، يخصم من محفظة الوكيل، ويسجّل الطلب (قيد الانتظار)."""
     if product.tenant_id != dealer.tenant_id:
         raise OrderError("المنتج والوكيل من مستأجرين مختلفين")
@@ -57,6 +74,7 @@ def create_order(dealer: User, product: Product, *, player_id="", customer_phone
 
     sell = resolve_sell_price(dealer, product)
     cost = product.cost_price
+    retail = resolve_dealer_sell_price(product, dealer_sell_price)
 
     wallet = getattr(dealer, "wallet", None)
     if wallet is None:
@@ -77,6 +95,7 @@ def create_order(dealer: User, product: Product, *, player_id="", customer_phone
         dealer=dealer, game=product.game, product=product,
         player_id=player_id, customer_phone=customer_phone,
         cost_price=cost, sell_price=sell, profit=sell - cost,
+        dealer_sell_price=retail, dealer_profit=retail - sell,
         status=Order.Status.PENDING,
         balance_before=txn.balance_before, balance_after=txn.balance_after,
     )
