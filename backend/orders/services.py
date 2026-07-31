@@ -245,8 +245,13 @@ def sync_order(order: Order) -> dict:
         out["changed"] = True
 
     order.save(update_fields=fields)
-    out.update(status=order.status, note=note, pin=order.pin_result,
-               provider_note=order.provider_note)
+    out.update(
+        status=order.status, note=note, pin=order.pin_result,
+        provider_note=order.provider_note,
+        # الردّ الخام كما ورد من المزوّد — للتشخيص وقراءة رسالته حرفيّاً
+        raw=(result.raw or "")[:300],
+        parsed=result.status,
+    )
     return out
 
 
