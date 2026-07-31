@@ -90,6 +90,9 @@ export interface Order {
   provider_name: string;
   pin_result: string;
   api_response: string;
+  provider_ref: string;
+  provider_note: string;
+  last_sync_at: string | null;
   balance_before: string;
   balance_after: string;
   created_at: string;

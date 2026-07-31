@@ -51,6 +51,14 @@ class BaseAdapter:
         """جلب الرصيد الفعلي — المحوّلات الداعمة تعيد تعريفه."""
         return BalanceResult(ok=False, note="هذا النوع لا يدعم جلب الرصيد آلياً")
 
+    def fetch_status(self, order, config: dict, provider=None) -> ExecutionResult:
+        """
+        استعلام حالة طلب أُرسل سابقاً (حلقة المراقبة).
+        يعيد status ∈ {success, processing, failed} + pin + note إن توفّرت.
+        `unsupported` يعني أن هذا المزوّد لا يدعم المتابعة فيُترك الطلب كما هو.
+        """
+        return ExecutionResult(status="unsupported", note="هذا النوع لا يدعم متابعة الحالة")
+
     def list_packages(self, config: dict, provider=None) -> "PackageList":
         """
         جلب كتالوج باقات المزوّد (لصفحة "ربط الباقات").

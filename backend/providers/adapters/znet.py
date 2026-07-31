@@ -71,6 +71,29 @@ class ZnetAdapter(BaseAdapter):
             return BalanceResult(ok=False, note=f"تعذّر الاتصال بـ ZNET: {e}")
         return self.parse_balance(resp.text, resp.status_code)
 
+    def fetch_status(self, order, config: dict, provider=None) -> ExecutionResult:
+        """GET servis/pin_kontrol.php?kod&sifre&tahsilat_api_islem_id={referans}."""
+        base = self._base(config)
+        ref = (order.provider_ref or "").strip()
+        if not base or not config.get("kod") or not config.get("sifre"):
+            return ExecutionResult(status="unsupported", note="إعداد ZNET ناقص")
+        if not ref:
+            return ExecutionResult(status="unsupported", note="لا مرجع (referans) لهذا الطلب")
+        path = config.get("status_path") or "servis/pin_kontrol.php"
+        try:
+            resp = requests.get(
+                f"{base}/{path}",
+                params={"kod": config["kod"], "sifre": config["sifre"],
+                        "tahsilat_api_islem_id": ref},
+                headers={"Accept": "application/json"}, timeout=(5, 20),
+            )
+        except requests.RequestException as e:
+            return ExecutionResult(status="unsupported", note=f"تعذّر الاتصال بـ ZNET: {e}")
+        if resp.status_code >= 400:
+            return ExecutionResult(status="unsupported", note=f"HTTP {resp.status_code}",
+                                   raw=resp.text)
+        return self.parse_status(resp.text)
+
     def list_packages(self, config: dict, provider=None) -> PackageList:
         """كتالوج ZNET: GET servis/pin_listesi.php?kod&sifre."""
         base = self._base(config)
@@ -189,7 +212,9 @@ class ZnetAdapter(BaseAdapter):
         """تحليل pin_kontrol: OK|<1|2|3>|PIN|رسالة."""
         parts = [p.strip() for p in (text or "").split("|")]
         if not parts or parts[0].upper() != "OK":
-            return ExecutionResult(status="failed", note=text or "", raw=text)
+            # ردّ غير OK = فشل **الاستعلام** لا فشل الطلب — لا نغيّر حالة الطلب
+            msg = parts[1] if len(parts) > 1 else (text or "استجابة فارغة")
+            return ExecutionResult(status="unsupported", note=msg, raw=text)
         code = parts[1] if len(parts) > 1 else ""
         pin = parts[2] if len(parts) > 2 else ""
         msg = parts[3] if len(parts) > 3 else ""

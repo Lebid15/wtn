@@ -144,16 +144,25 @@ def dispatch_order(order: Order, depth: int = 0) -> Order:
             order.pin_result = result.pin or ""
             order.approved_at = timezone.now()
             prefix = f"[بديل بعد: {' | '.join(trail)}] " if trail else ""
-            order.api_response = f"{prefix}{note}{ref}"[:1000]
-            order.save(update_fields=["status", "provider", "pin_result", "api_response", "approved_at"])
+            order.api_response = f"{prefix}{note}{ref}"[:250]
+            order.provider_ref = result.external_ref or ""
+            order.provider_note = note[:250]
+            order.save(update_fields=[
+                "status", "provider", "pin_result", "api_response",
+                "provider_ref", "provider_note", "approved_at",
+            ])
             return order
 
         if result.status == "processing":
             order.status = Order.Status.PROCESSING
             order.provider = provider
             prefix = f"[بديل بعد: {' | '.join(trail)}] " if trail else ""
-            order.api_response = f"{prefix}{note}{ref}"[:1000]
-            order.save(update_fields=["status", "provider", "api_response"])
+            order.api_response = f"{prefix}{note}{ref}"[:250]
+            order.provider_ref = result.external_ref or ""
+            order.provider_note = note[:250]
+            order.save(update_fields=[
+                "status", "provider", "api_response", "provider_ref", "provider_note",
+            ])
             return order
 
         trail.append(f"{provider.name}: {note or 'فشل'}")
@@ -161,7 +170,7 @@ def dispatch_order(order: Order, depth: int = 0) -> Order:
     # فشلت كل التوجيهات → عالق مع السجلّ الكامل
     order.status = Order.Status.STUCK
     order.provider = chain[-1]
-    order.api_response = ("فشلت كل التوجيهات → " + " | ".join(trail))[:1000]
+    order.api_response = ("فشلت كل التوجيهات → " + " | ".join(trail))[:250]
     order.save(update_fields=["status", "provider", "api_response"])
     return order
 
@@ -184,3 +193,68 @@ def cancel_order(order: Order) -> Order:
     order.api_response = "أُلغي واسترُجع المبلغ"
     order.save(update_fields=["status", "api_response"])
     return order
+
+
+def sync_order(order: Order) -> dict:
+    """
+    استعلام حالة الطلب لدى المزوّد وتحديثه عندنا (حلقة المراقبة).
+
+    يُطبَّق على الطلبات "قيد التنفيذ" فقط — أي ما أكّد المزوّد استلامه ولم
+    يحسمه بعد. نتيجة المزوّد:
+      • ناجح  → success + الـ PIN + ملاحظته
+      • مرفوض → عالق (لا استرجاع تلقائي — القرار للأدمن) + سبب الرفض
+      • ما زال → يبقى قيد التنفيذ ونحدّث الملاحظة إن تغيّرت
+    """
+    from providers.adapters.registry import adapter_for
+
+    out = {"order": order.id, "changed": False, "status": order.status}
+    if order.status != Order.Status.PROCESSING or order.provider is None:
+        out["note"] = "لا يحتاج متابعة"
+        return out
+
+    adapter = adapter_for(order.provider)
+    if adapter is None:
+        out["note"] = "لا محوّل آلي لهذا المزوّد"
+        return out
+
+    try:
+        result = adapter.fetch_status(order, order.provider.config or {}, provider=order.provider)
+    except Exception as e:                     # لا نُسقِط الحلقة بسبب مزوّد واحد
+        out["note"] = f"خطأ محوّل: {e}"
+        return out
+
+    note = (result.note or "").strip()
+    fields = ["last_sync_at"]
+    order.last_sync_at = timezone.now()
+
+    if note and note != order.provider_note:
+        order.provider_note = note[:250]
+        fields.append("provider_note")
+
+    if result.status == "success":
+        order.status = Order.Status.SUCCESS
+        order.pin_result = result.pin or order.pin_result
+        order.approved_at = timezone.now()
+        order.api_response = (f"المزوّد أكّد التنفيذ · {note}" if note else "المزوّد أكّد التنفيذ")[:250]
+        fields += ["status", "pin_result", "approved_at", "api_response"]
+        out["changed"] = True
+    elif result.status == "failed":
+        order.status = Order.Status.STUCK
+        order.api_response = (f"رفض المزوّد · {note}" if note else "رفض المزوّد الطلب")[:250]
+        fields += ["status", "api_response"]
+        out["changed"] = True
+
+    order.save(update_fields=fields)
+    out.update(status=order.status, note=note, pin=order.pin_result,
+               provider_note=order.provider_note)
+    return out
+
+
+def sync_pending(tenant, limit: int = 50) -> list:
+    """يتابع كل الطلبات "قيد التنفيذ" لهذا المستأجر — تستدعيها حلقة المراقبة."""
+    qs = (
+        Order.objects.filter(tenant=tenant, status=Order.Status.PROCESSING)
+        .select_related("provider", "product")
+        .order_by("-created_at")[:limit]
+    )
+    return [sync_order(o) for o in qs]

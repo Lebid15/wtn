@@ -19,5 +19,6 @@ class OrderSerializer(serializers.ModelSerializer):
             "product", "product_name", "player_id", "customer_phone",
             "cost_price", "sell_price", "profit", "status", "status_label",
             "provider", "provider_name", "pin_result", "api_response",
+            "provider_ref", "provider_note", "last_sync_at",
             "balance_before", "balance_after", "created_at",
         ]

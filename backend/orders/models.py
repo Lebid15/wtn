@@ -39,6 +39,10 @@ class Order(models.Model):
     )
     pin_result = models.CharField(max_length=255, blank=True, default="")   # PIN المسلّم
     api_response = models.CharField(max_length=255, blank=True, default="")  # رد الـ API
+    # متابعة الطلب لدى المزوّد بعد إرساله (حلقة المراقبة)
+    provider_ref = models.CharField(max_length=120, blank=True, default="")   # referans لدى المزوّد
+    provider_note = models.CharField(max_length=255, blank=True, default="")  # ملاحظة/رسالة المزوّد
+    last_sync_at = models.DateTimeField(null=True, blank=True)                # آخر استعلام حالة
     dealer_note = models.CharField(max_length=255, blank=True, default="")
 
     balance_before = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))

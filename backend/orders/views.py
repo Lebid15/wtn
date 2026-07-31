@@ -345,3 +345,32 @@ def order_cancel_view(request, order_id):
     except services.OrderError as e:
         return Response({"detail": str(e)}, status=http.HTTP_400_BAD_REQUEST)
     return Response(OrderSerializer(order).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def order_sync_view(request, order_id):
+    """متابعة طلب واحد لدى مزوّده وتحديث حالته."""
+    try:
+        order = Order.objects.select_related("provider").get(
+            pk=order_id, tenant=request.user.tenant
+        )
+    except Order.DoesNotExist:
+        return Response({"detail": "الطلب غير موجود"}, status=404)
+    result = services.sync_order(order)
+    order.refresh_from_db()
+    return Response({"sync": result, "order": OrderSerializer(order).data})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def orders_sync_pending_view(request):
+    """
+    حلقة المراقبة: تتابع كل الطلبات "قيد التنفيذ" دفعةً واحدة.
+    تستدعيها الواجهة دورياً (كل ~6 ثوانٍ) ما دام هناك طلب قيد التنفيذ.
+    """
+    results = services.sync_pending(request.user.tenant)
+    changed = [r for r in results if r.get("changed")]
+    return Response({
+        "checked": len(results), "changed": len(changed), "results": results,
+    })

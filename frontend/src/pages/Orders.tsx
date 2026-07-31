@@ -23,12 +23,22 @@ export default function Orders() {
   const [products, setProducts] = useState<Opt[]>([]);
   const [dealers, setDealers] = useState<Opt[]>([]);
   const [providers, setProviders] = useState<Opt[]>([]);
+  // حلقة المراقبة: تتابع الطلبات "قيد التنفيذ" لدى مزوّديها
+  const [watch, setWatch] = useState(true);
+  const [lastSync, setLastSync] = useState("");
 
   function load(st = status, filters = f) {
     setLoading(true);
     const params: any = { status: st };
     Object.entries(filters).forEach(([k, v]) => { if (v) params[k] = v; });
     api.get("/orders/", { params }).then((r) => setOrders(r.data.results)).finally(() => setLoading(false));
+  }
+
+  /** يعيد جلب القائمة بصمت — بلا وميض "جارٍ التحميل". */
+  function refreshQuiet() {
+    const params: any = { status };
+    Object.entries(f).forEach(([k, v]) => { if (v) params[k] = v; });
+    api.get("/orders/", { params }).then((r) => setOrders(r.data.results));
   }
 
   useEffect(() => {
@@ -38,6 +48,22 @@ export default function Orders() {
     api.get("/dealers/").then((r) => setDealers(r.data.results));
     api.get("/providers/").then((r) => setProviders(r.data.results || r.data));
   }, []);
+
+  // كل 6 ثوانٍ: ما دام هناك طلب "قيد التنفيذ"، اسأل مزوّده عن نتيجته
+  const pendingCount = orders.filter((o) => o.status === "processing").length;
+  useEffect(() => {
+    if (!watch || pendingCount === 0) return;
+    const t = setInterval(async () => {
+      try {
+        const r = await api.post("/orders/sync-pending/", {});
+        setLastSync(new Date().toLocaleTimeString("en-GB"));
+        if (r.data.changed > 0) refreshQuiet();
+      } catch {
+        /* تجاهل فشل نبضة واحدة — النبضة التالية تعيد المحاولة */
+      }
+    }, 6000);
+    return () => clearInterval(t);
+  }, [watch, pendingCount, status, f]);
 
   function setStatusAndLoad(st: string) { setStatus(st); load(st); }
   function clearFilters() { setF({ ...EMPTY }); setStatus("all"); load("all", { ...EMPTY }); }
@@ -57,6 +83,8 @@ export default function Orders() {
       <div className="card">
         <div className="card-title">
           <Icon name="filter" size={16} style={{ color: "var(--primary)" }} /> عمليات Oyun-Pin — متابعة الطلبات
+          <WatchBadge on={watch} count={pendingCount} lastSync={lastSync}
+            onToggle={() => setWatch((v) => !v)} />
           {/* نقاط الفلترة السريعة بالحالة (مثل المرجع) */}
           <span style={{ marginInlineStart: "auto", display: "inline-flex", gap: 6, alignItems: "center" }}>
             {([["all", "#7d8f94", "الكل"], ["pending", "#e8b013", "قيد الانتظار"], ["success", "#35c245", "ناجح"],
@@ -189,6 +217,13 @@ export default function Orders() {
                         التاريخ: {o.created_at} · الرصيد قبل: {money(o.balance_before)} → بعد: {money(o.balance_after)}
                         {o.pin_result && <> · <b style={{ color: "var(--ok)" }}>PIN: {o.pin_result}</b></>}
                         {o.api_response && <> · رد النظام: {o.api_response}</>}
+                        {o.provider_ref && <> · مرجع المزوّد: <code style={{ direction: "ltr" }}>{o.provider_ref}</code></>}
+                        {o.provider_note && (
+                          <> · <b style={{ color: "var(--primary)" }}>ملاحظة المزوّد: {o.provider_note}</b></>
+                        )}
+                        {o.last_sync_at && (
+                          <> · آخر استعلام: {new Date(o.last_sync_at).toLocaleString("en-GB")}</>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -232,3 +267,28 @@ const qdot: React.CSSProperties = {
   width: 16, height: 16, borderRadius: "50%", border: "1px solid rgba(0,0,0,.15)",
   cursor: "pointer", boxShadow: "inset 0 -2px 3px rgba(0,0,0,.2)",
 };
+
+
+/** مؤشّر حلقة المراقبة: عدد الطلبات المتابَعة وآخر نبضة، مع مفتاح إيقاف. */
+function WatchBadge({
+  on, count, lastSync, onToggle,
+}: { on: boolean; count: number; lastSync: string; onToggle: () => void }) {
+  const active = on && count > 0;
+  return (
+    <button type="button" onClick={onToggle} title="متابعة الطلبات قيد التنفيذ لدى المزوّد كل 6 ثوانٍ"
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer",
+        border: "1px solid var(--border)", borderRadius: 20, padding: "3px 10px",
+        fontSize: 12, background: active ? "rgba(0,150,80,.10)" : "transparent",
+        color: active ? "var(--ok)" : "var(--muted)", marginInlineStart: 10,
+      }}>
+      <span style={{
+        width: 8, height: 8, borderRadius: "50%",
+        background: active ? "var(--ok)" : "#bbb",
+        animation: active ? "pulse 1.4s ease-in-out infinite" : "none",
+      }} />
+      {!on ? "المراقبة موقوفة" : count === 0 ? "المراقبة جاهزة" : `يراقب ${count} طلباً`}
+      {active && lastSync && <span style={{ opacity: 0.7 }}>· {lastSync}</span>}
+    </button>
+  );
+}
