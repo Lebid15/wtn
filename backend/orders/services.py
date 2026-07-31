@@ -272,6 +272,29 @@ def _send_to(order: Order, provider, trail: list, depth: int = 0) -> bool:
     return False
 
 
+def _failover_after_rejection(order: Order, trail: list) -> bool:
+    """
+    بعد أن يلغي مزوّدٌ طلباً كان قد قبله: تُجرَّب بقيّة سلسلة المنتج من بعده.
+    تُعيد True إن التقطه بديل (نجح أو قيد تنفيذ) فيبقى الطلب حيّاً.
+
+    يُبدأ من **موضع المزوّد الحالي** لا من رأس السلسلة، فلا يُعاد الإرسال إلى
+    من جُرِّب سلفاً — وهو ما قد يشحن اللاعب مرّتين.
+    وإن كان المزوّد الحالي خارج السلسلة (وجّهه المشغّل بيده) فلا سلسلة تُتبَع:
+    توجيهه قرار إنسان، ولا يُبنى عليه تسلسل آلي لم يطلبه.
+    """
+    product = order.product
+    chain = [p for p in (product.provider, product.provider_alt1, product.provider_alt2) if p]
+    ids = [p.id for p in chain]
+    if order.provider_id not in ids:
+        trail.append("لا سلسلة بديلة من هذا الموضع")
+        return False
+
+    for nxt in chain[ids.index(order.provider_id) + 1:]:
+        if _send_to(order, nxt, trail):
+            return True
+    return False
+
+
 def dispatch_to_provider(order: Order, provider, depth: int = 0) -> Order:
     """
     توجيه **يدوي** إلى مزوّد يختاره المشغّل — يتخطّى سلسلة المنتج.
@@ -404,14 +427,24 @@ def sync_order(order: Order) -> dict:
         fields += ["status", "pin_result", "approved_at", "api_response"]
         out["changed"] = True
     elif result.status == "failed":
-        # ZNET: الحالة 3 = IPTAL (ملغى) — والمزوّد يعيد المبلغ إلى رصيدنا لديه
-        # (مؤكَّد عملياً: 581.60 → 625.00). فلا يجوز إبقاء مبلغ الوكيل محجوزاً:
-        # نلغي الطلب ونسترجع له تلقائياً بدل تركه "عالقاً" بانتظار الأدمن.
-        order.save(update_fields=fields)          # نثبّت الملاحظة قبل الإلغاء
+        order.save(update_fields=fields)          # نثبّت الملاحظة قبل أي تصرّف
+
+        # رفض المزوّد **بعد قبوله** ليس نهاية الطلب: السلسلة البديلة وُضعت
+        # لهذا بالضبط. نجرّب من بعده في سلسلة المنتج قبل أن نلغي على الوكيل.
+        trail = [f"{order.provider.name}: ألغى الطلب بعد قبوله" + (f" — {note}" if note else "")]
+        if _failover_after_rejection(order, trail):
+            order.refresh_from_db()
+            out.update(changed=True, status=order.status, note=note, failover=True,
+                       provider=order.provider_id, provider_note=order.provider_note,
+                       raw=(result.raw or "")[:300], parsed=result.status)
+            return out
+
+        # لا بديل التقطه ⇒ إلغاء واسترجاع. ZNET (الحالة 3 = IPTAL) يعيد المبلغ
+        # إلى رصيدنا لديه — مؤكَّد عملياً 581.60 ← 625.00 — فلا معنى لحجز
+        # مال الوكيل، ولا لتركه "عالقاً" بانتظار الأدمن.
         cancel_order(order)
         order.api_response = (
-            f"ألغى المزوّد الطلب — استُرجع المبلغ · {note}" if note
-            else "ألغى المزوّد الطلب — استُرجع المبلغ"
+            "ألغى المزوّد الطلب ولم يلتقطه بديل — استُرجع المبلغ · " + " | ".join(trail)
         )[:250]
         order.save(update_fields=["api_response"])
         out.update(changed=True, status=order.status, note=note,
