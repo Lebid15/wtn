@@ -9,12 +9,14 @@ export interface PickerProduct { id: number; name: string; game_name: string }
  * المالك في أغلب الاستعمال، فلا يُجبَر على تحديد مئة باقة ليقصد كلّها.
  */
 export default function ProductPicker({
-  products, value, onChange, placeholder = "كل الباقات",
+  products, value, onChange, placeholder = "كل الباقات", meta,
 }: {
   products: PickerProduct[];
   value: number[];
   onChange: (ids: number[]) => void;
   placeholder?: string;
+  /** سطر جانبي لكل باقة — رقم ربطها وسعرها لدى المزوّد مثلاً. */
+  meta?: (id: number) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
@@ -105,6 +107,7 @@ export default function ProductPicker({
                   <label key={p.id} style={itemRow}>
                     <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)} />
                     <span>{p.name}</span>
+                    {meta && <span style={metaCell}>{meta(p.id)}</span>}
                   </label>
                 ))}
               </div>
@@ -139,4 +142,8 @@ const gameRow: React.CSSProperties = {
 const itemRow: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 8, padding: "5px 14px",
   fontSize: 13, cursor: "pointer",
+};
+const metaCell: React.CSSProperties = {
+  marginInlineStart: "auto", display: "flex", alignItems: "center", gap: 8,
+  fontSize: 11.5, whiteSpace: "nowrap",
 };

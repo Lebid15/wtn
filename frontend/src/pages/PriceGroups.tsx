@@ -10,6 +10,11 @@ interface MatrixProduct {
 }
 interface MatrixGame { game_id: number; game_name: string; products: MatrixProduct[] }
 interface Group { id: number; name: string; dealer_count?: number }
+/** ربط باقة لدى مزوّد — رقمه هناك وآخر سعر معروف له (بعملة الدفتر). */
+interface ProviderLink {
+  product: number; provider: number; package_id: string;
+  extra: Record<string, string>;
+}
 
 // عمود الخلية قيد التحرير: رقم مجموعة، أو عمودا المنتج نفسه
 type Col = number | "cost" | "rec";
@@ -319,8 +324,14 @@ function BulkPriceModal({ groups, products, costOf, onClose, onDone }: {
             </select>
           </Field>
 
-          <Field label="الباقات" hint="اتركه فارغاً ليشمل كل الباقات.">
-            <ProductPicker products={products} value={picked} onChange={setPicked} />
+          <Field label="الباقات" hint="بجانب كل باقة تكلفتها — وعليها يُحسب السعر. اتركه فارغاً ليشمل كل الباقات.">
+            <ProductPicker products={products} value={picked} onChange={setPicked}
+              meta={(id) => {
+                const cost = Number(costOf.get(id) ?? 0);
+                return cost > 0
+                  ? <b style={{ direction: "ltr", color: "var(--primary-dark)" }}>{cost.toFixed(2)}</b>
+                  : <span style={{ color: "var(--danger)" }}>بلا تكلفة</span>;
+              }} />
           </Field>
 
           <Field label="نوع الهامش">
@@ -357,6 +368,7 @@ function RefreshCostsModal({ products, onClose, onDone }: {
 }) {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [provider, setProvider] = useState<number | "">("");
+  const [links, setLinks] = useState<ProviderLink[]>([]);
   const [picked, setPicked] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -369,7 +381,15 @@ function RefreshCostsModal({ products, onClose, onDone }: {
       setProviders(rows);
       setProvider(rows[0]?.id ?? "");
     });
+    api.get("/catalog/product-links/").then((r) => setLinks(r.data));
   }, []);
+
+  /** ربط الباقة لدى المزوّد المختار — رقمه وسعره كما نعرفهما الآن. */
+  const linkOf = useMemo(() => {
+    const m = new Map<number, ProviderLink>();
+    for (const l of links) if (l.provider === provider) m.set(l.product, l);
+    return m;
+  }, [links, provider]);
 
   async function run() {
     setErr("");
@@ -439,13 +459,27 @@ function RefreshCostsModal({ products, onClose, onDone }: {
             </select>
           </Field>
 
-          <Field label="الباقات" hint="اتركه فارغاً ليشمل كل الباقات المربوطة بهذا المزوّد.">
+          <Field label="الباقات"
+            hint="بجانب كل باقة رقم ربطها لدى المزوّد وآخر سعر معروف له. اتركه فارغاً ليشمل كل الباقات المربوطة.">
             <ProductPicker products={products} value={picked} onChange={setPicked}
-              placeholder="كل الباقات المربوطة" />
+              placeholder="كل الباقات المربوطة"
+              meta={(id) => {
+                const link = linkOf.get(id);
+                if (!link) return <span style={{ color: "var(--muted)" }}>غير مربوطة</span>;
+                return (
+                  <>
+                    <code style={{ direction: "ltr", color: "var(--muted)" }}>#{link.package_id}</code>
+                    <b style={{ direction: "ltr", color: link.extra?.price ? "var(--primary-dark)" : "var(--muted)" }}>
+                      {link.extra?.price ?? "—"}
+                    </b>
+                  </>
+                );
+              }} />
           </Field>
 
           <div style={preview}>
-            أسعار المزوّدين بالليرة التركية، وتُحوَّل إلى عملة الدفتر بسعر
+            الباقة <b>غير المربوطة</b> بهذا المزوّد تُتخطّى — اربطها من «ربط الباقات» أولاً.
+            وأسعار المزوّدين بالليرة التركية، وتُحوَّل إلى عملة الدفتر بسعر
             «الإعدادات ← أسعار الصرف» قبل الحفظ.
           </div>
         </>
