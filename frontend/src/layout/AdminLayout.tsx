@@ -15,8 +15,23 @@ const MAIN_TABS = [
   { key: "raporlar", label: "التقارير", icon: "chart", to: "/reports" },
 ];
 
-// أيقونات التنبيهات (يمين) — مطابقة لروح المرجع
-const ALERTS = ["chat", "games", "api", "user", "warning", "card"];
+/**
+ * شريط «ما ينتظر قرارك» (يمين الهيدر).
+ *
+ * لكل أيقونة وظيفتان: تنقلك إلى قسمها بالضغط، وتتلوّن إن كان فيه ما ينتظرك.
+ * الباهتة تعني «لا شيء هنا» — ومكانها ثابت لا يقفز، فتحفظه بالذاكرة.
+ *
+ * `key` هو اسم العدّاد كما تُعيده `GET /api/alerts/`.
+ */
+const ALERTS: { key: string; icon: string; to: string; label: string; hot?: boolean }[] = [
+  { key: "announcement", icon: "bell", to: "/home", label: "إعلان من إدارة المنصّة", hot: true },
+  { key: "tickets", icon: "chat", to: "/settings/support", label: "رسائل لم تُقرأ" },
+  { key: "orders_pending", icon: "games", to: "/oyunpin/orders", label: "طلبات قيد الانتظار" },
+  { key: "orders_stuck", icon: "warning", to: "/oyunpin/orders", label: "طلبات عالقة", hot: true },
+  { key: "deposits_pending", icon: "card", to: "/ayarlar/payments", label: "إيداعات تنتظر قرارك" },
+  { key: "dealers_negative", icon: "user", to: "/dealers", label: "وكلاء برصيد سالب" },
+  { key: "providers", icon: "api", to: "/oyunpin/providers", label: "مزوّدون معطّلون أو رصيدهم منخفض" },
+];
 
 // القوائم الفرعية لكل قسم (تتغيّر حسب التبويب النشط) — مطابقة لتبويبات المرجع
 const SUBNAV_OYUNPIN = [
@@ -66,6 +81,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [ann, setAnn] = useState<{ message: string; ticker: string } | null>(null);
   const [themeCfg, setThemeCfg] = useState<ThemeConfig>({});
   const [customizerOpen, setCustomizerOpen] = useState(false);
+  const [counts, setCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     api.get("/announcement/").then((r) => setAnn(r.data)).catch(() => setAnn({ message: "", ticker: "" }));
@@ -76,6 +92,17 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       applyThemeConfig(cfg);
     }).catch(() => {});
   }, []);
+
+  /** عدّادات شريط التنبيه — نداء واحد كل دقيقة، ومرّة عند كل تنقّل. */
+  useEffect(() => {
+    let alive = true;
+    const pull = () => api.get("/alerts/")
+      .then((r) => alive && setCounts(r.data))
+      .catch(() => {});
+    pull();
+    const t = setInterval(pull, 60_000);
+    return () => { alive = false; clearInterval(t); };
+  }, [loc.pathname]);
 
   const flags = { ...THEME_DEFAULTS, ...themeCfg };
   const tickerItems = (ann?.ticker || "").split("\n").map((s) => s.trim()).filter(Boolean);
@@ -122,13 +149,24 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           })}
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ ...alertIco, background: "var(--danger)", position: "relative" }}>
-            <Icon name="bell" size={16} />
-            <span style={badgeDot}>1</span>
-          </span>
-          {ALERTS.map((a, i) => (
-            <span key={i} style={alertIco}><Icon name={a} size={16} /></span>
-          ))}
+          {ALERTS.map((a) => {
+            const n = counts[a.key] || 0;
+            const live = n > 0;
+            return (
+              <Link key={a.key} to={a.to} aria-label={a.label}
+                title={live ? `${a.label} — ${n}` : `${a.label}: لا شيء`}
+                style={{
+                  ...alertIco,
+                  // الملوّنة تنادي، والباهتة تنتظر — والمكان ثابت في الحالتين
+                  background: live ? (a.hot ? "var(--danger)" : "rgba(255,255,255,.22)") : "transparent",
+                  color: live ? "#fff" : "rgba(255,255,255,.38)",
+                  position: "relative",
+                }}>
+                <Icon name={a.icon} size={16} />
+                {live && <span style={badgeDot}>{n > 99 ? "99+" : n}</span>}
+              </Link>
+            );
+          })}
           <span style={{ color: "#fff", fontSize: 13, marginInlineStart: 8 }}>
             {user?.name}
           </span>
@@ -213,12 +251,14 @@ const alertIco: React.CSSProperties = {
   width: 30,
   height: 30,
   borderRadius: 4,
-  background: "var(--primary-soft)",
+  // الخلفية واللون يُحدَّدان لكل أيقونة حسب حالتها (ملوّنة/باهتة)
+  border: "1px solid rgba(255,255,255,.16)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  color: "#fff",
   fontSize: 15,
+  textDecoration: "none",
+  transition: "background .15s, color .15s",
 };
 const logoutBtn: React.CSSProperties = {
   display: "flex",
@@ -240,12 +280,14 @@ const badgeDot: React.CSSProperties = {
   color: "var(--danger)",
   fontSize: 10,
   fontWeight: 700,
-  width: 15,
+  minWidth: 15,
   height: 15,
-  borderRadius: "50%",
+  padding: "0 3px",
+  borderRadius: 8,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+  boxShadow: "0 1px 3px rgba(0,0,0,.3)",
 };
 const subnav: React.CSSProperties = {
   display: "flex",
