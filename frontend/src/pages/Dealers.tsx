@@ -6,12 +6,13 @@ import DealerSettingsModal from "../components/DealerSettingsModal";
 import StatementModal from "../components/StatementModal";
 import { downloadCsv } from "../csv";
 import Icon from "../components/Icon";
-import { symbolOf, useBaseSymbol } from "../currency";
+import { symbolOf, useBaseCurrency, useBaseSymbol } from "../currency";
 
 type Filter = "all" | "active" | "neg" | "off";
 
 export default function Dealers() {
   const cur = useBaseSymbol();
+  const base = useBaseCurrency();
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -59,11 +60,11 @@ export default function Dealers() {
   function exportExcel() {
     downloadCsv(
       "قائمة-الوكلاء",
-      ["رقم الوكيل", "الاسم", "الرصيد", "العملة", "الحد الائتماني",
-       "الحالة", "المجموعة", "عدد الدكاكين"],
+      ["رقم الوكيل", "الاسم", "الرصيد", "عملة الدفتر", "عملة الوكيل",
+       "الحد الائتماني", "الحالة", "المجموعة", "عدد الدكاكين"],
       shown.map((d) => [
-        d.login_id, d.name, d.balance, d.currency, d.credit_limit,
-        d.active ? "نشط" : "موقوف", d.group || "", d.children_count,
+        d.login_id, d.name, d.balance, d.currency, d.display_currency || base,
+        d.credit_limit, d.active ? "نشط" : "موقوف", d.group || "", d.children_count,
       ]),
     );
   }
@@ -131,6 +132,7 @@ export default function Dealers() {
                 <th>الرقم</th>
                 <th className="cell-start">اسم الوكيل</th>
                 <th>الرصيد</th>
+                <th title="العملة التي يرى بها الوكيل لوحته">العملة</th>
                 <th>الحد الائتماني</th>
                 <th>الحالة</th>
                 <th>المجموعة</th>
@@ -139,9 +141,9 @@ export default function Dealers() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} style={{ padding: 30, color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
+                <tr><td colSpan={9} style={{ padding: 30, color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
               ) : shown.length === 0 ? (
-                <tr><td colSpan={8} style={{ padding: 30, color: "var(--muted)" }}>لا يوجد وكلاء مطابقون</td></tr>
+                <tr><td colSpan={9} style={{ padding: 30, color: "var(--muted)" }}>لا يوجد وكلاء مطابقون</td></tr>
               ) : shown.map((d) => {
                 const bal = Number(d.balance);
                 return (
@@ -157,6 +159,10 @@ export default function Dealers() {
                     <td>
                       <span className={`num ${balCls(bal)}`} style={{ fontSize: 14.5 }}>{money(bal)}</span>
                       <span style={{ fontSize: 11, color: "var(--faint)", marginInlineStart: 3 }}>{symbolOf(d.currency)}</span>
+                    </td>
+                    <td style={{ fontWeight: 800, fontSize: 15 }}
+                      title={d.display_currency || base}>
+                      {symbolOf(d.display_currency || base)}
                     </td>
                     <td className="num" style={{ color: "var(--muted)" }}>{money(d.credit_limit)}</td>
                     <td>

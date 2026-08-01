@@ -125,6 +125,8 @@ export interface Dealer {
   balance: string;
   credit_limit: string;
   currency: string;
+  /** عملة عرض الوكيل — فارغة تعني عملة الموقع */
+  display_currency: string;
   status: string;
   country: string;
   group: string;

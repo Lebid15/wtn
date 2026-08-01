@@ -146,8 +146,8 @@ export default function DealerSettingsModal({
                   </Fld>
                 </div>
                 <div style={hint}>
-                  الحد الائتماني هو أقصى دَين تسمح به: <b>-500</b> تعني أن رصيده يهبط إلى
-                  −500 ثم يتوقّف شراؤه. عملة الوكيل عرضٌ فقط — الدفتر يبقى بـ{labelOf(f.base_currency)}.
+                  الحد الائتماني أقصى دَين تسمح به: <b>-500</b> يعني أن رصيده يهبط
+                  إلى −500 ثم يتوقّف شراؤه.
                 </div>
 
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>

@@ -234,6 +234,8 @@ def dealers_view(request):
             "balance": str(wallet.balance) if wallet else "0.00",
             "credit_limit": str(wallet.credit_limit) if wallet else "0.00",
             "currency": wallet.currency if wallet else "TRY",
+            # عملة عرض الوكيل — فارغة تعني عملة الموقع
+            "display_currency": u.display_currency or "",
             "status": u.status,
             "country": u.country,
             "group": mods.get("group", ""),
