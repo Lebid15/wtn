@@ -15,6 +15,11 @@ from .serializers import (
 )
 
 
+def _tokens_for(user: User) -> dict:
+    refresh = RefreshToken.for_user(user)
+    return {"access": str(refresh.access_token), "refresh": str(refresh)}
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_view(request):
