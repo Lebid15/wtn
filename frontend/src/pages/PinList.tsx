@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { api, type Product, type Provider } from "../api";
+import AutoRouteModal from "../components/AutoRouteModal";
 import Icon from "../components/Icon";
 
 /** ربط باقة بمزوّد: رقمها لديه + سعرها عنده (يُحفظ في extra.price). */
@@ -17,10 +18,17 @@ export default function PinList() {
   const [f, setF] = useState({ ...EMPTY_F });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [autoRoute, setAutoRoute] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   function loadLinks() {
     return api.get("/catalog/product-links/").then((r) => setLinks(r.data));
+  }
+  function reload() {
+    return Promise.all([
+      api.get("/catalog/products/").then((r) => setProducts(r.data)),
+      loadLinks(),
+    ]);
   }
   useEffect(() => {
     Promise.all([
@@ -120,12 +128,20 @@ export default function PinList() {
           <span style={{ fontWeight: 400, fontSize: 12, color: "var(--debt)" }}>
             ** اسحب صفّ المنتج وأفلته لترتيب ما يراه وكلاؤك
           </span>
-          <button className="btn g" style={{ marginInlineStart: "auto", height: 32 }}
-            onClick={refreshPrices} disabled={refreshing}
-            title="يسأل كل مزوّد عن كتالوجه ويحدّث أسعار الباقات المربوطة به">
-            <Icon name="refresh" size={14} style={{ marginInlineEnd: 5, verticalAlign: -2 }} />
-            {refreshing ? "جارٍ التحديث..." : "تحديث الأسعار"}
-          </button>
+          <div style={{ marginInlineStart: "auto", display: "flex", gap: 8 }}>
+            <button className="btn" style={{ height: 32 }}
+              onClick={() => setAutoRoute(true)}
+              title="يرتّب مزوّدي كل باقة حسب السعر: الأرخص API 1 ثم الأغلى بديلاً">
+              <Icon name="chart" size={14} style={{ marginInlineEnd: 5, verticalAlign: -2 }} />
+              توجيه تلقائي حسب السعر
+            </button>
+            <button className="btn g" style={{ height: 32 }}
+              onClick={refreshPrices} disabled={refreshing}
+              title="يسأل كل مزوّد عن كتالوجه ويحدّث أسعار الباقات المربوطة به">
+              <Icon name="refresh" size={14} style={{ marginInlineEnd: 5, verticalAlign: -2 }} />
+              {refreshing ? "جارٍ التحديث..." : "تحديث الأسعار"}
+            </button>
+          </div>
         </div>
 
         {/* ===== الفلترة ===== */}
@@ -233,6 +249,15 @@ export default function PinList() {
           </table>
         </div>
       </div>
+
+      {autoRoute && (
+        <AutoRouteModal onClose={() => setAutoRoute(false)}
+          onDone={(text) => {
+            setAutoRoute(false);
+            setMsg({ ok: true, text });
+            reload();
+          }} />
+      )}
 
       <div style={note}>
         توجيه بثلاثة مستويات: يُرسل الطلب إلى <b>API 1</b>، وعند فشله — أو عند

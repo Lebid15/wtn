@@ -73,6 +73,54 @@ def catalog_match(index: dict, link):
     return same_id[0], ""
 
 
+def rank_providers(product, links, providers_by_id) -> list:
+    """
+    ترتيب مزوّدي الباقة للتوجيه التلقائي: **الأرخص أولاً**.
+
+    ثلاث طبقات، والترتيب داخل كلٍّ منها بالسعر تصاعدياً:
+
+    1. **رابح** — سعره معروف ولا يتجاوز سعر بيعنا.
+    2. **مجهول السعر** — رابط بلا سعر مرجعي بعد. يأتي بعد الرابحين لأنه لا
+       يُرتَّب، ولا يُستبعَد لأنه ملاذ صالح والنظام يتعلّم سعره من أول طلب.
+    3. **خاسر** — سعره يتجاوز سعر بيعنا. يبقى ملاذاً أخيراً لا يُستبعَد:
+       حماية الخسارة تمنعه وقت الإرسال، وإن رفع المالك سعر بيعه غداً صار
+       صالحاً بلا إعادة توجيه.
+
+    يُعيد قائمة قواميس مرتّبة، كلٌّ منها يحمل المزوّد وسعره وسبب طبقته.
+    """
+    sell = product.recommended_price or Decimal("0")
+    ranked = []
+    for link in links:
+        provider = providers_by_id.get(link.provider_id)
+        if provider is None:
+            continue
+        raw = (link.extra or {}).get("price")
+        price = None
+        if raw not in (None, ""):
+            try:
+                price = Decimal(str(raw).replace(",", "."))
+            except Exception:
+                price = None
+
+        if price is None:
+            tier, sort_key = 1, Decimal("0")
+        elif sell > 0 and price > sell:
+            tier, sort_key = 2, price
+        else:
+            tier, sort_key = 0, price
+
+        ranked.append({
+            "provider": provider,
+            "price": price,
+            "tier": tier,
+            # المزوّد الأقدم يتقدّم عند تساوي السعر — ترتيب ثابت لا عشوائي
+            "_sort": (tier, sort_key, provider.sort_order, provider.id),
+        })
+
+    ranked.sort(key=lambda r: r["_sort"])
+    return ranked
+
+
 def apply_margin_rules(product) -> int:
     """
     يعيد حساب أسعار المجموعات المرتبطة بقاعدة لهذه الباقة.

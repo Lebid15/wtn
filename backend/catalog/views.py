@@ -14,7 +14,7 @@ from .models import Game, LibraryGame, PriceGroup, Product, ProductLink, Product
 from .serializers import (
     GameDetailSerializer, GameSerializer, PriceGroupSerializer, ProductSerializer,
 )
-from .services import catalog_index, catalog_match, price_from_margin
+from .services import catalog_index, catalog_match, price_from_margin, rank_providers
 
 
 class GameViewSet(viewsets.ModelViewSet):
@@ -331,6 +331,93 @@ def refresh_costs_view(request):
         "updated": updated,
         "skipped": skipped,
         "currency": currency.base_currency(tenant),
+    })
+
+
+CHAIN_FIELDS = ["provider", "provider_alt1", "provider_alt2"]
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def auto_route_view(request):
+    """
+    توجيه باقات لعبة تلقائياً حسب السعر: الأرخص رئيسياً ثم الأغلى بديلاً.
+
+    يعمل بخطوتين: `apply=false` يعيد الخطة للمعاينة، و`apply=true` ينفّذها.
+    المعاينة ليست ترفاً — التوجيه يقرّر أين تُنفَق أموال كل طلب لاحق.
+
+    {game: <id> | فارغ = كل الألعاب, apply: bool}
+    """
+    from providers.adapters.registry import adapter_for
+
+    tenant = request.user.tenant
+
+    # المزوّدون المرشَّحون: نشطون ولهم محوّل آلي (المنفّذ اليدوي لا يُوجَّه إليه)
+    providers_by_id = {
+        p.id: p for p in Provider.objects.filter(tenant=tenant, status=Provider.Status.ACTIVE)
+        if adapter_for(p) is not None
+    }
+    if not providers_by_id:
+        return Response({"detail": "لا مزوّدين آليين نشطين"}, status=400)
+
+    products = Product.objects.filter(tenant=tenant).select_related("game")
+    game_id = request.data.get("game")
+    if game_id:
+        products = products.filter(game_id=game_id)
+    products = list(products.order_by("game__sort_order", "sort_order", "id"))
+    if not products:
+        return Response({"detail": "لا باقات في هذا الاختيار"}, status=400)
+
+    links_by_product = {}
+    for link in ProductLink.objects.filter(tenant=tenant, product__in=products):
+        links_by_product.setdefault(link.product_id, []).append(link)
+
+    apply = bool(request.data.get("apply"))
+    plan, changes = [], []
+    for p in products:
+        before = [
+            providers_by_id[pid].name if pid in providers_by_id else "—"
+            for pid in (getattr(p, f + "_id") for f in CHAIN_FIELDS) if pid
+        ]
+        ranked = rank_providers(p, links_by_product.get(p.id, []), providers_by_id)
+        chain = ranked[:3]
+
+        row = {
+            "id": p.id, "name": p.name, "game": p.game.name,
+            "was_manual": p.execution_type == Product.Execution.MANUAL,
+            "before": before,
+            "after": [{
+                "id": r["provider"].id,
+                "name": r["provider"].name,
+                "price": str(r["price"]) if r["price"] is not None else None,
+                "loss": r["tier"] == 2,
+            } for r in chain],
+            "dropped": len(ranked) - len(chain),
+            "note": "" if ranked else "بلا ربط بأي مزوّد آلي — اربطها من «ربط الباقات»",
+        }
+        new_ids = [r["provider"].id for r in chain]
+        old_ids = [getattr(p, f + "_id") for f in CHAIN_FIELDS]
+        row["changed"] = ranked and (
+            new_ids + [None] * (3 - len(new_ids)) != old_ids
+            or p.execution_type == Product.Execution.MANUAL
+        )
+        plan.append(row)
+        if row["changed"]:
+            changes.append((p, new_ids))
+
+    if apply:
+        with transaction.atomic():
+            for p, new_ids in changes:
+                for field, pid in zip(CHAIN_FIELDS, new_ids + [None] * (3 - len(new_ids))):
+                    setattr(p, field + "_id", pid)
+                p.execution_type = Product.Execution.AUTO
+                p.save(update_fields=[*CHAIN_FIELDS, "execution_type"])
+
+    return Response({
+        "applied": apply,
+        "changed": len(changes),
+        "total": len(plan),
+        "plan": plan,
     })
 
 

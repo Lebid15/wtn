@@ -294,6 +294,91 @@ class CatalogToolsTest(APITestCase):
         self.p60.refresh_from_db()
         self.assertEqual(self.p60.cost_price, Decimal("1.00"))
 
+    # ── التوجيه التلقائي حسب السعر ─────────────────────────────────
+    def test_auto_route_orders_cheapest_first(self):
+        cheap = self._provider("رخيص")
+        mid = self._provider("وسط")
+        dear = self._provider("غالٍ")
+        self._link(self.p325, dear, "3", "3.90")
+        self._link(self.p325, cheap, "1", "1.50")
+        self._link(self.p325, mid, "2", "2.70")
+
+        r = self.client.post("/api/catalog/auto-route/", {"apply": True}, format="json")
+
+        self.assertEqual(r.status_code, 200, r.content)
+        self.p325.refresh_from_db()
+        self.assertEqual(self.p325.provider_id, cheap.id)
+        self.assertEqual(self.p325.provider_alt1_id, mid.id)
+        self.assertEqual(self.p325.provider_alt2_id, dear.id)
+        self.assertEqual(self.p325.execution_type, Product.Execution.AUTO)
+
+    def test_auto_route_puts_loss_provider_last(self):
+        """سعر بيع 4.50 — فمن سعره 6.00 خاسر ويُؤخَّر مهما كان ترتيبه بالسعر."""
+        loser = self._provider("خاسر")
+        winner = self._provider("رابح")
+        self._link(self.p325, loser, "1", "6.00")
+        self._link(self.p325, winner, "2", "4.00")
+
+        r = self.client.post("/api/catalog/auto-route/", {"apply": True}, format="json")
+
+        self.p325.refresh_from_db()
+        self.assertEqual(self.p325.provider_id, winner.id)
+        self.assertEqual(self.p325.provider_alt1_id, loser.id)
+        row = next(x for x in r.json()["plan"] if x["id"] == self.p325.id)
+        self.assertTrue(row["after"][1]["loss"])  # مَوسوم في المعاينة
+
+    def test_auto_route_places_unknown_price_after_winners(self):
+        known = self._provider("معروف")
+        unknown = self._provider("مجهول")
+        self._link(self.p325, known, "1", "4.00")
+        self._link(self.p325, unknown, "2", None)
+
+        self.client.post("/api/catalog/auto-route/", {"apply": True}, format="json")
+
+        self.p325.refresh_from_db()
+        self.assertEqual(self.p325.provider_id, known.id)
+        self.assertEqual(self.p325.provider_alt1_id, unknown.id)
+
+    def test_auto_route_preview_changes_nothing(self):
+        """المعاينة تُري الخطة ولا تكتب — وإلا فلا معنى لكونها معاينة."""
+        cheap = self._provider("رخيص")
+        self._link(self.p325, cheap, "1", "1.50")
+
+        r = self.client.post("/api/catalog/auto-route/", {"apply": False}, format="json")
+
+        self.assertFalse(r.json()["applied"])
+        self.p325.refresh_from_db()
+        self.assertIsNone(self.p325.provider_id)
+
+    def test_auto_route_reports_unlinked_package(self):
+        self._provider("مزوّد")
+        r = self.client.post("/api/catalog/auto-route/", {"apply": True}, format="json")
+        row = next(x for x in r.json()["plan"] if x["id"] == self.p325.id)
+        self.assertIn("بلا ربط", row["note"])
+        self.assertFalse(row["changed"])
+
+    def test_auto_route_keeps_only_three_and_counts_the_rest(self):
+        for i, price in enumerate(["1.00", "2.00", "3.00", "4.00"], start=1):
+            self._link(self.p325, self._provider(f"م{i}"), str(i), price)
+
+        r = self.client.post("/api/catalog/auto-route/", {"apply": True}, format="json")
+
+        row = next(x for x in r.json()["plan"] if x["id"] == self.p325.id)
+        self.assertEqual(len(row["after"]), 3)
+        self.assertEqual(row["dropped"], 1)
+
+    def test_auto_route_converts_manual_package(self):
+        self.p325.execution_type = Product.Execution.MANUAL
+        self.p325.save()
+        self._link(self.p325, self._provider("مزوّد"), "1", "1.50")
+
+        r = self.client.post("/api/catalog/auto-route/", {"apply": True}, format="json")
+
+        self.p325.refresh_from_db()
+        self.assertEqual(self.p325.execution_type, Product.Execution.AUTO)
+        row = next(x for x in r.json()["plan"] if x["id"] == self.p325.id)
+        self.assertTrue(row["was_manual"])
+
     # ── حذف المجموعة ───────────────────────────────────────────────
     def test_delete_group_moves_dealers_out(self):
         dealer = User.objects.create(
@@ -320,10 +405,16 @@ class CatalogToolsTest(APITestCase):
         self.assertEqual(r.json()[0]["dealer_count"], 1)
 
     # ── مساعدات ────────────────────────────────────────────────────
-    def _provider(self):
+    def _provider(self, name="زينت"):
         return Provider.objects.create(
-            tenant=self.tenant, name="زينت", type=Provider.Type.CARD_STORE,
+            tenant=self.tenant, name=name, type=Provider.Type.CARD_STORE,
             config={"code": "znet"},
+        )
+
+    def _link(self, product, provider, package_id, price):
+        return ProductLink.objects.create(
+            tenant=self.tenant, product=product, provider=provider,
+            package_id=package_id, extra={"price": price} if price else {},
         )
 
     def _bulk(self, mode, value, products=None):
