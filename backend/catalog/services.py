@@ -31,6 +31,48 @@ def price_from_margin(cost: Decimal, mode: str, value: Decimal):
     return price if price >= 0 else None
 
 
+def catalog_index(packages) -> dict:
+    """
+    فهرس كتالوج المزوّد بمفتاح **(المعرّف، الكوبون)** معاً.
+
+    المعرّف وحده لا يميّز الباقة: زينت يرقّم به **اللعبة** (`oyun_bilgi_id`)،
+    فباقات ببجي كلّها معرّفها `1` ويميّزها `kupur`. المطابقة به وحده تُلصق
+    سعر أوّل باقة في اللعبة بكل باقاتها.
+    """
+    index = {}
+    for p in packages:
+        pid = str(p.get("id") or "").strip()
+        if not pid:
+            continue
+        index[(pid, str(p.get("kupur") or "").strip())] = p
+    return index
+
+
+def catalog_match(index: dict, link):
+    """
+    باقة الرابط في الفهرس: (المطابقة، سبب الإخفاق).
+
+    الرابط اليدويّ قد يكون بلا كوبون. حينها نقبل المطابقة **إن لم يكن في
+    الكتالوج إلا باقة واحدة بهذا المعرّف**؛ فإن تعدّدت فالأمر ملتبس ونمتنع —
+    التخمين هنا يكتب سعر باقة على أخرى بلا أن ينتبه أحد.
+    """
+    pid = str(link.package_id).strip()
+    kupur = str((link.extra or {}).get("kupur") or "").strip()
+
+    found = index.get((pid, kupur))
+    if found is not None:
+        return found, ""
+
+    same_id = [v for (k_id, _), v in index.items() if k_id == pid]
+    if not same_id:
+        return None, "لا وجود لها في كتالوج المزوّد"
+    if kupur:
+        return None, f"الكوبون {kupur} غير موجود لدى المزوّد"
+    if len(same_id) > 1:
+        return None, f"أكثر من باقة بالرقم {pid} — حدّد الكوبون في «ربط الباقات»"
+    return same_id[0], ""
+
+
 def apply_margin_rules(product) -> int:
     """
     يعيد حساب أسعار المجموعات المرتبطة بقاعدة لهذه الباقة.

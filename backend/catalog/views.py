@@ -14,7 +14,7 @@ from .models import Game, LibraryGame, PriceGroup, Product, ProductLink, Product
 from .serializers import (
     GameDetailSerializer, GameSerializer, PriceGroupSerializer, ProductSerializer,
 )
-from .services import price_from_margin
+from .services import catalog_index, catalog_match, price_from_margin
 
 
 class GameViewSet(viewsets.ModelViewSet):
@@ -299,13 +299,13 @@ def refresh_costs_view(request):
     if not catalog.ok:
         return Response({"detail": catalog.note or "تعذّر جلب الكتالوج"}, status=400)
 
-    prices = {str(p.get("id")): p for p in catalog.packages if p.get("id")}
+    index = catalog_index(catalog.packages)
     updated, skipped = [], []
     with transaction.atomic():
         for link in links:
-            found = prices.get(str(link.package_id))
+            found, why = catalog_match(index, link)
             if not found:
-                skipped.append({"name": link.product.name, "note": "لا وجود لها في كتالوج المزوّد"})
+                skipped.append({"name": link.product.name, "note": why})
                 continue
             cost = currency.from_provider(tenant, str(found.get("price") or "").strip())
             if cost is None or cost <= 0:
@@ -548,10 +548,10 @@ def refresh_link_prices_view(request):
                            "note": catalog.note or "تعذّر جلب الكتالوج"})
             continue
 
-        prices = {str(p.get("id")): p for p in catalog.packages if p.get("id")}
+        index = catalog_index(catalog.packages)
         changed = 0
         for link in rows:
-            found = prices.get(str(link.package_id))
+            found, _ = catalog_match(index, link)
             if not found:
                 continue
             extra = dict(link.extra or {})
@@ -569,6 +569,6 @@ def refresh_link_prices_view(request):
             changed += 1
         total += changed
         report.append({"provider": provider.name, "ok": True, "updated": changed,
-                       "checked": len(rows), "catalog": len(prices)})
+                       "checked": len(rows), "catalog": len(index)})
 
     return Response({"updated": total, "providers": report})

@@ -190,6 +190,76 @@ class CatalogToolsTest(APITestCase):
         link = ProductLink.objects.get(product=self.p60, provider=provider)
         self.assertEqual(link.extra["price"], "1.10")
 
+    def test_refresh_costs_matches_by_kupur_not_id_alone(self):
+        """
+        زينت يرقّم بـpackage_id **اللعبة** لا الباقة: باقات ببجي كلّها رقمها 1
+        ويميّزها الكوبون. المطابقة بالرقم وحده كانت تلصق سعر أوّل باقة بكلّها.
+        """
+        provider = self._provider()
+        ProductLink.objects.create(
+            tenant=self.tenant, product=self.p60, provider=provider,
+            package_id="1", extra={"kupur": "60"},
+        )
+        ProductLink.objects.create(
+            tenant=self.tenant, product=self.p325, provider=provider,
+            package_id="1", extra={"kupur": "325"},
+        )
+        catalog = PackageList(ok=True, packages=[
+            {"id": "1", "kupur": "60", "name": "PUBG 60 UC", "price": "40"},
+            {"id": "1", "kupur": "325", "name": "PUBG 325 UC", "price": "160"},
+        ])
+
+        with patch("providers.adapters.znet.ZnetAdapter.list_packages", return_value=catalog):
+            self.client.post(
+                "/api/catalog/refresh-costs/",
+                {"provider": provider.id, "products": []}, format="json",
+            )
+
+        self.p60.refresh_from_db()
+        self.p325.refresh_from_db()
+        self.assertEqual(self.p60.cost_price, Decimal("1.00"))    # 40 ÷ 40
+        self.assertEqual(self.p325.cost_price, Decimal("4.00"))   # 160 ÷ 40 — لا 1.00
+
+    def test_refresh_costs_refuses_ambiguous_link(self):
+        """رابط بلا كوبون واللعبة فيها أكثر من باقة: نمتنع بدل أن نخمّن."""
+        provider = self._provider()
+        ProductLink.objects.create(
+            tenant=self.tenant, product=self.p60, provider=provider, package_id="1", extra={},
+        )
+        catalog = PackageList(ok=True, packages=[
+            {"id": "1", "kupur": "60", "name": "PUBG 60 UC", "price": "40"},
+            {"id": "1", "kupur": "325", "name": "PUBG 325 UC", "price": "160"},
+        ])
+
+        with patch("providers.adapters.znet.ZnetAdapter.list_packages", return_value=catalog):
+            r = self.client.post(
+                "/api/catalog/refresh-costs/",
+                {"provider": provider.id, "products": []}, format="json",
+            )
+
+        self.assertEqual(r.json()["updated"], [])
+        self.assertIn("حدّد الكوبون", r.json()["skipped"][0]["note"])
+        self.p60.refresh_from_db()
+        self.assertEqual(self.p60.cost_price, Decimal("1.00"))  # لم تُمَسّ
+
+    def test_refresh_costs_matches_single_package_without_kupur(self):
+        """مزوّد بلا كوبونات (ZDK): المعرّف وحده يكفي ما دام فريداً."""
+        provider = self._provider()
+        ProductLink.objects.create(
+            tenant=self.tenant, product=self.p60, provider=provider,
+            package_id="823", extra={},
+        )
+        catalog = PackageList(ok=True, packages=[{"id": "823", "name": "PUBG 60", "price": "44"}])
+
+        with patch("providers.adapters.znet.ZnetAdapter.list_packages", return_value=catalog):
+            self.client.post(
+                "/api/catalog/refresh-costs/",
+                {"provider": provider.id, "products": []}, format="json",
+            )
+
+        self.p60.refresh_from_db()
+        self.assertEqual(self.p60.cost_price, Decimal("1.10"))
+
     def test_refresh_costs_reports_missing_package(self):
         provider = self._provider()
         ProductLink.objects.create(

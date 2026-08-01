@@ -25,6 +25,16 @@ interface ProviderLink {
   extra: Record<string, string>;
 }
 
+/**
+ * رقم الربط كما يميّز الباقة فعلاً.
+ * زينت يرقّم بـ`package_id` **اللعبة**، والباقة داخلها يميّزها `kupur` —
+ * فالرقم وحده يتكرّر على كل باقات اللعبة ولا يدلّ على شيء.
+ */
+function linkCode(l: ProviderLink): string {
+  const kupur = l.extra?.kupur;
+  return kupur ? `${l.package_id}/${kupur}` : l.package_id;
+}
+
 // عمود الخلية قيد التحرير: رقم مجموعة، أو عمودا المنتج نفسه
 type Col = number | "cost" | "rec";
 
@@ -502,7 +512,7 @@ function RefreshCostsModal({ products, onClose, onDone }: {
                 if (!link) return <span style={{ color: "var(--muted)" }}>غير مربوطة</span>;
                 return (
                   <>
-                    <code style={{ direction: "ltr", color: "var(--muted)" }}>#{link.package_id}</code>
+                    <code style={{ direction: "ltr", color: "var(--muted)" }}>{linkCode(link)}</code>
                     <b style={{ direction: "ltr", color: link.extra?.price ? "var(--primary-dark)" : "var(--muted)" }}>
                       {link.extra?.price ?? "—"}
                     </b>
