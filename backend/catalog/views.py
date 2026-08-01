@@ -6,7 +6,6 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from core import currency
 from core.models import User
 from providers.models import Provider
 from django.db import transaction
@@ -84,7 +83,6 @@ def _dealer_row(u):
         "oyun_load_limit": str(u.oyun_load_limit),
         "foreign_ip_allowed": u.foreign_ip_allowed,
         "price_group": u.price_group_id,
-        "display_currency": u.display_currency or "",
     }
 
 
@@ -104,11 +102,6 @@ def dealer_prices_view(request):
             for g in PriceGroup.objects.filter(tenant=tenant).order_by("id")
         ],
         "dealers": [_dealer_row(u) for u in dealers],
-        "base_currency": currency.base_currency(tenant),
-        # العملات التي لها سعر صرف مضبوط — وحدها تصلح لعرض لوحة الوكيل
-        "available_currencies": sorted(
-            c for c, v in (tenant.exchange_rates or {}).items() if str(v).strip()
-        ),
     })
 
 
@@ -135,19 +128,9 @@ def dealer_price_update_view(request, dealer_id):
         u.price_group = (
             PriceGroup.objects.filter(pk=gid, tenant=request.user.tenant).first() if gid else None
         )
-    if "display_currency" in data:
-        cur = str(data["display_currency"] or "")
-        tenant = request.user.tenant
-        # عملة بلا سعر صرف مضبوط لا تصلح للعرض — الأرقام ستكون خاطئة
-        if cur and cur != currency.base_currency(tenant) and not currency.rate_of(tenant, cur):
-            return Response(
-                {"detail": f"لا سعر صرف مضبوط للعملة {cur} — اضبطه في «أسعار الصرف» أولاً"},
-                status=400,
-            )
-        u.display_currency = "" if cur == currency.base_currency(tenant) else cur
-    u.save(update_fields=[
-        "oyun_load_limit", "foreign_ip_allowed", "price_group", "display_currency",
-    ])
+    # عملة عرض الوكيل تُضبط من «الوكلاء ← قائمة الوكلاء ← إعدادات الوكيل»،
+    # فهي إعداد عامّ للوكيل لا إعداد تسعير.
+    u.save(update_fields=["oyun_load_limit", "foreign_ip_allowed", "price_group"])
     return Response(_dealer_row(u))
 
 
