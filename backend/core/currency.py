@@ -31,6 +31,24 @@ def rate_of(tenant, currency: str) -> Decimal:
     return r if r > 0 else Decimal("0")
 
 
+# عملة المزوّدين: كتالوجاتهم كلّها تُسعّر بالليرة التركية. كل رقم يصل منهم
+# يُحوَّل إلى عملة الدفتر **عند حدوده** — فلا يدخل القاعدة رقمٌ بعملة أخرى.
+PROVIDER_CURRENCY = "TRY"
+
+
+def from_provider(tenant, amount):
+    """من عملة المزوّدين إلى عملة دفتر المتجر. None = تعذّر (لا سعر صرف مضبوط)."""
+    if amount is None or amount == "":
+        return None
+    rate = rate_of(tenant, PROVIDER_CURRENCY)
+    if rate <= 0:
+        return None
+    try:
+        return (Decimal(str(amount).replace(",", ".")) / rate).quantize(CENT)
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
 def display_currency(user) -> str:
     """عملة عرض المستخدم — فارغة تعني عملة الموقع."""
     tenant = getattr(user, "tenant", None)

@@ -8,7 +8,7 @@ from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.utils import timezone
 
-from core import services as wallet_services
+from core import currency, services as wallet_services
 from core.models import User, WalletTransaction
 from catalog.models import AgentMargin, Product, ProductPrice
 from .models import Order
@@ -188,9 +188,14 @@ def _apply_real_cost(order: Order, result, provider) -> list:
     """
     if result.cost is None or result.cost < 0:
         return []
-    order.cost_price = result.cost
-    order.profit = order.sell_price - result.cost
-    _learn_link_price(order.product_id, getattr(provider, "id", None), result.cost)
+    # المزوّد يسعّر بالليرة والدفتر بعملة المتجر — التحويل هنا، عند حدود
+    # النظام. بدونه تدخل ليرةٌ إلى حقل دولاري فيظهر الطلب خاسراً بأربعين ضعفاً.
+    cost = currency.from_provider(order.tenant, result.cost)
+    if cost is None:
+        return []
+    order.cost_price = cost
+    order.profit = order.sell_price - cost
+    _learn_link_price(order.product_id, getattr(provider, "id", None), cost)
     return ["cost_price", "profit"]
 
 

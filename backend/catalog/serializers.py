@@ -5,9 +5,12 @@ from .models import Game, LibraryGame, LibraryProduct, PriceGroup, Product
 
 
 class PriceGroupSerializer(serializers.ModelSerializer):
+    # عدد وكلاء المجموعة — نافذة الحذف تعرضه قبل أن ينتقلوا إلى «بلا مجموعة»
+    dealer_count = serializers.IntegerField(source="dealers.count", read_only=True)
+
     class Meta:
         model = PriceGroup
-        fields = ["id", "name", "dollar_rate", "created_at"]
+        fields = ["id", "name", "dollar_rate", "dealer_count", "created_at"]
         read_only_fields = ["tenant", "created_at"]
 
 

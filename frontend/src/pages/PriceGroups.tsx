@@ -1,6 +1,7 @@
-import { Fragment, useEffect, useState } from "react";
-import { api } from "../api";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { api, type Provider } from "../api";
 import Icon from "../components/Icon";
+import ProductPicker, { type PickerProduct } from "../components/ProductPicker";
 
 interface Cell { price: string; custom: boolean }
 interface MatrixProduct {
@@ -8,7 +9,7 @@ interface MatrixProduct {
   prices: Record<string, Cell>;
 }
 interface MatrixGame { game_id: number; game_name: string; products: MatrixProduct[] }
-interface Group { id: number; name: string }
+interface Group { id: number; name: string; dealer_count?: number }
 
 // عمود الخلية قيد التحرير: رقم مجموعة، أو عمودا المنتج نفسه
 type Col = number | "cost" | "rec";
@@ -19,6 +20,8 @@ export default function PriceGroups() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<{ p: number; g: Col } | null>(null);
   const [draft, setDraft] = useState("");
+  const [dialog, setDialog] = useState<"bulk" | "costs" | "delete" | null>(null);
+  const [toast, setToast] = useState("");
 
   function load() {
     setLoading(true);
@@ -27,6 +30,26 @@ export default function PriceGroups() {
       .finally(() => setLoading(false));
   }
   useEffect(() => load(), []);
+
+  /** الباقات مسطّحةً مع اسم لعبتها — تتشاركها نوافذ التسعير والتكاليف. */
+  const allProducts = useMemo<PickerProduct[]>(
+    () => games.flatMap((g) => g.products.map((p) => ({
+      id: p.id, name: p.name, game_name: g.game_name,
+    }))),
+    [games],
+  );
+  const costOf = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const g of games) for (const p of g.products) m.set(p.id, p.cost_price);
+    return m;
+  }, [games]);
+
+  function done(message: string) {
+    setDialog(null);
+    setToast(message);
+    setTimeout(() => setToast(""), 6000);
+    load();
+  }
 
   async function createGroup() {
     const name = prompt("اسم مجموعة الأسعار الجديدة:");
@@ -106,12 +129,12 @@ export default function PriceGroups() {
       </h2>
 
       {/* شريط الأدوات */}
+      {/* «تعديل سعر الصرف» أُزيل — مرجع الصرف الوحيد صار «الإعدادات ← أسعار الصرف» */}
       <div style={toolbar}>
         <button className="btn g" onClick={createGroup}><Icon name="plus" size={15} style={ib} />إنشاء مجموعة أسعار</button>
-        <button className="btn"><Icon name="dollar" size={15} style={ib} />تعديل سعر الصرف</button>
-        <button className="btn"><Icon name="chart" size={15} style={ib} />تسعير جماعي</button>
-        <button className="btn"><Icon name="refresh" size={15} style={ib} />تحديث التكاليف</button>
-        <button className="btn r"><Icon name="trash" size={15} style={ib} />حذف مجموعة</button>
+        <button className="btn" onClick={() => setDialog("bulk")}><Icon name="chart" size={15} style={ib} />تسعير جماعي</button>
+        <button className="btn" onClick={() => setDialog("costs")}><Icon name="refresh" size={15} style={ib} />تحديث التكاليف</button>
+        <button className="btn r" onClick={() => setDialog("delete")}><Icon name="trash" size={15} style={ib} />حذف مجموعة</button>
       </div>
       <div style={note}>
         اضغط على أي خلية سعر لتعديلها. الخلية <b style={{ color: "var(--primary-dark)" }}>الملوّنة</b> = سعر
@@ -173,7 +196,333 @@ export default function PriceGroups() {
           </tbody>
         </table>
       </div>
+
+      {dialog === "bulk" && (
+        <BulkPriceModal groups={groups} products={allProducts} costOf={costOf}
+          onClose={() => setDialog(null)} onDone={done} />
+      )}
+      {dialog === "costs" && (
+        <RefreshCostsModal products={allProducts} onClose={() => setDialog(null)} onDone={done} />
+      )}
+      {dialog === "delete" && (
+        <DeleteGroupModal onClose={() => setDialog(null)} onDone={done} />
+      )}
+
+      {toast && <div style={toastBox}>{toast}</div>}
     </div>
+  );
+}
+
+/* ─────────────────────────── النوافذ ─────────────────────────── */
+
+/** هيكل نافذة مشترك: غطاء + رأس + جسم + ذيل. */
+function Modal({ title, onClose, children, footer }: {
+  title: string; onClose: () => void;
+  children: React.ReactNode; footer: React.ReactNode;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div style={overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div style={box}>
+        <div style={head}>
+          {title}
+          <button type="button" style={xBtn} onClick={onClose}>✕</button>
+        </div>
+        <div style={{ padding: 16 }}>{children}</div>
+        <div style={foot}>{footer}</div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, hint, children }: {
+  label: string; hint?: string; children: React.ReactNode;
+}) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={fieldLabel}>{label}</label>
+      {children}
+      {hint && <div style={fieldHint}>{hint}</div>}
+    </div>
+  );
+}
+
+/**
+ * تسعير جماعي — سعر مجموعة أسعار بعينها = تكلفة كل باقة + هامش.
+ * الأساس التكلفة لا السعر الحالي، فتكرار التطبيق لا يضاعف الزيادة.
+ */
+function BulkPriceModal({ groups, products, costOf, onClose, onDone }: {
+  groups: Group[];
+  products: PickerProduct[];
+  costOf: Map<number, string>;
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const [group, setGroup] = useState<number | "">(groups[0]?.id ?? "");
+  const [picked, setPicked] = useState<number[]>([]);
+  const [mode, setMode] = useState<"percent" | "fixed">("percent");
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  // معاينة على باقة حقيقية — الرقم المجرّد لا يُطمئن، والمثال يُطمئن
+  const sample = useMemo(() => {
+    const id = picked[0] ?? products[0]?.id;
+    const cost = Number(costOf.get(id!) ?? 0);
+    const v = Number(value);
+    if (!id || !cost || !value || Number.isNaN(v)) return null;
+    const after = mode === "percent" ? cost * (1 + v / 100) : cost + v;
+    return { name: products.find((p) => p.id === id)?.name ?? "", cost, after };
+  }, [picked, products, costOf, mode, value]);
+
+  async function apply() {
+    setErr("");
+    setBusy(true);
+    try {
+      const r = await api.post("/catalog/bulk-price/", {
+        price_group: group, products: picked, mode, value,
+      });
+      const skipped = (r.data.skipped_zero_cost || []) as string[];
+      onDone(
+        `✅ سُعّرت ${r.data.updated} باقة في مجموعة ${r.data.group}` +
+        (skipped.length ? ` — وتُركت ${skipped.length} باقة تكلفتها صفر: ${skipped.slice(0, 3).join("، ")}${skipped.length > 3 ? "…" : ""}` : ""),
+      );
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || "تعذّر التسعير");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title="تسعير جماعي" onClose={onClose} footer={
+      <>
+        {err && <span style={errText}>{err}</span>}
+        <button className="btn" style={{ marginInlineStart: "auto" }} onClick={onClose}>إلغاء</button>
+        <button className="btn g" disabled={busy || !group || value === ""} onClick={apply}>
+          {busy ? "جارٍ التسعير..." : "تطبيق"}
+        </button>
+      </>
+    }>
+      {groups.length === 0 ? (
+        <div style={{ color: "var(--muted)" }}>أنشئ مجموعة أسعار أولاً.</div>
+      ) : (
+        <>
+          <Field label="مجموعة الأسعار" hint="السعر يُكتب في عمود هذه المجموعة وحدها ويصير مخصّصاً.">
+            <select value={group} onChange={(e) => setGroup(Number(e.target.value))} style={input}>
+              {groups.map((g) => <option key={g.id} value={g.id}>مجموعة {g.name}</option>)}
+            </select>
+          </Field>
+
+          <Field label="الباقات" hint="اتركه فارغاً ليشمل كل الباقات.">
+            <ProductPicker products={products} value={picked} onChange={setPicked} />
+          </Field>
+
+          <Field label="نوع الهامش">
+            <select value={mode} onChange={(e) => setMode(e.target.value as any)} style={input}>
+              <option value="percent">نسبة مئوية % من التكلفة</option>
+              <option value="fixed">مبلغ ثابت يُضاف إلى التكلفة</option>
+            </select>
+          </Field>
+
+          <Field label={mode === "percent" ? "النسبة (%)" : "المبلغ"}
+            hint="سعر البيع = التكلفة + الهامش. الأساس هو التكلفة دائماً، فإعادة التطبيق لا تضاعف الزيادة.">
+            <input type="number" step="0.01" value={value} autoFocus
+              onChange={(e) => setValue(e.target.value)} style={input}
+              placeholder={mode === "percent" ? "مثال: 25" : "مثال: 0.20"} />
+          </Field>
+
+          {sample && (
+            <div style={preview}>
+              مثال — <b>{sample.name}</b>: تكلفتها {sample.cost.toFixed(2)} ⇐ سعرها{" "}
+              <b style={{ color: "var(--primary-dark)" }}>{sample.after.toFixed(2)}</b>
+            </div>
+          )}
+        </>
+      )}
+    </Modal>
+  );
+}
+
+/** تحديث التكاليف — تكلفتنا تصير سعر المزوّد المختار. */
+function RefreshCostsModal({ products, onClose, onDone }: {
+  products: PickerProduct[];
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [provider, setProvider] = useState<number | "">("");
+  const [picked, setPicked] = useState<number[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [report, setReport] = useState<any>(null);
+
+  useEffect(() => {
+    api.get("/providers/", { params: { status: "active" } }).then((r) => {
+      // المنفّذ اليدوي بلا كتالوج — لا تكاليف تُجلب منه
+      const rows = (r.data as Provider[]).filter((p) => p.type !== "loader");
+      setProviders(rows);
+      setProvider(rows[0]?.id ?? "");
+    });
+  }, []);
+
+  async function run() {
+    setErr("");
+    setReport(null);
+    setBusy(true);
+    try {
+      const r = await api.post("/catalog/refresh-costs/", { provider, products: picked });
+      setReport(r.data);
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || "تعذّر تحديث التكاليف");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title="تحديث التكاليف من مزوّد" onClose={onClose} footer={
+      <>
+        {err && <span style={errText}>{err}</span>}
+        <button className="btn" style={{ marginInlineStart: "auto" }}
+          onClick={() => (report ? onDone(`✅ حُدّثت ${report.updated.length} تكلفة من «${report.provider}»`) : onClose())}>
+          {report ? "تم" : "إلغاء"}
+        </button>
+        {!report && (
+          <button className="btn g" disabled={busy || !provider} onClick={run}>
+            {busy ? "جارٍ الجلب..." : "تحديث"}
+          </button>
+        )}
+      </>
+    }>
+      {report ? (
+        <>
+          <div style={{ marginBottom: 10 }}>
+            من «<b>{report.provider}</b>» — حُدّثت <b>{report.updated.length}</b> تكلفة
+            بعملة الدفتر ({report.currency}).
+          </div>
+          <div style={{ maxHeight: 300, overflowY: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <tbody>
+                {report.updated.map((u: any, i: number) => (
+                  <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={{ padding: "5px 8px", textAlign: "right" }}>{u.name}</td>
+                    <td style={{ padding: "5px 8px", color: "var(--muted)", direction: "ltr" }}>
+                      {u.before} ⇐ <b style={{ color: "var(--primary-dark)" }}>{u.after}</b>
+                    </td>
+                  </tr>
+                ))}
+                {report.skipped.map((s: any, i: number) => (
+                  <tr key={`s${i}`} style={{ borderBottom: "1px solid var(--border)", opacity: 0.65 }}>
+                    <td style={{ padding: "5px 8px", textAlign: "right" }}>{s.name}</td>
+                    <td style={{ padding: "5px 8px", fontSize: 12 }}>تُخُطّيت — {s.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : providers.length === 0 ? (
+        <div style={{ color: "var(--muted)" }}>لا مزوّدين آليين — أضِف مزوّداً من «مزوّدو API».</div>
+      ) : (
+        <>
+          <Field label="المزوّد" hint="تصير تكلفة الباقة عندنا هي سعرها لديه.">
+            <select value={provider} onChange={(e) => setProvider(Number(e.target.value))} style={input}>
+              {providers.map((p) => (
+                <option key={p.id} value={p.id}>{p.name} — {p.type_label}</option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="الباقات" hint="اتركه فارغاً ليشمل كل الباقات المربوطة بهذا المزوّد.">
+            <ProductPicker products={products} value={picked} onChange={setPicked}
+              placeholder="كل الباقات المربوطة" />
+          </Field>
+
+          <div style={preview}>
+            أسعار المزوّدين بالليرة التركية، وتُحوَّل إلى عملة الدفتر بسعر
+            «الإعدادات ← أسعار الصرف» قبل الحفظ.
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+/** حذف مجموعة أسعار — وكلاؤها ينتقلون إلى «بلا مجموعة» فيشترون بالسعر الموصى. */
+function DeleteGroupModal({ onClose, onDone }: {
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const [rows, setRows] = useState<Group[]>([]);
+  const [id, setId] = useState<number | "">("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    api.get("/catalog/price-groups/").then((r) => {
+      setRows(r.data);
+      setId(r.data[0]?.id ?? "");
+    });
+  }, []);
+
+  const chosen = rows.find((g) => g.id === id);
+
+  async function remove() {
+    setErr("");
+    setBusy(true);
+    try {
+      await api.delete(`/catalog/price-groups/${id}/`);
+      onDone(`🗑 حُذفت مجموعة ${chosen?.name}`);
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || "تعذّر الحذف");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title="حذف مجموعة أسعار" onClose={onClose} footer={
+      <>
+        {err && <span style={errText}>{err}</span>}
+        <button className="btn" style={{ marginInlineStart: "auto" }} onClick={onClose}>إلغاء</button>
+        <button className="btn r" disabled={busy || !id} onClick={remove}>
+          {busy ? "جارٍ الحذف..." : "حذف"}
+        </button>
+      </>
+    }>
+      {rows.length === 0 ? (
+        <div style={{ color: "var(--muted)" }}>لا مجموعات أسعار.</div>
+      ) : (
+        <>
+          <Field label="المجموعة">
+            <select value={id} onChange={(e) => setId(Number(e.target.value))} style={input}>
+              {rows.map((g) => (
+                <option key={g.id} value={g.id}>
+                  مجموعة {g.name}{g.dealer_count ? ` — ${g.dealer_count} وكيل` : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <div style={{ ...preview, background: "#fdf3f3", borderColor: "#f0caca", color: "#8a3535" }}>
+            يُحذف عمود المجموعة وأسعارها المخصّصة كلّها.
+            {!!chosen?.dealer_count && (
+              <>
+                {" "}و<b>{chosen.dealer_count} وكيل</b> ينتقلون إلى «بلا مجموعة»،
+                فيصيرون على <b>السعر الموصى</b> فوراً.
+              </>
+            )}
+            {" "}لا رجعة في هذا.
+          </div>
+        </>
+      )}
+    </Modal>
   );
 }
 
@@ -201,4 +550,45 @@ const td: React.CSSProperties = {
 const groupHead: React.CSSProperties = {
   background: "#f5c518", color: "#4a3c00", fontWeight: 700,
   padding: "7px 14px", textAlign: "right", fontSize: 14,
+};
+const overlay: React.CSSProperties = {
+  position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 80,
+  display: "flex", alignItems: "center", justifyContent: "center",
+};
+const box: React.CSSProperties = {
+  background: "var(--surface)", borderRadius: 10, width: 470, maxWidth: "95vw",
+  maxHeight: "92vh", overflow: "auto", boxShadow: "0 10px 40px rgba(0,0,0,.3)",
+};
+const head: React.CSSProperties = {
+  background: "var(--primary)", color: "#fff", padding: "11px 16px",
+  fontWeight: 700, display: "flex", alignItems: "center",
+};
+const xBtn: React.CSSProperties = {
+  marginInlineStart: "auto", background: "none", border: 0, color: "#fff",
+  fontSize: 16, cursor: "pointer", lineHeight: 1,
+};
+const foot: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 8, padding: "11px 16px",
+  borderTop: "1px solid var(--border)", background: "var(--row-alt)",
+};
+const input: React.CSSProperties = {
+  width: "100%", height: 34, padding: "0 10px", borderRadius: 6,
+  border: "1px solid var(--border)", background: "var(--surface)",
+  font: "inherit", fontSize: 13.5,
+};
+const fieldLabel: React.CSSProperties = {
+  display: "block", fontSize: 12.5, fontWeight: 700, marginBottom: 5,
+};
+const fieldHint: React.CSSProperties = {
+  fontSize: 11.5, color: "var(--muted)", marginTop: 4, lineHeight: 1.6,
+};
+const preview: React.CSSProperties = {
+  background: "#f6f8f9", border: "1px solid #dbe3e5", borderRadius: 6,
+  padding: "9px 12px", fontSize: 12.5, lineHeight: 1.7, color: "var(--muted)",
+};
+const errText: React.CSSProperties = { color: "var(--danger)", fontSize: 12.5 };
+const toastBox: React.CSSProperties = {
+  position: "fixed", insetInlineStart: 18, bottom: 18, zIndex: 90, maxWidth: 460,
+  background: "#123", color: "#fff", padding: "11px 16px", borderRadius: 8,
+  fontSize: 13, lineHeight: 1.7, boxShadow: "0 8px 26px rgba(0,0,0,.3)",
 };

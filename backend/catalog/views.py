@@ -6,6 +6,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from core import currency
 from core.models import User
 from providers.models import Provider
 from django.db import transaction
@@ -168,6 +169,161 @@ def set_price_view(request):
     return Response({"product": product.id, "price_group": group.id, "price": str(pp.price)})
 
 
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def bulk_price_view(request):
+    """
+    تسعير جماعي: سعر مجموعة أسعار بعينها = **تكلفة** كل منتج + هامش.
+
+    الأساس هو التكلفة لا السعر الحالي، فتكرار العملية بالقيمة نفسها يعطي
+    النتيجة نفسها — لو كان الأساس السعر الحالي لضاعف كلُّ ضغطة الزيادةَ.
+
+    {price_group, products: [ids] | فارغ = الكل, mode: "percent"|"fixed", value}
+    """
+    tenant = request.user.tenant
+    group = PriceGroup.objects.filter(pk=request.data.get("price_group"), tenant=tenant).first()
+    if group is None:
+        return Response({"detail": "مجموعة الأسعار غير موجودة"}, status=404)
+
+    mode = request.data.get("mode")
+    if mode not in ("percent", "fixed"):
+        return Response({"detail": "نوع الهامش غير صحيح"}, status=400)
+    try:
+        value = Decimal(str(request.data.get("value")).replace(",", "."))
+    except (InvalidOperation, TypeError, ValueError):
+        return Response({"detail": "القيمة غير صحيحة"}, status=400)
+
+    products = Product.objects.filter(tenant=tenant)
+    ids = request.data.get("products") or []
+    if ids:
+        products = products.filter(id__in=ids)
+    products = list(products.order_by("game__sort_order", "sort_order"))
+    if not products:
+        return Response({"detail": "لم يُحدَّد أي منتج"}, status=400)
+
+    # منتج بتكلفة صفر لا يُسعَّر: أي هامش نسبي عليه يعطي صفراً — أي بيعاً
+    # مجّانياً بلا أن ينتبه أحد. يُترك ويُذكر اسمه ليضبط المالك تكلفته.
+    priced, zero_cost, negative = [], [], []
+    for p in products:
+        if p.cost_price <= 0:
+            zero_cost.append(p.name)
+            continue
+        price = (
+            p.cost_price * (Decimal("1") + value / Decimal("100"))
+            if mode == "percent" else p.cost_price + value
+        ).quantize(currency.CENT)
+        if price < 0:
+            negative.append(p.name)
+            continue
+        priced.append((p, price))
+
+    if negative:
+        return Response(
+            {"detail": f"القيمة تجعل سعر {len(negative)} باقة سالباً — لم يُغيَّر شيء"},
+            status=400,
+        )
+    if not priced:
+        return Response(
+            {"detail": "كل الباقات المختارة تكلفتها صفر — اضبط تكاليفها أولاً"}, status=400
+        )
+
+    with transaction.atomic():
+        for p, price in priced:
+            ProductPrice.objects.update_or_create(
+                tenant=tenant, product=p, price_group=group, defaults={"price": price},
+            )
+
+    return Response({
+        "updated": len(priced),
+        "group": group.name,
+        "skipped_zero_cost": zero_cost,
+    })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def refresh_costs_view(request):
+    """
+    تحديث تكلفة الباقات من كتالوج مزوّد بعينه — تصير تكلفتُنا سعرَه.
+
+    يُجلب الكتالوج **مرّة واحدة** ثم تُطابَق الروابط محلياً. وسعر المزوّد
+    بالليرة فيُحوَّل إلى عملة الدفتر قبل الحفظ (`currency.from_provider`).
+
+    {provider, products: [ids] | فارغ = الكل}
+    """
+    from providers.adapters.registry import adapter_for
+
+    tenant = request.user.tenant
+    provider = Provider.objects.filter(pk=request.data.get("provider"), tenant=tenant).first()
+    if provider is None:
+        return Response({"detail": "المزوّد غير موجود"}, status=404)
+
+    adapter = adapter_for(provider)
+    if adapter is None:
+        return Response({"detail": f"«{provider.name}» منفّذ يدوي — لا كتالوج له"}, status=400)
+
+    if currency.rate_of(tenant, currency.PROVIDER_CURRENCY) <= 0:
+        return Response(
+            {"detail": f"لا سعر صرف مضبوط لـ{currency.PROVIDER_CURRENCY} — "
+                       f"اضبطه في «الإعدادات ← أسعار الصرف» أولاً"},
+            status=400,
+        )
+
+    links = ProductLink.objects.filter(
+        tenant=tenant, provider=provider
+    ).select_related("product")
+    ids = request.data.get("products") or []
+    if ids:
+        links = links.filter(product_id__in=ids)
+    links = list(links)
+    if not links:
+        return Response(
+            {"detail": f"لا باقات مربوطة بـ«{provider.name}» ضمن ما اخترت — اربطها من «ربط الباقات»"},
+            status=400,
+        )
+
+    try:
+        catalog = adapter.list_packages(provider.config or {}, provider=provider)
+    except Exception as e:
+        return Response({"detail": f"تعذّر جلب كتالوج «{provider.name}»: {e}"}, status=400)
+    if not catalog.ok:
+        return Response({"detail": catalog.note or "تعذّر جلب الكتالوج"}, status=400)
+
+    prices = {str(p.get("id")): p for p in catalog.packages if p.get("id")}
+    updated, skipped = [], []
+    with transaction.atomic():
+        for link in links:
+            found = prices.get(str(link.package_id))
+            if not found:
+                skipped.append({"name": link.product.name, "note": "لا وجود لها في كتالوج المزوّد"})
+                continue
+            cost = currency.from_provider(tenant, str(found.get("price") or "").strip())
+            if cost is None or cost <= 0:
+                skipped.append({"name": link.product.name, "note": "المزوّد لا يعطي سعراً لها"})
+                continue
+
+            product = link.product
+            before = product.cost_price
+            if before != cost:
+                product.cost_price = cost
+                product.save(update_fields=["cost_price"])
+            # السعر المرجعي لحماية الخسارة — بعملة الدفتر كبقيّة أرقام القاعدة
+            extra = dict(link.extra or {})
+            extra["price"] = str(cost)
+            link.extra = extra
+            link.package_name = str(found.get("name") or "")[:200] or link.package_name
+            link.save(update_fields=["extra", "package_name", "updated_at"])
+
+            updated.append({"name": product.name, "before": str(before), "after": str(cost)})
+
+    return Response({
+        "provider": provider.name,
+        "updated": updated,
+        "skipped": skipped,
+        "currency": currency.base_currency(tenant),
+    })
+
+
 class PriceGroupViewSet(viewsets.ModelViewSet):
     """CRUD مجموعات الأسعار (Fiyat Grupları)."""
     serializer_class = PriceGroupSerializer
@@ -321,6 +477,13 @@ def product_links_view(request):
     extra = request.data.get("extra") or {}
     if not isinstance(extra, dict):
         extra = {}
+    # السعر يصل من كتالوج المزوّد بالليرة — يُحوَّل هنا فلا يدخل القاعدة
+    # رقمٌ بعملة غير عملة الدفتر.
+    if extra.get("price") not in (None, ""):
+        converted = currency.from_provider(tenant, extra["price"])
+        extra = {**extra, "price": str(converted)} if converted is not None else (
+            {k: v for k, v in extra.items() if k != "price"}
+        )
 
     link, _ = ProductLink.objects.update_or_create(
         tenant=tenant, product=product, provider=provider,
@@ -382,7 +545,10 @@ def refresh_link_prices_view(request):
             if not found:
                 continue
             extra = dict(link.extra or {})
-            price = str(found.get("price") or "").strip()
+            # سعر المزوّد بالليرة — يُحوَّل إلى عملة الدفتر قبل الحفظ، وإلا
+            # قارنته حماية الخسارة بسعر بيعٍ بعملة أخرى فرأت كل طلب خاسراً.
+            converted = currency.from_provider(tenant, str(found.get("price") or "").strip())
+            price = str(converted) if converted is not None else ""
             name = str(found.get("name") or "")[:200]
             if not price or (extra.get("price") == price and link.package_name == name):
                 continue
