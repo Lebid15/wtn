@@ -132,12 +132,31 @@ class AgentMargin(models.Model):
 
 
 class ProductPrice(models.Model):
-    """سعر منتج لمجموعة أسعار معيّنة (خلية في مصفوفة Fiyat Grupları)."""
+    """
+    سعر منتج لمجموعة أسعار معيّنة (خلية في مصفوفة Fiyat Grupları).
+
+    السعر إمّا **مرتبط بقاعدة** من التسعير الجماعي (تكلفة + نسبة أو مبلغ)
+    فيتبع التكلفة كلّما تغيّرت، وإمّا **يدويّ** فيبقى كما كُتب. الحقلان أدناه
+    هما ما يميّز الحالتين: فارغان = يدويّ.
+
+    ينفكّ الارتباط بأمرين لا ثالث لهما: تسعير جماعي جديد يحلّ محلّه، أو
+    تعديل يدويّ للخلية.
+    """
+
+    class Margin(models.TextChoices):
+        PERCENT = "percent", "نسبة مئوية من التكلفة"
+        FIXED = "fixed", "مبلغ ثابت فوق التكلفة"
 
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="product_prices")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="group_prices")
     price_group = models.ForeignKey(PriceGroup, on_delete=models.CASCADE, related_name="prices")
     price = models.DecimalField(max_digits=12, decimal_places=2)  # سعر بالليرة لهذه المجموعة
+
+    # قاعدة التسعير المرتبطة — فارغة تعني سعراً يدوياً لا يتبع التكلفة
+    margin_mode = models.CharField(
+        max_length=8, choices=Margin.choices, blank=True, default=""
+    )
+    margin_value = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True)
 
     class Meta:
         db_table = "product_prices"
@@ -145,6 +164,11 @@ class ProductPrice(models.Model):
 
     def __str__(self):
         return f"{self.product.name} @ {self.price_group.name} = {self.price}"
+
+    @property
+    def linked(self) -> bool:
+        """هل السعر مرتبط بالتكلفة بقاعدة؟"""
+        return bool(self.margin_mode) and self.margin_value is not None
 
 
 # ─────────── المكتبة العالمية (Global Library) — يحرّرها مالك المنصّة فقط ───────────

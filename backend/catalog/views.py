@@ -14,6 +14,7 @@ from .models import Game, LibraryGame, PriceGroup, Product, ProductLink, Product
 from .serializers import (
     GameDetailSerializer, GameSerializer, PriceGroupSerializer, ProductSerializer,
 )
+from .services import price_from_margin
 
 
 class GameViewSet(viewsets.ModelViewSet):
@@ -38,9 +39,9 @@ def price_matrix_view(request):
     tenant = request.user.tenant
     groups = list(PriceGroup.objects.filter(tenant=tenant).order_by("id"))
 
-    # جميع الأسعار الصريحة {(product_id, group_id): price}
+    # جميع الأسعار الصريحة {(product_id, group_id): صفّ السعر}
     explicit = {
-        (pp.product_id, pp.price_group_id): pp.price
+        (pp.product_id, pp.price_group_id): pp
         for pp in ProductPrice.objects.filter(tenant=tenant)
     }
 
@@ -55,10 +56,16 @@ def price_matrix_view(request):
             games.append(current)
         cells = {}
         for g in groups:
-            val = explicit.get((p.id, g.id))
+            row = explicit.get((p.id, g.id))
             cells[g.id] = {
-                "price": str(val) if val is not None else str(p.recommended_price),
-                "custom": val is not None,
+                "price": str(row.price) if row is not None else str(p.recommended_price),
+                "custom": row is not None,
+                # القاعدة المرتبطة — الجدول يعرضها ليعرف المالك أي خلية تتبع
+                # التكلفة وأيّها رقمٌ يدويّ جامد
+                "margin": (
+                    {"mode": row.margin_mode, "value": str(row.margin_value)}
+                    if row is not None and row.linked else None
+                ),
             }
         current["products"].append({
             "id": p.id,
@@ -163,8 +170,11 @@ def set_price_view(request):
     except (InvalidOperation, TypeError):
         return Response({"detail": "سعر غير صحيح"}, status=400)
 
+    # التعديل اليدوي يفكّ ارتباط الخلية بقاعدة التسعير الجماعي: المالك كتب
+    # رقماً بيده، فلا يجوز أن يمحوه أوّلُ تغيير في التكلفة.
     pp, _ = ProductPrice.objects.update_or_create(
-        tenant=tenant, product=product, price_group=group, defaults={"price": price},
+        tenant=tenant, product=product, price_group=group,
+        defaults={"price": price, "margin_mode": "", "margin_value": None},
     )
     return Response({"product": product.id, "price_group": group.id, "price": str(pp.price)})
 
@@ -208,11 +218,8 @@ def bulk_price_view(request):
         if p.cost_price <= 0:
             zero_cost.append(p.name)
             continue
-        price = (
-            p.cost_price * (Decimal("1") + value / Decimal("100"))
-            if mode == "percent" else p.cost_price + value
-        ).quantize(currency.CENT)
-        if price < 0:
+        price = price_from_margin(p.cost_price, mode, value)
+        if price is None:
             negative.append(p.name)
             continue
         priced.append((p, price))
@@ -227,10 +234,13 @@ def bulk_price_view(request):
             {"detail": "كل الباقات المختارة تكلفتها صفر — اضبط تكاليفها أولاً"}, status=400
         )
 
+    # تُحفظ القاعدة مع السعر لا السعر وحده: الخلية تبقى مرتبطة بالتكلفة
+    # فتتبعها كلّما تغيّرت، حتى يفكّها تسعيرٌ جماعي جديد أو تعديل يدويّ.
     with transaction.atomic():
         for p, price in priced:
             ProductPrice.objects.update_or_create(
-                tenant=tenant, product=p, price_group=group, defaults={"price": price},
+                tenant=tenant, product=p, price_group=group,
+                defaults={"price": price, "margin_mode": mode, "margin_value": value},
             )
 
     return Response({

@@ -3,7 +3,16 @@ import { api, type Provider } from "../api";
 import Icon from "../components/Icon";
 import ProductPicker, { type PickerProduct } from "../components/ProductPicker";
 
-interface Cell { price: string; custom: boolean }
+/** قاعدة تسعير مرتبطة بالتكلفة — فارغة تعني سعراً يدوياً جامداً. */
+interface Margin { mode: "percent" | "fixed"; value: string }
+interface Cell { price: string; custom: boolean; margin: Margin | null }
+
+/** وسم القاعدة كما يُقرأ: «3%» أو «+0.20». */
+function marginLabel(m: Margin): string {
+  const v = Number(m.value);
+  const n = Number.isInteger(v) ? String(v) : String(Number(v.toFixed(4)));
+  return m.mode === "percent" ? `${n}%` : `+${n}`;
+}
 interface MatrixProduct {
   id: number; name: string; cost_price: string; recommended_price: string;
   prices: Record<string, Cell>;
@@ -72,8 +81,9 @@ export default function PriceGroups() {
     setGames((gs) => gs.map((game) => ({
       ...game,
       products: game.products.map((p) =>
+        // التعديل اليدوي يفكّ ارتباط الخلية بقاعدة التسعير — كما يفعل الخادم
         p.id === productId
-          ? { ...p, prices: { ...p.prices, [groupId]: { price: value, custom: true } } }
+          ? { ...p, prices: { ...p.prices, [groupId]: { price: value, custom: true, margin: null } } }
           : p),
     })));
   }
@@ -85,18 +95,21 @@ export default function PriceGroups() {
     setEditing(null);
     if (value === "") return;
     await api.patch(`/catalog/products/${productId}/`, { [field]: value });
+
+    // تغيّر التكلفة يجرّ معه كل خلية مرتبطة بقاعدة — والخادم هو من يحسبها،
+    // فنعيد التحميل بدل أن نخمّن النتيجة هنا ونخالفه.
+    if (field === "cost_price") return load();
+
     setGames((gs) => gs.map((game) => ({
       ...game,
       products: game.products.map((p) => {
         if (p.id !== productId) return p;
         const next = { ...p, [field]: value };
         // السعر الموصى هو افتراضي الخلايا غير المخصّصة — فتتبعه فوراً
-        if (field === "recommended_price") {
-          next.prices = Object.fromEntries(
-            Object.entries(p.prices).map(([gid, c]) =>
-              [gid, c.custom ? c : { price: value, custom: false }]),
-          );
-        }
+        next.prices = Object.fromEntries(
+          Object.entries(p.prices).map(([gid, c]) =>
+            [gid, c.custom ? c : { ...c, price: value, custom: false }]),
+        );
         return next;
       }),
     })));
@@ -145,6 +158,12 @@ export default function PriceGroups() {
         اضغط على أي خلية سعر لتعديلها. الخلية <b style={{ color: "var(--primary-dark)" }}>الملوّنة</b> = سعر
         مخصّص، والرمادية = السعر الموصى (افتراضي). عمودا <b>التكلفة</b> و<b>الموصى</b> قابلان للتعديل هنا
         أيضاً، وهما نفس القيمتين في باقات المنتجات — التعديل من أيّ الجهتين يُحدّث الأخرى.
+        <div style={{ marginTop: 6 }}>
+          الخلية التي عليها وسم مثل <sup style={{ ...linkTag, position: "static" }}>3%</sup>{" "}
+          <b>مرتبطة بالتكلفة</b>: تُعاد حسابها تلقائياً كلّما تغيّرت التكلفة — بتحرير العمود
+          أو بـ«تحديث التكاليف». ويُفكّ الارتباط بأمرين: تسعير جماعي جديد يحلّ محلّه،
+          أو تعديل الخلية بيدك.
+        </div>
       </div>
 
       <div style={{ overflowX: "auto" }}>
@@ -187,10 +206,20 @@ export default function PriceGroups() {
                         <td key={g.id} style={{ ...td, cursor: "pointer",
                           color: cell?.custom ? "var(--primary-dark)" : "var(--muted)",
                           fontWeight: cell?.custom ? 700 : 400 }}
-                          onClick={() => startEdit(p.id, g.id, cell?.price ?? "")}>
+                          onClick={() => startEdit(p.id, g.id, cell?.price ?? "")}
+                          title={cell?.margin
+                            ? `مرتبطة بالتكلفة: ${marginLabel(cell.margin)} — تتبعها كلّما تغيّرت. التعديل اليدوي يفكّ الارتباط.`
+                            : undefined}>
                           {isEditing
                             ? cellInput(() => saveCell(p.id, g.id))
-                            : money(cell?.price ?? "0")}
+                            : (
+                              <>
+                                {money(cell?.price ?? "0")}
+                                {cell?.margin && (
+                                  <sup style={linkTag}>{marginLabel(cell.margin)}</sup>
+                                )}
+                              </>
+                            )}
                         </td>
                       );
                     })}
@@ -348,12 +377,17 @@ function BulkPriceModal({ groups, products, costOf, onClose, onDone }: {
               placeholder={mode === "percent" ? "مثال: 25" : "مثال: 0.20"} />
           </Field>
 
-          {sample && (
-            <div style={preview}>
-              مثال — <b>{sample.name}</b>: تكلفتها {sample.cost.toFixed(2)} ⇐ سعرها{" "}
-              <b style={{ color: "var(--primary-dark)" }}>{sample.after.toFixed(2)}</b>
-            </div>
-          )}
+          <div style={preview}>
+            {sample && (
+              <div style={{ marginBottom: 6 }}>
+                مثال — <b>{sample.name}</b>: تكلفتها {sample.cost.toFixed(2)} ⇐ سعرها{" "}
+                <b style={{ color: "var(--primary-dark)" }}>{sample.after.toFixed(2)}</b>
+              </div>
+            )}
+            🔗 الباقات المختارة تبقى <b>مرتبطة</b> بهذه القاعدة: كلّما تغيّرت تكلفتها
+            أُعيد حساب سعرها في هذه المجموعة تلقائياً. ويُفكّ الارتباط بتسعير جماعي
+            جديد عليها، أو بتعديل سعرها يدوياً في الجدول.
+          </div>
         </>
       )}
     </Modal>
@@ -584,6 +618,11 @@ const td: React.CSSProperties = {
 const groupHead: React.CSSProperties = {
   background: "#f5c518", color: "#4a3c00", fontWeight: 700,
   padding: "7px 14px", textAlign: "right", fontSize: 14,
+};
+const linkTag: React.CSSProperties = {
+  position: "relative", top: -1, marginInlineStart: 4, padding: "1px 4px",
+  borderRadius: 4, background: "var(--primary)", color: "#fff",
+  fontSize: 9.5, fontWeight: 700, direction: "ltr", verticalAlign: "super",
 };
 const overlay: React.CSSProperties = {
   position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 80,

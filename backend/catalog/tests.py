@@ -93,6 +93,81 @@ class CatalogToolsTest(APITestCase):
         self.assertEqual(r.status_code, 400)
         self.assertIsNone(self._price(self.p60))  # لم يُكتب شيء
 
+    # ── ارتباط السعر بالتكلفة ──────────────────────────────────────
+    def test_bulk_links_price_to_cost(self):
+        """التسعير الجماعي يحفظ قاعدة لا رقماً — والسعر يتبع التكلفة بعدها."""
+        self._bulk("percent", "25")
+        self.assertEqual(self._price(self.p60), Decimal("1.25"))
+
+        self.p60.cost_price = Decimal("2.00")
+        self.p60.save()
+
+        self.assertEqual(self._price(self.p60), Decimal("2.50"))  # تبع التكلفة وحده
+
+    def test_refresh_costs_pulls_linked_prices(self):
+        """تغيّر التكلفة من «تحديث التكاليف» يجرّ السعر المرتبط معه."""
+        self._bulk("percent", "25")
+        provider = self._provider()
+        ProductLink.objects.create(
+            tenant=self.tenant, product=self.p60, provider=provider, package_id="1",
+        )
+        catalog = PackageList(ok=True, packages=[{"id": "1", "name": "PUBG 60", "price": "80"}])
+
+        with patch("providers.adapters.znet.ZnetAdapter.list_packages", return_value=catalog):
+            self.client.post(
+                "/api/catalog/refresh-costs/",
+                {"provider": provider.id, "products": []}, format="json",
+            )
+
+        self.p60.refresh_from_db()
+        self.assertEqual(self.p60.cost_price, Decimal("2.00"))   # 80 ل.ت ÷ 40
+        self.assertEqual(self._price(self.p60), Decimal("2.50"))  # 2.00 + 25%
+
+    def test_manual_edit_breaks_the_link(self):
+        """الرقم المكتوب باليد لا يمحوه أوّلُ تغيير في التكلفة."""
+        self._bulk("percent", "25")
+        self.client.post(
+            "/api/catalog/set-price/",
+            {"product": self.p60.id, "price_group": self.group.id, "price": "9.99"},
+            format="json",
+        )
+
+        self.p60.cost_price = Decimal("2.00")
+        self.p60.save()
+
+        self.assertEqual(self._price(self.p60), Decimal("9.99"))  # ثبت كما كُتب
+        self.assertFalse(self._row(self.p60).linked)
+
+    def test_new_bulk_replaces_the_rule(self):
+        """تسعير جماعي جديد يحلّ محلّ القاعدة القديمة لا يتراكم عليها."""
+        self._bulk("percent", "25")
+        self._bulk("fixed", "0.50")
+        self.assertEqual(self._price(self.p60), Decimal("1.50"))
+
+        self.p60.cost_price = Decimal("2.00")
+        self.p60.save()
+
+        self.assertEqual(self._price(self.p60), Decimal("2.50"))  # 2.00 + 0.50 لا +25%
+        self.assertEqual(self._row(self.p60).margin_mode, "fixed")
+
+    def test_unlinked_cells_never_move(self):
+        """باقة لم تدخل التسعير الجماعي لا يمسّها تغيّر تكلفتها."""
+        self.client.post(
+            "/api/catalog/set-price/",
+            {"product": self.p325.id, "price_group": self.group.id, "price": "4.44"},
+            format="json",
+        )
+        self.p325.cost_price = Decimal("9.00")
+        self.p325.save()
+        self.assertEqual(self._price(self.p325), Decimal("4.44"))
+
+    def test_matrix_exposes_the_rule(self):
+        self._bulk("percent", "25")
+        r = self.client.get("/api/catalog/price-matrix/")
+        cell = r.json()["games"][0]["products"][0]["prices"][str(self.group.id)]
+        self.assertEqual(cell["margin"]["mode"], "percent")
+        self.assertEqual(Decimal(cell["margin"]["value"]), Decimal("25"))
+
     # ── تحديث التكاليف ─────────────────────────────────────────────
     def test_refresh_costs_converts_provider_lira(self):
         """سعر المزوّد 44 ل.ت ⇒ تكلفتنا 1.10$ لا 44$."""
@@ -181,6 +256,17 @@ class CatalogToolsTest(APITestCase):
             config={"code": "znet"},
         )
 
+    def _bulk(self, mode, value, products=None):
+        return self.client.post(
+            "/api/catalog/bulk-price/",
+            {"price_group": self.group.id, "products": products or [],
+             "mode": mode, "value": value},
+            format="json",
+        )
+
+    def _row(self, product):
+        return ProductPrice.objects.filter(product=product, price_group=self.group).first()
+
     def _price(self, product):
-        pp = ProductPrice.objects.filter(product=product, price_group=self.group).first()
+        pp = self._row(product)
         return pp.price if pp else None
