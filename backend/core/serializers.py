@@ -1,19 +1,7 @@
 """DRF serializers للقلب."""
 from rest_framework import serializers
 
-from .models import DealerGroup, Tenant, User, Wallet
-
-
-class DealerGroupSerializer(serializers.ModelSerializer):
-    dealer_count = serializers.SerializerMethodField()
-
-    class Meta:
-        model = DealerGroup
-        fields = ["id", "name", "dealer_count"]
-        read_only_fields = ["tenant"]
-
-    def get_dealer_count(self, obj):
-        return 0  # سيُربط بالوكلاء لاحقاً
+from .models import Tenant, User, Wallet
 
 
 class TenantSerializer(serializers.ModelSerializer):
@@ -28,8 +16,9 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tenant
+        # الثيم والخط واللون في لوحة «المظهر» — لا يُضبطان من هنا
         fields = [
-            "theme", "font", "theme_color", "logo_url", "default_locale",
+            "logo_url", "default_locale",
             "founded_year", "short_name", "full_name", "address",
             "email", "phone", "homepage_text", "footer_html",
         ]

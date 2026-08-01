@@ -21,7 +21,7 @@ const EMPTY = { dealer: "", method: "", q: "", min: "", max: "", date_from: "", 
 export default function PaymentTracking() {
   const base = useBaseCurrency();
   const [reqs, setReqs] = useState<Req[]>([]);
-  const [status, setStatus] = useState("pending");
+  const [status, setStatus] = useState("all");
   const [f, setF] = useState({ ...EMPTY });
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);

@@ -66,21 +66,6 @@ class Tenant(models.Model):
 
 
 # ─────────────────────────── المستخدمون والأدوار ───────────────────────────
-class DealerGroup(models.Model):
-    """مجموعة وكلاء (Bayi Grupları) — تصنيف إداري للوكلاء."""
-
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="dealer_groups")
-    name = models.CharField(max_length=120)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "dealer_groups"
-        ordering = ["id"]
-
-    def __str__(self):
-        return self.name
-
-
 class UserManager(BaseUserManager):
     def create_user(self, login_id, password=None, **extra):
         if not login_id:

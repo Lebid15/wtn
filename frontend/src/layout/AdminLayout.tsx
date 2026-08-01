@@ -10,7 +10,8 @@ import { applyThemeConfig, THEME_DEFAULTS, type ThemeConfig } from "../theme";
 const MAIN_TABS = [
   { key: "home", label: "الرئيسية", icon: "home", to: "/home" },
   { key: "oyunpin", label: "الألعاب", icon: "games", to: "/oyunpin" },
-  { key: "ayarlar", label: "الإعدادات", icon: "settings", to: "/dealers" },
+  { key: "bayiler", label: "الوكلاء", icon: "users", to: "/dealers" },
+  { key: "ayarlar", label: "الإعدادات", icon: "settings", to: "/settings/site" },
   { key: "raporlar", label: "التقارير", icon: "chart", to: "/reports" },
 ];
 
@@ -29,18 +30,21 @@ const SUBNAV_OYUNPIN = [
   { label: "بنك الأكواد", to: "/oyunpin/pool" },
   { label: "مزوّدو API", to: "/oyunpin/providers" },
 ];
-const SUBNAV_AYARLAR = [
+// قسم الوكلاء — كل ما يخصّ الوكيل وماله
+const SUBNAV_BAYILER = [
+  { label: "قائمة الوكلاء", to: "/dealers" },
   { label: "متابعة الدفع", to: "/ayarlar/payments" },
   { label: "طرق الدفع", to: "/ayarlar/payment-methods" },
   { label: "أسعار الصرف", to: "/ayarlar/exchange" },
   { label: "حساباتي", to: "/ayarlar/accounts" },
   { label: "حركات الحسابات", to: "/ayarlar/ledger" },
-  { label: "قائمة الوكلاء", to: "/dealers" },
-  { label: "مجموعات الوكلاء", to: "/ayarlar/groups" },
-  { label: "إعدادات الموقع", to: "/ayarlar/site" },
-  { label: "إعدادات SMS", to: "/ayarlar/sms" },
-  { label: "الرسائل", to: "/ayarlar/support" },
-  { label: "فواتير الاشتراك", to: "/ayarlar/invoices" },
+];
+// قسم الإعدادات — إعدادات المتجر نفسه
+const SUBNAV_AYARLAR = [
+  { label: "إعدادات الموقع", to: "/settings/site" },
+  { label: "إعدادات SMS", to: "/settings/sms" },
+  { label: "الرسائل", to: "/settings/support" },
+  { label: "فواتير الاشتراك", to: "/settings/invoices" },
 ];
 const SUBNAV_RAPORLAR = [
   { label: "تقرير الطلبات", to: "/reports" },
@@ -52,7 +56,8 @@ function subnavFor(path: string) {
   if (path.startsWith("/home")) return [];   // الرئيسية بلا قائمة فرعية
   if (path.startsWith("/oyunpin")) return SUBNAV_OYUNPIN;
   if (path.startsWith("/reports")) return SUBNAV_RAPORLAR;
-  return SUBNAV_AYARLAR; // /dealers + /ayarlar
+  if (path.startsWith("/settings")) return SUBNAV_AYARLAR;
+  return SUBNAV_BAYILER; // /dealers + /ayarlar
 }
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
@@ -98,7 +103,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               (t.key === "home" && loc.pathname.startsWith("/home")) ||
               (t.key === "oyunpin" && loc.pathname.startsWith("/oyunpin")) ||
               (t.key === "raporlar" && loc.pathname.startsWith("/reports")) ||
-              (t.key === "ayarlar" &&
+              (t.key === "ayarlar" && loc.pathname.startsWith("/settings")) ||
+              (t.key === "bayiler" &&
                 (loc.pathname === "/dealers" || loc.pathname.startsWith("/ayarlar")));
             return (
               <Link

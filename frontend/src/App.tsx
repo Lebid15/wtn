@@ -21,7 +21,6 @@ import Accounts from "./pages/Accounts";
 import PaymentMethods from "./pages/PaymentMethods";
 import PaymentTracking from "./pages/PaymentTracking";
 import Reports from "./pages/Reports";
-import DealerGroups from "./pages/DealerGroups";
 import Store from "./pages/Store";
 import Platform from "./pages/Platform";
 import Ledger from "./pages/Ledger";
@@ -76,18 +75,19 @@ export default function App() {
           <Route path="/oyunpin/providers" element={Admin(<Providers />)} />
           <Route path="/oyunpin/:id" element={Admin(<GameDetail />)} />
 
-          {/* Ayarlar */}
+          {/* الوكلاء */}
           <Route path="/dealers" element={Admin(<Dealers />)} />
           <Route path="/ayarlar/payments" element={Admin(<PaymentTracking />)} />
           <Route path="/ayarlar/payment-methods" element={Admin(<PaymentMethods />)} />
           <Route path="/ayarlar/exchange" element={Admin(<Exchange />)} />
           <Route path="/ayarlar/accounts" element={Admin(<Accounts />)} />
           <Route path="/ayarlar/ledger" element={Admin(<Ledger />)} />
-          <Route path="/ayarlar/groups" element={Admin(<DealerGroups />)} />
-          <Route path="/ayarlar/site" element={Admin(<SiteSettings />)} />
-          <Route path="/ayarlar/sms" element={Admin(<SmsSettings />)} />
-          <Route path="/ayarlar/support" element={Admin(<Support />)} />
-          <Route path="/ayarlar/invoices" element={Admin(<MyInvoices />)} />
+
+          {/* الإعدادات — إعدادات المتجر نفسه */}
+          <Route path="/settings/site" element={Admin(<SiteSettings />)} />
+          <Route path="/settings/sms" element={Admin(<SmsSettings />)} />
+          <Route path="/settings/support" element={Admin(<Support />)} />
+          <Route path="/settings/invoices" element={Admin(<MyInvoices />)} />
 
           {/* Raporlar */}
           <Route path="/reports" element={Admin(<Reports />)} />

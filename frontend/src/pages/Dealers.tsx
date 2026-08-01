@@ -3,6 +3,8 @@ import { api, type Dealer } from "../api";
 import WalletModal from "../components/WalletModal";
 import DealerCreateModal from "../components/DealerCreateModal";
 import DealerSettingsModal from "../components/DealerSettingsModal";
+import StatementModal from "../components/StatementModal";
+import { downloadCsv } from "../csv";
 import Icon from "../components/Icon";
 import { symbolOf, useBaseSymbol } from "../currency";
 
@@ -17,6 +19,7 @@ export default function Dealers() {
   const [modal, setModal] = useState<{ dealer: Dealer; action: "topup" | "deduct" } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsFor, setSettingsFor] = useState<number | null>(null);
+  const [statementFor, setStatementFor] = useState<Dealer | null>(null);
 
   function load(search = "") {
     setLoading(true);
@@ -51,6 +54,19 @@ export default function Dealers() {
   }), [dealers]);
 
   const balCls = (v: number) => (v < 0 ? "bal-neg" : v > 0 ? "bal-pos" : "bal-zero");
+
+  /** يصدّر ما هو ظاهر بعد البحث والفلترة — لا القائمة كاملةً. */
+  function exportExcel() {
+    downloadCsv(
+      "قائمة-الوكلاء",
+      ["رقم الوكيل", "الاسم", "الرصيد", "العملة", "الحد الائتماني",
+       "الحالة", "المجموعة", "عدد الدكاكين"],
+      shown.map((d) => [
+        d.login_id, d.name, d.balance, d.currency, d.credit_limit,
+        d.active ? "نشط" : "موقوف", d.group || "", d.children_count,
+      ]),
+    );
+  }
 
   return (
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "22px 20px 40px" }}>
@@ -95,7 +111,10 @@ export default function Dealers() {
         <span style={{ marginInlineStart: "auto", color: "var(--muted)", fontSize: 13 }}>
           العدد: <b style={{ color: "var(--text)" }}>{shown.length}</b>
         </span>
-        <button className="btn"><Icon name="excel" size={15} style={ib} />تصدير Excel</button>
+        <button className="btn" onClick={exportExcel} disabled={shown.length === 0}
+          title="تصدير الوكلاء الظاهرين بعد البحث والفلترة">
+          <Icon name="excel" size={15} style={ib} />تصدير Excel
+        </button>
         <button className="btn g" onClick={() => setCreateOpen(true)}>
           <Icon name="plus" size={15} style={ib} />إضافة وكيل
         </button>
@@ -152,7 +171,8 @@ export default function Dealers() {
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                         <IconBtn name="plus" color="var(--ok)" title="شحن رصيد" onClick={() => setModal({ dealer: d, action: "topup" })} />
                         <IconBtn name="minus" color="var(--danger)" title="خصم رصيد" onClick={() => setModal({ dealer: d, action: "deduct" })} />
-                        <IconBtn name="chart" color="var(--primary)" title="كشف حساب" />
+                        <IconBtn name="chart" color="var(--primary)" title="كشف حساب"
+                          onClick={() => setStatementFor(d)} />
                         <IconBtn name="settings" color="var(--primary-dark)" title="إعدادات الوكيل"
                           onClick={() => setSettingsFor(d.id)} />
                       </div>
@@ -181,6 +201,11 @@ export default function Dealers() {
         <DealerSettingsModal dealerId={settingsFor}
           onClose={() => setSettingsFor(null)}
           onSaved={() => load(q)} />
+      )}
+
+      {statementFor && (
+        <StatementModal dealerId={statementFor.id} dealerName={statementFor.name}
+          onClose={() => setStatementFor(null)} />
       )}
     </div>
   );

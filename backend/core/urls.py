@@ -1,11 +1,7 @@
 """روابط الـ API للقلب."""
 from django.urls import path
-from rest_framework.routers import DefaultRouter
 
 from . import tickets, views
-
-router = DefaultRouter()
-router.register("dealer-groups", views.DealerGroupViewSet, basename="dealer-group")
 
 urlpatterns = [
     path("auth/login/", views.login_view, name="login"),
@@ -29,4 +25,4 @@ urlpatterns = [
     path("announcement/", views.announcement_view, name="announcement"),
     # فواتير المستأجر الحالي
     path("invoices/", views.my_invoices_view, name="my-invoices"),
-] + router.urls
+]
