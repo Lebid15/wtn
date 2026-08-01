@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
+import Icon from "../components/Icon";
 
 interface Group { id: number; name: string }
 interface DealerRow {
@@ -122,7 +123,9 @@ export default function DealerPrices() {
                 </select>
               </td>
               <td style={td}>
-                <button style={detailBtn} title="لوحة أسعار خاصة بهذا الوكيل">✏</button>
+                <button style={detailBtn} title="لوحة أسعار خاصة بهذا الوكيل">
+                  <Icon name="details" size={14} />
+                </button>
               </td>
             </tr>
           ))}
@@ -153,4 +156,5 @@ const radioLbl: React.CSSProperties = { fontSize: 13, margin: "0 6px", cursor: "
 const detailBtn: React.CSSProperties = {
   border: 0, borderRadius: "50%", width: 28, height: 28,
   background: "var(--ok)", color: "#fff", fontSize: 14,
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
 };

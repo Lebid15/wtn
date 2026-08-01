@@ -371,7 +371,7 @@ export default function Orders() {
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                         {/* القبول والرفض والتوجيه كلّها من شريط الإجراءات بعد
                             التحديد — لا أزرار حاسمة داخل الصفّ تُضغط سهواً. */}
-                        <MiniBtn name="search" color="var(--primary)" title="تفاصيل المسار"
+                        <MiniBtn name="details" color="var(--primary)" title="تفاصيل المسار"
                           onClick={() => setTrace(o.id)} />
                       </div>
                     </td>

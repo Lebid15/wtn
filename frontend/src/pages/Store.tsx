@@ -337,7 +337,7 @@ function OrdersTab() {
                 <td style={{ ...c, color: "var(--muted)", fontSize: 12 }}>{o.created_at}</td>
                 <td style={c}>
                   <button onClick={() => setDetails(o)} title="تفاصيل الطلب" style={detailsBtn}>
-                    <Icon name="search" size={14} />
+                    <Icon name="details" size={14} />
                   </button>
                 </td>
               </tr>

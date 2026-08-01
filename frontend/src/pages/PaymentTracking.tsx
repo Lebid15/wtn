@@ -261,7 +261,7 @@ export default function PaymentTracking() {
                           color: "var(--primary)", width: 28, height: 28, borderRadius: 7,
                           display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
                         }}>
-                        <Icon name="search" size={14} />
+                        <Icon name="details" size={14} />
                       </button>
                     </td>
                   </tr>
