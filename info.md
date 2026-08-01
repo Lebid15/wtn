@@ -156,6 +156,6 @@ cd ../backend && FRONTEND_DIST=../frontend/dist DEBUG=0 \
 | [docs/DEPLOY.md](docs/DEPLOY.md) | دليل النشر الأصلي المفصّل |
 | [docs/START_HERE.md](docs/START_HERE.md) | توجيه أي جلسة جديدة — نظرة شاملة |
 | [docs/NEXT_STEPS.md](docs/NEXT_STEPS.md) | ما تبقّى من خطوات |
-| [plan.md](plan.md) | الخطة القادمة (قيد النقاش) |
+| [plan.md](plan.md) | **خطة العمل** — ما أُنجز جلسةً جلسة، وما تبقّى (§10) |
 | [docs/ROLES.md](docs/ROLES.md) | الأدوار الأربعة |
 | [docs/BUILD_LOG.md](docs/BUILD_LOG.md) | سجلّ البناء خطوة بخطوة |
