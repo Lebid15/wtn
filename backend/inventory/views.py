@@ -1,174 +1,323 @@
 """
-الجرد النهائي — المرحلة الأولى: قراءة ما نملكه فعلاً.
-
-**الفكرة المقتبَسة من نظام JRD:** الجرد لقطةٌ لكل مالك في لحظة، والفرق بين
-لقطتين هو ربحك. هناك كان لا بدّ من روبوتات وAPI لجلب الأرصدة من كل مصدر —
-وهنا **الأرصدة عندنا أصلاً في القاعدة**، فالمرحلة الأولى قراءةٌ لا جلب.
-
-**والفرق الجوهري عن ذلك النظام:** هناك كل بند كان مالاً لنا فيُجمع. وعندنا
-**محافظ الوكلاء ليست مالنا**: وكيلٌ رصيده +500 يعني أننا مدينون له بخدمةٍ
-قيمتها 500 — التزامٌ علينا لا أصلٌ لنا. جمعُه ضمن رأس المال يضخّمه ضخّماً
-كاذباً. لذلك يفصل هذا التقرير **الأصول عن الالتزامات** ولا يخلطهما.
-
-ولا نطبع رقم «صافي رأس المال» في هذه المرحلة عمداً: بعض الأرقام عملتها غير
-محسومة بعد (انظر `unresolved` في الردّ)، وجمعُ أرقامٍ بعملات مجهولة يعطي
-رقماً واثقاً وخاطئاً — وهو أسوأ من لا رقم.
+واجهات الجرد النهائي: اللقطة الحيّة · البنود اليدوية · جلب الأرصدة · الحفظ والسجلّ.
 """
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
-from django.db.models import Count, Q, Sum
+from django.db import transaction
+from django.db.models import Count, Sum
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from core import currency as cur
-from core.models import Invoice, User, Wallet
-from payments.models import ReceivingAccount
+from core.models import User
+from orders.models import Order
+from payments.models import CURRENCIES
+from providers.adapters.registry import adapter_for
 from providers.models import Provider
 
+from . import services
+from .models import InventoryConfig, ManualItem, Snapshot, SnapshotLine
+
 ZERO = Decimal("0")
+CENT = Decimal("0.01")
 
 
-def _row(name, amount, currency, tenant, *, kind, note="", resolved=True):
-    """صفّ واحد في الجرد. `base` = القيمة بعملة الدفتر، أو None إن تعذّر."""
-    amount = Decimal(amount or 0)
-    base = None
-    if resolved:
-        if currency == cur.base_currency(tenant):
-            base = amount.quantize(Decimal("0.01"))
-        else:
-            rate = cur.rate_of(tenant, currency)
-            base = (amount / rate).quantize(Decimal("0.01")) if rate > 0 else None
-    return {
-        "name": name, "amount": str(amount), "currency": currency,
-        "base": str(base) if base is not None else None,
-        "kind": kind, "note": note, "resolved": resolved and base is not None,
-    }
+def _money(v) -> str:
+    """كل مبلغ يخرج بخانتين عشريتين — «0» و«0.00» في الردّ نفسه تربك الواجهة."""
+    return str(Decimal(v or 0).quantize(CENT))
 
 
-def _group(key, label, kind, rows, hint=""):
-    total = sum((Decimal(r["base"]) for r in rows if r["base"] is not None), ZERO)
-    return {
-        "key": key, "label": label, "kind": kind, "hint": hint,
-        "rows": rows,
-        "total_base": str(total),
-        "unresolved": sum(1 for r in rows if not r["resolved"]),
-    }
+def _guard(request):
+    """الجرد لصاحب المتجر وحده — هو رأس ماله."""
+    if request.user.role != User.Role.TENANT_ADMIN:
+        return None, Response({"detail": "الجرد لصاحب المتجر وحده"}, status=403)
+    if request.user.tenant is None:
+        return None, Response({"detail": "لا يوجد متجر"}, status=400)
+    return request.user.tenant, None
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def live_view(request):
-    """لقطة حيّة لكل ما تعرفه القاعدة عن مال المتجر — بلا حفظ وبلا تعديل."""
-    if request.user.role != User.Role.TENANT_ADMIN:
-        return Response({"detail": "الجرد لصاحب المتجر وحده"}, status=403)
-    tenant = request.user.tenant
-    if tenant is None:
-        return Response({"detail": "لا يوجد متجر"}, status=400)
+    """اللقطة الحالية — ما سيُحفظ لو ضغطتَ «حفظ الجرد» الآن."""
+    tenant, err = _guard(request)
+    if err:
+        return err
+    data = services.build(tenant)
+    data["currencies"] = [{"code": c, "label": lbl} for c, lbl in CURRENCIES]
+    return Response(data)
 
-    base = cur.base_currency(tenant)
-    groups = []
-    notes = []
 
-    # ── 1. المزوّدون ──
-    # `real_balance` يأتي من ردّ المزوّد نفسه، وكتالوجات المزوّدين كلّها
-    # بالليرة التركية (core.currency.PROVIDER_CURRENCY) — فيُحوَّل.
-    # أمّا `balance` و`debt` فيكتبهما صاحب المتجر بيده، وعملتهما غير موثّقة
-    # في النموذج: نعرضهما ولا نجمعهما حتى يحسم المالك عملتهما.
-    prov_rows, prov_debt_rows = [], []
-    for p in Provider.objects.filter(tenant=tenant).order_by("sort_order", "id"):
-        if p.real_balance:
-            prov_rows.append(_row(
-                p.name, p.real_balance, cur.PROVIDER_CURRENCY, tenant,
-                kind="asset", note="من ردّ المزوّد",
-            ))
-        if p.balance:
-            prov_rows.append(_row(
-                f"{p.name} — رصيد يدوي", p.balance, "?", tenant,
-                kind="asset", note="أدخله صاحب المتجر — عملته غير محسومة",
-                resolved=False,
-            ))
-        if p.debt:
-            prov_debt_rows.append(_row(
-                f"{p.name} — دَين", p.debt, "?", tenant,
-                kind="liability", note="أدخله صاحب المتجر — عملته غير محسومة",
-                resolved=False,
-            ))
-    groups.append(_group(
-        "providers", "أرصدتنا لدى المزوّدين", "asset", prov_rows,
-        "مالٌ دفعناه مسبقاً ولم نستهلكه بعد — أصلٌ لنا.",
-    ))
-    if prov_debt_rows:
-        groups.append(_group(
-            "provider_debt", "ديون علينا للمزوّدين", "liability", prov_debt_rows,
-            "ما استهلكناه ولم نسدّده بعد.",
-        ))
+# ─────────────────────────── البنود اليدوية ───────────────────────────
 
-    # ── 2. حسابات الاستلام والنقد ──
-    # النموذج بلا حقل عملة، والمبالغ تدخله بعملة الدفتر — فتُقرأ كذلك.
-    recv_rows = [
-        _row(f"{a.title} ({a.get_method_display()})", a.balance, base, tenant,
-             kind="asset", note="")
-        for a in ReceivingAccount.objects.filter(
-            tenant=tenant, status=ReceivingAccount.Status.ACTIVE
-        ).order_by("sort_order", "id") if a.balance
-    ]
-    groups.append(_group(
-        "receiving", "حساباتنا والنقد", "asset", recv_rows,
-        "حسابات الاستلام المفعّلة كما هي مسجّلة في «حساباتي».",
-    ))
+def _item_row(m):
+    return {
+        "id": m.id, "name": m.name, "amount": _money(m.amount),
+        "currency": m.currency, "note": m.note, "sort_order": m.sort_order,
+    }
 
-    # ── 3. محافظ الوكلاء — الوجهان ──
-    agg = Wallet.objects.filter(tenant=tenant).aggregate(
-        credit=Sum("balance", filter=Q(balance__gt=0)),
-        credit_n=Count("id", filter=Q(balance__gt=0)),
-        debt=Sum("balance", filter=Q(balance__lt=0)),
-        debt_n=Count("id", filter=Q(balance__lt=0)),
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def item_create_view(request):
+    """إضافة بند يدوي — بالاسم وحده يكفي، والمبلغ يُعدَّل بعدها من الجدول."""
+    tenant, err = _guard(request)
+    if err:
+        return err
+    name = str(request.data.get("name") or "").strip()
+    if not name:
+        return Response({"detail": "اسم البند مطلوب"}, status=400)
+    currency = str(request.data.get("currency") or cur.base_currency(tenant))
+    if currency != cur.base_currency(tenant) and not cur.rate_of(tenant, currency):
+        return Response(
+            {"detail": f"لا سعر صرف مضبوط للعملة {currency} — اضبطه في «أسعار الصرف» أولاً"},
+            status=400,
+        )
+    last = ManualItem.objects.filter(tenant=tenant).order_by("-sort_order").first()
+    m = ManualItem.objects.create(
+        tenant=tenant, name=name[:120], currency=currency,
+        sort_order=(last.sort_order + 1) if last else 0,
     )
-    groups.append(_group(
-        "dealer_debt", "ديون الوكلاء لنا", "asset",
-        [_row(f"{agg['debt_n'] or 0} وكيلاً رصيدهم سالب", -(agg["debt"] or ZERO),
-              base, tenant, kind="asset")] if agg["debt"] else [],
-        "الرصيد السالب دَينٌ على الوكيل — مالٌ سنقبضه.",
-    ))
-    groups.append(_group(
-        "dealer_credit", "أرصدة الوكلاء عندنا", "liability",
-        [_row(f"{agg['credit_n'] or 0} وكيلاً رصيدهم موجب", agg["credit"] or ZERO,
-              base, tenant, kind="liability")] if agg["credit"] else [],
-        "مالٌ قبضناه ولم نقدّم مقابله بعد — التزامٌ علينا لا ربح.",
-    ))
+    return Response(_item_row(m), status=201)
 
-    # ── 4. فواتير اشتراك المنصّة غير المدفوعة ──
-    unpaid = Invoice.objects.filter(tenant=tenant, status=Invoice.Status.UNPAID)
-    inv_total = unpaid.aggregate(s=Sum("amount"))["s"] or ZERO
-    if inv_total:
-        groups.append(_group(
-            "subscription", "اشتراك المنصّة غير المدفوع", "liability",
-            [_row(f"{unpaid.count()} فاتورة", inv_total, base, tenant, kind="liability")],
-            "دفترٌ بينك وبين مالك المنصّة — خارج دفتر متجرك.",
-        ))
 
-    if any(g["unresolved"] for g in groups):
-        notes.append(
-            "بعض الأرقام عملتها غير محسومة (الرصيد والدَّين اليدويان على المزوّد)، "
-            "فلا تدخل المجاميع. تُحسم عملتها ثم تُحتسب."
-        )
-    if not cur.rate_of(tenant, cur.PROVIDER_CURRENCY):
-        notes.append(
-            f"لا سعر صرف مضبوط لـ{cur.PROVIDER_CURRENCY} — أرصدة المزوّدين لا تُحوَّل. "
-            "اضبطه من «الإعدادات ← أسعار الصرف»."
-        )
+@api_view(["POST", "DELETE"])
+@permission_classes([IsAuthenticated])
+def item_view(request, item_id):
+    """تعديل بند يدوي أو حذفه."""
+    tenant, err = _guard(request)
+    if err:
+        return err
+    try:
+        m = ManualItem.objects.get(pk=item_id, tenant=tenant)
+    except ManualItem.DoesNotExist:
+        return Response({"detail": "البند غير موجود"}, status=404)
 
-    assets = sum((Decimal(g["total_base"]) for g in groups if g["kind"] == "asset"), ZERO)
-    liabilities = sum((Decimal(g["total_base"]) for g in groups if g["kind"] == "liability"), ZERO)
+    if request.method == "DELETE":
+        m.delete()
+        return Response({"deleted": True})
+
+    data = request.data
+    if "name" in data:
+        name = str(data["name"] or "").strip()
+        if not name:
+            return Response({"detail": "اسم البند مطلوب"}, status=400)
+        m.name = name[:120]
+    if "amount" in data:
+        try:
+            m.amount = Decimal(str(data["amount"] or "0").replace(",", ""))
+        except (InvalidOperation, TypeError):
+            return Response({"detail": "مبلغ غير صحيح"}, status=400)
+    if "currency" in data:
+        c = str(data["currency"] or "")
+        if c != cur.base_currency(tenant) and not cur.rate_of(tenant, c):
+            return Response({"detail": f"لا سعر صرف مضبوط للعملة {c}"}, status=400)
+        m.currency = c
+    if "note" in data:
+        m.note = str(data["note"] or "")[:200]
+    m.save()
+    return Response(_item_row(m))
+
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def sources_view(request):
+    """تفعيل/تعطيل مصدر تلقائي — أي البنود تدخل رأس مالك قرارُك أنت."""
+    tenant, err = _guard(request)
+    if err:
+        return err
+    conf, _ = InventoryConfig.objects.get_or_create(tenant=tenant)
+    incoming = request.data.get("sources")
+    if not isinstance(incoming, dict):
+        return Response({"detail": "صيغة غير صحيحة"}, status=400)
+    known = {k for k, _ in services.SOURCES}
+    conf.sources = {k: bool(v) for k, v in incoming.items() if k in known}
+    conf.save(update_fields=["sources", "updated_at"])
+    return Response(services.build(tenant))
+
+
+# ─────────────────────────── جلب الأرصدة ───────────────────────────
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def refresh_view(request):
+    """
+    «جلب الأرصدة» — يسأل كل مزوّد عن رصيده الآن.
+
+    يُكمل على من فشل بدل أن يسقط كلّه: مزوّدٌ معطوب لا يجوز أن يمنعك من جرد
+    البقيّة. ويعيد سطراً لكل مزوّد بما جرى معه.
+    """
+    tenant, err = _guard(request)
+    if err:
+        return err
+    only = request.data.get("provider")
+    qs = Provider.objects.filter(tenant=tenant)
+    if only:
+        qs = qs.filter(pk=only)
+
+    results = []
+    for p in qs.order_by("sort_order", "id"):
+        adapter = adapter_for(p)
+        if adapter is None:
+            results.append({"id": p.id, "name": p.name, "ok": False,
+                            "note": "منفّذ يدوي — لا رصيد آلياً"})
+            continue
+        try:
+            res = adapter.get_balance(p.config or {}, provider=p)
+        except Exception as e:  # مزوّد يرمي استثناءً لا يُسقط الجرد كلّه
+            results.append({"id": p.id, "name": p.name, "ok": False,
+                            "note": f"{type(e).__name__}: {e}"[:180]})
+            continue
+        if not res.ok:
+            results.append({"id": p.id, "name": p.name, "ok": False,
+                            "note": (res.note or "فشل الجلب")[:180]})
+            continue
+        fields = []
+        if res.balance is not None:
+            p.real_balance = res.balance
+            fields.append("real_balance")
+        if res.debt is not None:
+            p.debt = res.debt
+            fields.append("debt")
+        if fields:
+            p.save(update_fields=fields)
+        results.append({"id": p.id, "name": p.name, "ok": True,
+                        "balance": str(p.real_balance), "note": (res.note or "")[:180]})
 
     return Response({
-        "base_currency": base,
-        "groups": groups,
-        "totals": {
-            "assets": str(assets),
-            "liabilities": str(liabilities),
-            "net": str(assets - liabilities),
-        },
-        "notes": notes,
+        "results": results,
+        "ok_count": sum(1 for r in results if r["ok"]),
+        "fail_count": sum(1 for r in results if not r["ok"]),
+        "live": services.build(tenant),
     })
+
+
+# ─────────────────────────── الحفظ والسجلّ ───────────────────────────
+
+def _orders_profit(tenant, since):
+    """
+    ربح الطلبات في الفترة — شاهدٌ مستقلّ على فرق رأس المال.
+
+    ليس بديلاً عن الجرد: الجرد يرى المال كلّه (نقداً وديوناً وأرصدة)، ودفتر
+    الطلبات يرى المبيعات وحدها. لكن تباعدهما الكبير يستحقّ سؤالاً.
+    """
+    qs = Order.objects.filter(tenant=tenant, status="success")
+    if since:
+        qs = qs.filter(created_at__gt=since)
+    agg = qs.aggregate(p=Sum("profit"), n=Count("id"))
+    return (agg["p"] or ZERO), (agg["n"] or 0)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def snapshot_create_view(request):
+    """حفظ جرد (يومي أو شهري) — لقطة كاملة لا تتغيّر بعدها."""
+    tenant, err = _guard(request)
+    if err:
+        return err
+    kind = request.data.get("kind", Snapshot.Kind.DAILY)
+    if kind not in Snapshot.Kind.values:
+        return Response({"detail": "نوع جرد غير معروف"}, status=400)
+
+    live = services.build(tenant)
+    counted = [g for g in live["groups"] if g["enabled"]] + [live["manual"]]
+
+    previous = Snapshot.objects.filter(tenant=tenant, kind=kind).order_by("-taken_at", "-id").first()
+    prev_total = previous.total_base if previous else ZERO
+    total = Decimal(live["totals"]["total"])
+
+    orders_profit, orders_count = _orders_profit(tenant, previous.taken_at if previous else None)
+
+    period_profit, daily_count = ZERO, 0
+    if kind == Snapshot.Kind.MONTHLY:
+        dailies = Snapshot.objects.filter(tenant=tenant, kind=Snapshot.Kind.DAILY)
+        if previous:
+            dailies = dailies.filter(taken_at__gt=previous.taken_at)
+        agg = dailies.aggregate(p=Sum("profit"), n=Count("id"))
+        period_profit, daily_count = (agg["p"] or ZERO), (agg["n"] or 0)
+
+    with transaction.atomic():
+        snap = Snapshot.objects.create(
+            tenant=tenant, kind=kind,
+            base_currency=live["base_currency"], rates=live["rates"],
+            total_base=total,
+            assets_base=Decimal(live["totals"]["assets"]),
+            liabilities_base=Decimal(live["totals"]["liabilities"]),
+            previous=previous, previous_total=prev_total, profit=total - prev_total,
+            period_from=previous.taken_at if previous else None,
+            period_profit=period_profit, daily_count=daily_count,
+            orders_profit=orders_profit, orders_count=orders_count,
+            note=str(request.data.get("note") or "")[:300],
+            created_by=request.user,
+        )
+        order = 0
+        rows = []
+        for g in counted:
+            for l in g["lines"]:
+                rows.append(SnapshotLine(
+                    snapshot=snap, group=g["key"], group_label=g["label"],
+                    name=l["name"][:160], amount=Decimal(l["amount"]),
+                    currency=l["currency"],
+                    base_amount=Decimal(l["base"]) if l["base"] is not None else ZERO,
+                    source=l["source"], note=l["note"][:200], sort_order=order,
+                ))
+                order += 1
+        SnapshotLine.objects.bulk_create(rows)
+
+    return Response(_snapshot_row(snap, with_lines=True), status=201)
+
+
+def _snapshot_row(s, with_lines=False):
+    row = {
+        "id": s.id, "kind": s.kind, "kind_label": s.get_kind_display(),
+        "taken_at": s.taken_at.strftime("%Y-%m-%d %H:%M"),
+        "date": s.taken_at.strftime("%Y-%m-%d"),
+        "base_currency": s.base_currency,
+        "total": _money(s.total_base),
+        "assets": _money(s.assets_base), "liabilities": _money(s.liabilities_base),
+        "previous_total": _money(s.previous_total), "profit": _money(s.profit),
+        "period_profit": _money(s.period_profit), "daily_count": s.daily_count,
+        "orders_profit": _money(s.orders_profit), "orders_count": s.orders_count,
+        "note": s.note,
+        "by": s.created_by.name if s.created_by else "",
+    }
+    if with_lines:
+        row["lines"] = [{
+            "group": l.group, "group_label": l.group_label, "name": l.name,
+            "amount": _money(l.amount), "currency": l.currency,
+            "base": _money(l.base_amount), "source": l.source, "note": l.note,
+        } for l in s.lines.all()]
+        row["rates"] = s.rates
+    return row
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def snapshots_view(request):
+    """سجلّ الجرود — يومية وشهرية."""
+    tenant, err = _guard(request)
+    if err:
+        return err
+    qs = Snapshot.objects.filter(tenant=tenant).select_related("created_by")
+    kind = request.query_params.get("kind")
+    if kind in Snapshot.Kind.values:
+        qs = qs.filter(kind=kind)
+    return Response({"count": qs.count(), "results": [_snapshot_row(s) for s in qs[:200]]})
+
+
+@api_view(["GET", "DELETE"])
+@permission_classes([IsAuthenticated])
+def snapshot_view(request, snapshot_id):
+    """تفاصيل جرد محفوظ أو حذفه."""
+    tenant, err = _guard(request)
+    if err:
+        return err
+    try:
+        s = Snapshot.objects.select_related("created_by").get(pk=snapshot_id, tenant=tenant)
+    except Snapshot.DoesNotExist:
+        return Response({"detail": "الجرد غير موجود"}, status=404)
+    if request.method == "DELETE":
+        s.delete()
+        return Response({"deleted": True})
+    return Response(_snapshot_row(s, with_lines=True))
