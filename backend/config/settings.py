@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     "superadmin",
     "agent",
     "whatsapp",
+    "inventory",
 ]
 
 MIDDLEWARE = [

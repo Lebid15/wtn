@@ -65,7 +65,7 @@ const SUBNAV_AYARLAR = [
 const SUBNAV_RAPORLAR = [
   { label: "تقرير الطلبات", to: "/reports" },
   { label: "تقرير الأرباح", to: "/reports/profits" },
-  { label: "كشف الوكلاء", to: "/reports/dealers" },
+  { label: "الجرد النهائي", to: "/reports/inventory" },
 ];
 
 function subnavFor(path: string) {

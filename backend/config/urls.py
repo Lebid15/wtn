@@ -51,6 +51,7 @@ urlpatterns = [
     path("api/platform/", include("superadmin.urls")),
     path("api/agent/", include("agent.urls")),
     path("api/whatsapp/", include("whatsapp.urls")),
+    path("api/inventory/", include("inventory.urls")),
     # catch-all: أي مسار غير API/admin/أصول → SPA
     re_path(r"^(?!api/|admin/|static/|assets/).*$", spa_index, name="spa"),
 ]

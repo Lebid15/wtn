@@ -21,6 +21,7 @@ import Accounts from "./pages/Accounts";
 import PaymentMethods from "./pages/PaymentMethods";
 import PaymentTracking from "./pages/PaymentTracking";
 import Reports from "./pages/Reports";
+import Inventory from "./pages/Inventory";
 import Store from "./pages/Store";
 import Platform from "./pages/Platform";
 import Ledger from "./pages/Ledger";
@@ -94,7 +95,9 @@ export default function App() {
           {/* Raporlar */}
           <Route path="/reports" element={Admin(<Reports />)} />
           <Route path="/reports/profits" element={Admin(<DealerReport title="تقرير الأرباح (حسب الوكيل)" highlight="profit" />)} />
-          <Route path="/reports/dealers" element={Admin(<DealerReport title="كشف الوكلاء" highlight="sell" />)} />
+          <Route path="/reports/inventory" element={Admin(<Inventory />)} />
+          {/* «كشف الوكلاء» كان نفس بيانات «تقرير الأرباح» بعنوان آخر — حلّ محلّه الجرد */}
+          <Route path="/reports/dealers" element={<Navigate to="/reports/inventory" replace />} />
 
           <Route path="*" element={<RoleHomeRedirect />} />
         </Routes>
