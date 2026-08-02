@@ -25,6 +25,7 @@ import Store from "./pages/Store";
 import Platform from "./pages/Platform";
 import Ledger from "./pages/Ledger";
 import SmsSettings from "./pages/SmsSettings";
+import WhatsAppSettings from "./pages/WhatsAppSettings";
 import DealerReport from "./pages/DealerReport";
 import BigAgent from "./pages/BigAgent";
 import Home from "./pages/Home";
@@ -86,6 +87,7 @@ export default function App() {
           {/* الإعدادات — إعدادات المتجر نفسه */}
           <Route path="/settings/site" element={Admin(<SiteSettings />)} />
           <Route path="/settings/sms" element={Admin(<SmsSettings />)} />
+          <Route path="/settings/whatsapp" element={Admin(<WhatsAppSettings />)} />
           <Route path="/settings/support" element={Admin(<Support />)} />
           <Route path="/settings/invoices" element={Admin(<MyInvoices />)} />
 

@@ -134,4 +134,8 @@ export interface Dealer {
   oyun: boolean;
   active: boolean;
   children_count: number;
+  /** رقم واتساب مطبَّعاً بلا + — فارغ يعني أن زرّ الإرسال معطّل لهذا الوكيل */
+  whatsapp: string;
+  /** موافقته على التحصيل الآلي — عليها يُفلتر الإرسال الجماعي */
+  auto_debt_collection: boolean;
 }

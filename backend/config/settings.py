@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "payments",
     "superadmin",
     "agent",
+    "whatsapp",
 ]
 
 MIDDLEWARE = [

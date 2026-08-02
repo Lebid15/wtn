@@ -119,8 +119,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     # لأن قرص الاستضافة مؤقّت ويُمسح مع كل نشر. اختيارية دائماً.
     id_image = models.TextField(blank=True, default="")     # صورة الهوية
     shop_image = models.TextField(blank=True, default="")   # صورة لوحة المحل
-    # موافقة الوكيل على تحصيل دَينه آلياً (يبني عليها روبوت التحصيل لاحقاً)
+    # موافقة الوكيل على تحصيل دَينه آلياً — عليها يُفلتر الإرسال الجماعي بواتساب
     auto_debt_collection = models.BooleanField(default=False)
+    # رقم واتساب مطبَّعاً: أرقام فقط برمز الدولة بلا + ولا صفر بادئ (905551234567).
+    # يُطبَّع عند الحفظ لا عند الإرسال — انظر whatsapp/phone.py
+    whatsapp = models.CharField(max_length=24, blank=True, default="")
     oyun_load_limit = models.DecimalField(  # Bayi Oyun Yükleme Limiti
         max_digits=12, decimal_places=2, default=Decimal("10000")
     )

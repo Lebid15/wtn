@@ -6,7 +6,8 @@ import { labelOf, symbolOf } from "../currency";
 interface Settings {
   id: number; login_id: string; name: string; role: string; role_label: string;
   display_currency: string; credit_limit: string; balance: string; status: string;
-  phone: string; country: string; province: string;
+  phone: string; whatsapp: string; whatsapp_pretty: string;
+  country: string; province: string;
   id_image: string; shop_image: string; auto_debt_collection: boolean;
   base_currency: string; available_currencies: string[];
 }
@@ -78,6 +79,7 @@ export default function DealerSettingsModal({
         credit_limit: f.credit_limit || "0",
         status: f.status,
         phone: f.phone,
+        whatsapp: f.whatsapp,
         country: f.country,
         province: f.province,
         id_image: f.id_image,
@@ -185,6 +187,15 @@ export default function DealerSettingsModal({
                     <input value={f.province} onChange={(e) => set("province", e.target.value)}
                       placeholder="إدلب · إسطنبول …" style={inp} />
                   </Fld>
+                  <Fld label="رقم واتساب (برمز الدولة)">
+                    <input value={f.whatsapp} onChange={(e) => set("whatsapp", e.target.value)}
+                      placeholder="+905551234567" style={{ ...inp, direction: "ltr", textAlign: "left" }} />
+                  </Fld>
+                </div>
+                <div style={hint}>
+                  إليه تصل رسائل تنبيه الرصيد. اكتبه برمز الدولة (<span style={{ direction: "ltr", display: "inline-block" }}>+90 · +963</span>)،
+                  أو ابدأه بصفر وسنُكمل رمز البلد المختار أعلاه. يُصحَّح شكله تلقائياً عند الحفظ،
+                  ويُرفض إن كان غير صالح.
                 </div>
 
                 <div style={grid2}>

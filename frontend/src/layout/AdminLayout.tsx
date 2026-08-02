@@ -58,6 +58,7 @@ const SUBNAV_BAYILER = [
 const SUBNAV_AYARLAR = [
   { label: "إعدادات الموقع", to: "/settings/site" },
   { label: "إعدادات SMS", to: "/settings/sms" },
+  { label: "واتساب", to: "/settings/whatsapp" },
   { label: "الرسائل", to: "/settings/support" },
   { label: "فواتير الاشتراك", to: "/settings/invoices" },
 ];

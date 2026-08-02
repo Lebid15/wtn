@@ -20,6 +20,11 @@ services:
         value: "0"
       - key: ALLOWED_HOSTS
         value: "*"
+      # السرّ المشترك مع بوت واتساب. يولّده Render مرّةً، وتنسخه من لوحته إلى
+      # ملف bot/.env على الجهاز الذي يشغّل البوت. بدونه تبقى الواجهة الداخلية
+      # مغلقة تماماً (503) — وهو السلوك المقصود.
+      - key: INTERNAL_API_KEY
+        generateValue: true
       - key: DB_HOST
         fromDatabase:
           name: wtn-db

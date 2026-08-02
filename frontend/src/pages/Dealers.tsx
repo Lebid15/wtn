@@ -4,6 +4,7 @@ import WalletModal from "../components/WalletModal";
 import DealerCreateModal from "../components/DealerCreateModal";
 import DealerSettingsModal from "../components/DealerSettingsModal";
 import StatementModal from "../components/StatementModal";
+import BulkWhatsAppModal from "../components/BulkWhatsAppModal";
 import { downloadCsv } from "../csv";
 import Icon from "../components/Icon";
 import { symbolOf, useBaseCurrency, useBaseSymbol } from "../currency";
@@ -21,6 +22,22 @@ export default function Dealers() {
   const [createOpen, setCreateOpen] = useState(false);
   const [settingsFor, setSettingsFor] = useState<number | null>(null);
   const [statementFor, setStatementFor] = useState<Dealer | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
+
+  /** إرسال تنبيه الرصيد لوكيل واحد — يقصده المالك بعينه، فلا شرط موافقة. */
+  async function notifyOne(d: Dealer) {
+    if (!d.whatsapp) {
+      setToast({ ok: false, text: `لا رقم واتساب لـ«${d.name}» — أضفه من ⚙ إعدادات الوكيل` });
+      return;
+    }
+    try {
+      await api.post("/whatsapp/send/", { dealer_id: d.id });
+      setToast({ ok: true, text: `جُدولت رسالة إلى ${d.name} — تتابعها في الإعدادات ← واتساب` });
+    } catch (e: any) {
+      setToast({ ok: false, text: e?.response?.data?.detail || "تعذّر الإرسال" });
+    }
+  }
 
   function load(search = "") {
     setLoading(true);
@@ -116,6 +133,11 @@ export default function Dealers() {
           title="تصدير الوكلاء الظاهرين بعد البحث والفلترة">
           <Icon name="excel" size={15} style={ib} />تصدير Excel
         </button>
+        <button className="btn" style={{ background: "#258a4a" }} onClick={() => setBulkOpen(true)}
+          disabled={stats.negative === 0}
+          title="تنبيه بالرصيد عبر واتساب لكل مدين وافق على التحصيل الآلي">
+          <Icon name="whatsapp" size={15} style={ib} />تنبيه المدينين
+        </button>
         <button className="btn g" onClick={() => setCreateOpen(true)}>
           <Icon name="plus" size={15} style={ib} />إضافة وكيل
         </button>
@@ -177,6 +199,9 @@ export default function Dealers() {
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                         <IconBtn name="plus" color="var(--ok)" title="شحن رصيد" onClick={() => setModal({ dealer: d, action: "topup" })} />
                         <IconBtn name="minus" color="var(--danger)" title="خصم رصيد" onClick={() => setModal({ dealer: d, action: "deduct" })} />
+                        <IconBtn name="whatsapp" color={d.whatsapp ? "#25d366" : "var(--faint)"}
+                          title={d.whatsapp ? `تنبيه بالرصيد عبر واتساب — +${d.whatsapp}` : "لا رقم واتساب لهذا الوكيل"}
+                          onClick={() => notifyOne(d)} />
                         <IconBtn name="chart" color="var(--primary)" title="كشف حساب"
                           onClick={() => setStatementFor(d)} />
                         <IconBtn name="settings" color="var(--primary-dark)" title="إعدادات الوكيل"
@@ -212,6 +237,24 @@ export default function Dealers() {
       {statementFor && (
         <StatementModal dealerId={statementFor.id} dealerName={statementFor.name}
           onClose={() => setStatementFor(null)} />
+      )}
+
+      {bulkOpen && (
+        <BulkWhatsAppModal
+          onClose={() => setBulkOpen(false)}
+          onSent={(n) => {
+            setBulkOpen(false);
+            setToast({ ok: true, text: `جُدولت ${n} رسالة — تتابع تقدّمها في الإعدادات ← واتساب` });
+          }} />
+      )}
+
+      {toast && (
+        <div onClick={() => setToast(null)} style={{
+          position: "fixed", insetInlineStart: 20, bottom: 20, zIndex: 90, cursor: "pointer",
+          maxWidth: 420, padding: "11px 15px", borderRadius: 9, fontSize: 13, lineHeight: 1.8,
+          boxShadow: "0 6px 24px rgba(0,0,0,.25)",
+          background: toast.ok ? "var(--ok)" : "var(--danger)", color: "#fff",
+        }}>{toast.text}</div>
       )}
     </div>
   );

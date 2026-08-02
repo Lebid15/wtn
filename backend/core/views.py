@@ -248,6 +248,9 @@ def dealers_view(request):
             "oyun": mods.get("oyun", True),           # لعبة OyunPin
             "active": u.status == User.Status.ACTIVE,  # Aktif
             "children_count": u.children.count(),
+            # واتساب: الرقم وموافقة التحصيل — يقرأهما زرّا الإرسال في الجدول
+            "whatsapp": u.whatsapp,
+            "auto_debt_collection": u.auto_debt_collection,
         })
     return Response({"count": len(rows), "results": rows})
 
@@ -279,6 +282,8 @@ def _dealer_settings_row(u):
         "status": u.status,
         # التبويب الثاني
         "phone": u.phone,
+        "whatsapp": u.whatsapp,
+        "whatsapp_pretty": f"+{u.whatsapp}" if u.whatsapp else "",
         "country": u.country,
         "province": u.province,
         "id_image": u.id_image,
@@ -337,6 +342,25 @@ def dealer_settings_view(request, dealer_id):
         if key in data:
             setattr(u, key, str(data[key] or "").strip()[:80])
             fields.append(key)
+
+    # رقم واتساب: يُطبَّع هنا مرّةً — فلا يبقى تخمين صيغته إلى لحظة الإرسال.
+    # البلد يُقرأ من الحقل المُرسَل معه إن وُجد، وإلّا من المحفوظ.
+    if "whatsapp" in data:
+        from whatsapp.phone import normalize
+
+        raw = str(data["whatsapp"] or "").strip()
+        if raw:
+            country = str(data.get("country") or u.country or "")
+            normalized = normalize(raw, country)
+            if not normalized:
+                return Response(
+                    {"detail": "رقم واتساب غير صالح — اكتبه برمز الدولة مثل +905551234567"},
+                    status=400,
+                )
+            u.whatsapp = normalized
+        else:
+            u.whatsapp = ""
+        fields.append("whatsapp")
 
     for key in ("id_image", "shop_image"):
         if key in data:
