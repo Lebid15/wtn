@@ -106,6 +106,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     role = models.CharField(max_length=16, choices=Role.choices, default=Role.BAYI)
 
     login_id = models.CharField(max_length=32, unique=True)  # رقم الدخول (5550000007)
+    # الرقم المعروض في «قائمة الوكلاء»: تسلسلي داخل المتجر يبدأ من 1.
+    # مستقلّ عن login_id لأن الأخير فريد عبر المتاجر كلّها فلا يصلح تسلسلاً محلياً.
+    dealer_no = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     name = models.CharField(max_length=120)
     phone = models.CharField(max_length=20, blank=True, default="")
 

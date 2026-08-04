@@ -2,6 +2,7 @@
 from decimal import Decimal, InvalidOperation
 
 import pyotp
+from django.db import models
 from rest_framework import status, viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -164,6 +165,15 @@ def ledger_view(request):
     return Response({"count": qs.count(), "results": rows})
 
 
+def _next_dealer_no(tenant) -> int:
+    """الرقم التسلسلي التالي داخل هذا المتجر — لا يعيد استعمال رقم وكيل محذوف."""
+    last = (
+        User.objects.filter(tenant=tenant, role__in=[User.Role.BAYI, User.Role.ANA_BAYI])
+        .aggregate(models.Max("dealer_no"))["dealer_no__max"]
+    )
+    return (last or 0) + 1
+
+
 def _create_dealer(request):
     """إنشاء وكيل (Bayi) جديد تحت المستأجر الحالي — يقابل زر "Bayi Ekle"."""
     tenant = request.user.tenant
@@ -196,6 +206,7 @@ def _create_dealer(request):
             tenant=tenant,
             role=User.Role.BAYI,
             login_id=login_id,
+            dealer_no=_next_dealer_no(tenant),
             name=name,
             country=country,
             status=User.Status.ACTIVE,
@@ -235,6 +246,7 @@ def dealers_view(request):
         rows.append({
             "id": u.id,
             "login_id": u.login_id,
+            "dealer_no": u.dealer_no,
             "name": u.name,
             "balance": str(wallet.balance) if wallet else "0.00",
             "credit_limit": str(wallet.credit_limit) if wallet else "0.00",
@@ -255,6 +267,71 @@ def dealers_view(request):
     return Response({"count": len(rows), "results": rows})
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def dealers_hierarchy_view(request):
+    """
+    «وكلاء تحت وكيل»: كل وكيل كبير ومَن يتبعه.
+
+    الوكيل الكبير يشتري من المتجر ويبيع لدكاكينه، فربحه فرقُ سعرين. هنا يراه
+    صاحب المتجر مجموعةً واحدة: رصيد الكبير أعلى الجدول، وتحته دكاكينه بأرصدتها
+    ومجموع ما لهم وما عليهم — فلا يُقرأ الدكان معزولاً عن الشجرة التي يعيش فيها.
+    """
+    if request.user.role != User.Role.TENANT_ADMIN:
+        return Response({"detail": "غير مصرّح"}, status=403)
+
+    tenant = request.user.tenant
+    parents = (
+        User.objects.filter(tenant=tenant, role=User.Role.ANA_BAYI)
+        .select_related("wallet").order_by("dealer_no", "name")
+    )
+    children = (
+        User.objects.filter(tenant=tenant, role=User.Role.BAYI, parent__isnull=False)
+        .select_related("wallet").order_by("dealer_no", "name")
+    )
+
+    by_parent = {}
+    for c in children:
+        by_parent.setdefault(c.parent_id, []).append(c)
+
+    def row(u):
+        wallet = getattr(u, "wallet", None)
+        return {
+            "id": u.id,
+            "dealer_no": u.dealer_no,
+            "login_id": u.login_id,
+            "name": u.name,
+            "balance": str(wallet.balance) if wallet else "0.00",
+            "credit_limit": str(wallet.credit_limit) if wallet else "0.00",
+            "currency": wallet.currency if wallet else currency.base_currency(tenant),
+            "active": u.status == User.Status.ACTIVE,
+            "whatsapp": u.whatsapp,
+        }
+
+    groups = []
+    for p in parents:
+        kids = by_parent.pop(p.id, [])
+        groups.append({
+            "agent": row(p),
+            "dealers": [row(c) for c in kids],
+            "dealers_count": len(kids),
+            "dealers_balance": str(
+                sum(Decimal(getattr(c, "wallet", None).balance if getattr(c, "wallet", None) else 0)
+                    for c in kids) if kids else Decimal("0")
+            ),
+        })
+
+    # دكاكين معلّقة تحت وكيل ليس كبيراً (أو حُذف دوره) — تُعرض ولا تُخفى
+    orphans = [row(c) for ids in by_parent.values() for c in ids]
+
+    return Response({
+        "count": len(groups),
+        "base_currency": currency.base_currency(tenant),
+        "results": groups,
+        "orphans": orphans,
+    })
+
+
 def _get_dealer_wallet(request, dealer_id):
     """يجلب محفظة وكيل ضمن نفس المستأجر (عزل)."""
     return Wallet.objects.select_related("user").get(
@@ -267,14 +344,24 @@ MAX_IMAGE_CHARS = 3_000_000  # ≈ 2.2 ميغابايت بعد ترميز base64
 
 
 def _dealer_settings_row(u):
+    from catalog.models import PriceGroup
+
     wallet = getattr(u, "wallet", None)
     tenant = u.tenant
     return {
         "id": u.id,
         "login_id": u.login_id,
+        "dealer_no": u.dealer_no,
         "name": u.name,
         "role": u.role,
         "role_label": u.get_role_display(),
+        # إعدادات انتقلت من صفحة «أسعار الوكلاء» المحذوفة
+        "oyun_load_limit": str(u.oyun_load_limit),
+        "price_group": u.price_group_id,
+        "price_groups": [
+            {"id": g.id, "name": g.name}
+            for g in PriceGroup.objects.filter(tenant=tenant).order_by("id")
+        ],
         # التبويب الأول
         "display_currency": u.display_currency or "",
         "credit_limit": str(wallet.credit_limit) if wallet else "0.00",
@@ -337,6 +424,30 @@ def dealer_settings_view(request, dealer_id):
             return Response({"detail": "حالة غير معروفة"}, status=400)
         u.status = data["status"]
         fields.append("status")
+
+    # حدّ تحميل الألعاب ومجموعة الأسعار — كانا في صفحة «أسعار الوكلاء» قبل حذفها
+    if "oyun_load_limit" in data:
+        try:
+            limit = Decimal(str(data["oyun_load_limit"]))
+        except (InvalidOperation, TypeError):
+            return Response({"detail": "حدّ تحميل غير صحيح"}, status=400)
+        if limit < 0:
+            return Response({"detail": "حدّ التحميل لا يكون سالباً"}, status=400)
+        u.oyun_load_limit = limit
+        fields.append("oyun_load_limit")
+
+    if "price_group" in data:
+        from catalog.models import PriceGroup
+
+        gid = data["price_group"]
+        if gid in (None, ""):
+            u.price_group = None
+        else:
+            group = PriceGroup.objects.filter(pk=gid, tenant=tenant).first()
+            if group is None:
+                return Response({"detail": "مجموعة الأسعار غير موجودة"}, status=404)
+            u.price_group = group
+        fields.append("price_group")
 
     for key in ("phone", "province", "country"):
         if key in data:

@@ -4,13 +4,20 @@ import Icon from "../components/Icon";
 import { labelOf, symbolOf } from "../currency";
 
 interface Settings {
-  id: number; login_id: string; name: string; role: string; role_label: string;
+  id: number; login_id: string; dealer_no: number | null;
+  name: string; role: string; role_label: string;
   display_currency: string; credit_limit: string; balance: string; status: string;
   phone: string; whatsapp: string; whatsapp_pretty: string;
   country: string; province: string;
   id_image: string; shop_image: string; auto_debt_collection: boolean;
   base_currency: string; available_currencies: string[];
+  // انتقلا إلى هنا بعد حذف صفحة «أسعار الوكلاء»
+  oyun_load_limit: string; price_group: number | null;
+  price_groups: { id: number; name: string }[];
 }
+
+/** حدود تحميل الألعاب المعتادة — والقيمة المحفوظة تُضاف إن كانت خارجها. */
+const LIMIT_OPTIONS = ["1000", "5000", "10000", "25000", "50000", "100000"];
 
 const COUNTRIES = [
   { code: "SY", flag: "🇸🇾", name: "سوريا" },
@@ -78,6 +85,8 @@ export default function DealerSettingsModal({
         display_currency: f.display_currency,
         credit_limit: f.credit_limit || "0",
         status: f.status,
+        oyun_load_limit: f.oyun_load_limit || "0",
+        price_group: f.price_group,
         phone: f.phone,
         whatsapp: f.whatsapp,
         country: f.country,
@@ -150,6 +159,37 @@ export default function DealerSettingsModal({
                 <div style={hint}>
                   الحد الائتماني أقصى دَين تسمح به: <b>-500</b> يعني أن رصيده يهبط
                   إلى −500 ثم يتوقّف شراؤه.
+                </div>
+
+                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--primary-dark)", marginBottom: 10 }}>
+                    التسعير والتحميل
+                  </div>
+                  <div style={grid2}>
+                    <Fld label="مجموعة الأسعار">
+                      <select value={f.price_group ?? ""} style={inp}
+                        onChange={(e) => set("price_group", e.target.value ? Number(e.target.value) : null)}>
+                        <option value="">— بدون مجموعة —</option>
+                        {f.price_groups.map((g) => (
+                          <option key={g.id} value={g.id}>مجموعة {g.name}</option>
+                        ))}
+                      </select>
+                    </Fld>
+                    <Fld label="حد تحميل الألعاب">
+                      <select value={String(f.oyun_load_limit).split(".")[0]} style={inp}
+                        onChange={(e) => set("oyun_load_limit", e.target.value)}>
+                        {Array.from(new Set([
+                          ...LIMIT_OPTIONS, String(f.oyun_load_limit).split(".")[0],
+                        ])).sort((a, b) => Number(a) - Number(b)).map((l) => (
+                          <option key={l} value={l}>{Number(l).toLocaleString("en-US")}</option>
+                        ))}
+                      </select>
+                    </Fld>
+                  </div>
+                  <div style={{ ...hint, marginTop: 10 }}>
+                    مجموعة الأسعار تحدّد بكم يشتري هذا الوكيل — أسعارها تُحرَّر من
+                    «الألعاب ← مجموعات الأسعار». وحدّ التحميل سقف ما يشحنه من ألعاب.
+                  </div>
                 </div>
 
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>

@@ -12,6 +12,7 @@ urlpatterns = [
     path("settings/exchange/", views.exchange_rates_view, name="exchange-rates"),
     path("ledger/", views.ledger_view, name="ledger"),
     path("dealers/", views.dealers_view, name="dealers"),
+    path("dealers/hierarchy/", views.dealers_hierarchy_view, name="dealers-hierarchy"),
     path("dealers/<int:dealer_id>/transactions/", views.wallet_transactions_view, name="wallet-txns"),
     # قبل مسار <str:action> وإلا ابتلعه
     path("dealers/<int:dealer_id>/settings/", views.dealer_settings_view, name="dealer-settings"),

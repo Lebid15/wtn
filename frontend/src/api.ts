@@ -121,6 +121,8 @@ export interface Provider {
 export interface Dealer {
   id: number;
   login_id: string;
+  /** الرقم التسلسلي داخل المتجر — هو ما يُعرض في عمود «الرقم» */
+  dealer_no: number | null;
   name: string;
   balance: string;
   credit_limit: string;

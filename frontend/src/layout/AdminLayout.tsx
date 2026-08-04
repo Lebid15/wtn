@@ -41,13 +41,13 @@ const SUBNAV_OYUNPIN = [
   { label: "توجيه الباقات", to: "/oyunpin/pin-list" },
   { label: "ربط الباقات", to: "/oyunpin/package-links" },
   { label: "مجموعات الأسعار", to: "/oyunpin/price-groups" },
-  { label: "أسعار الوكلاء", to: "/oyunpin/dealer-prices" },
   { label: "بنك الأكواد", to: "/oyunpin/pool" },
   { label: "مزوّدو API", to: "/oyunpin/providers" },
 ];
 // قسم الوكلاء — كل ما يخصّ الوكيل وماله
 const SUBNAV_BAYILER = [
   { label: "قائمة الوكلاء", to: "/dealers" },
+  { label: "وكلاء تحت وكيل", to: "/dealers/sub" },
   { label: "متابعة الدفع", to: "/ayarlar/payments" },
   { label: "طرق الدفع", to: "/ayarlar/payment-methods" },
   { label: "أسعار الصرف", to: "/ayarlar/exchange" },
@@ -133,7 +133,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               (t.key === "raporlar" && loc.pathname.startsWith("/reports")) ||
               (t.key === "ayarlar" && loc.pathname.startsWith("/settings")) ||
               (t.key === "bayiler" &&
-                (loc.pathname === "/dealers" || loc.pathname.startsWith("/ayarlar")));
+                (loc.pathname.startsWith("/dealers") || loc.pathname.startsWith("/ayarlar")));
             return (
               <Link
                 key={t.key}

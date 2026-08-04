@@ -100,3 +100,98 @@ class HeaderAlertsTest(APITestCase):
             dealer=dealer, game=self.game, product=self.product, status=status,
             cost_price=Decimal("1"), sell_price=Decimal("2"), profit=Decimal("1"),
         )
+
+
+class DealerListTest(APITestCase):
+    """
+    قائمة الوكلاء بعد إعادة تشكيلها: رقم تسلسلي، وتعطيل بنقرة، وإعدادات
+    انتقلت إليها من صفحة «أسعار الوكلاء» المحذوفة.
+    """
+
+    def setUp(self):
+        from catalog.models import PriceGroup
+
+        self.tenant = Tenant.objects.create(subdomain="t9", name="متجر", base_currency="USD")
+        self.admin = User.objects.create(
+            login_id="admin9", name="صاحب المتجر", tenant=self.tenant,
+            role=User.Role.TENANT_ADMIN,
+        )
+        self.client.force_authenticate(user=self.admin)
+        self.group = PriceGroup.objects.create(tenant=self.tenant, name="1")
+
+        self.big = User.objects.create(
+            login_id="big9", name="وكيل كبير", tenant=self.tenant,
+            role=User.Role.ANA_BAYI, dealer_no=1,
+        )
+        Wallet.objects.create(tenant=self.tenant, user=self.big, balance=Decimal("100"))
+        self.dealer = User.objects.create(
+            login_id="bayi9", name="دكان", tenant=self.tenant,
+            role=User.Role.BAYI, parent=self.big, dealer_no=2,
+        )
+        Wallet.objects.create(tenant=self.tenant, user=self.dealer, balance=Decimal("-25"))
+
+    def _list(self):
+        r = self.client.get("/api/dealers/")
+        self.assertEqual(r.status_code, 200, r.content)
+        return r.json()["results"]
+
+    def test_list_carries_the_sequential_number(self):
+        self.assertEqual([d["dealer_no"] for d in self._list()], [2])
+
+    def test_new_dealer_gets_the_next_number(self):
+        r = self.client.post(
+            "/api/dealers/",
+            {"login_id": "bayi10", "name": "دكان ثانٍ", "password": "pass123"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(User.objects.get(login_id="bayi10").dealer_no, 3)
+
+    def test_toggling_status_disables_and_re_enables(self):
+        url = f"/api/dealers/{self.dealer.id}/settings/"
+        self.assertEqual(self.client.post(url, {"status": "passive"}, format="json").status_code, 200)
+        self.dealer.refresh_from_db()
+        self.assertEqual(self.dealer.status, User.Status.PASSIVE)
+        self.assertFalse(self._list()[0]["active"])   # يبقى في الردّ، والواجهة تُخفيه
+
+        self.client.post(url, {"status": "active"}, format="json")
+        self.dealer.refresh_from_db()
+        self.assertEqual(self.dealer.status, User.Status.ACTIVE)
+
+    def test_settings_carry_and_save_group_and_load_limit(self):
+        url = f"/api/dealers/{self.dealer.id}/settings/"
+        row = self.client.get(url).json()
+        self.assertEqual(row["price_group"], None)
+        self.assertEqual([g["id"] for g in row["price_groups"]], [self.group.id])
+
+        r = self.client.post(
+            url, {"price_group": self.group.id, "oyun_load_limit": "25000"}, format="json",
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        self.dealer.refresh_from_db()
+        self.assertEqual(self.dealer.price_group_id, self.group.id)
+        self.assertEqual(self.dealer.oyun_load_limit, Decimal("25000"))
+
+    def test_unknown_price_group_is_refused(self):
+        r = self.client.post(
+            f"/api/dealers/{self.dealer.id}/settings/", {"price_group": 9999}, format="json",
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_hierarchy_groups_dealers_under_their_big_agent(self):
+        r = self.client.get("/api/dealers/hierarchy/")
+        self.assertEqual(r.status_code, 200, r.content)
+        data = r.json()
+        self.assertEqual(len(data["results"]), 1)
+        group = data["results"][0]
+        self.assertEqual(group["agent"]["name"], "وكيل كبير")
+        self.assertEqual([d["name"] for d in group["dealers"]], ["دكان"])
+        self.assertEqual(group["dealers_count"], 1)
+        self.assertEqual(group["dealers_balance"], "-25.00")
+
+    def test_hierarchy_is_for_the_store_owner_only(self):
+        self.client.force_authenticate(user=self.dealer)
+        self.assertEqual(self.client.get("/api/dealers/hierarchy/").status_code, 403)
+
+    def test_removed_dealer_prices_endpoints_are_gone(self):
+        self.assertEqual(self.client.get("/api/catalog/dealer-prices/").status_code, 404)

@@ -3,6 +3,7 @@ import { AuthProvider, useAuth, roleHome } from "./auth";
 import AdminLayout from "./layout/AdminLayout";
 import Login from "./pages/Login";
 import Dealers from "./pages/Dealers";
+import SubDealers from "./pages/SubDealers";
 import Exchange from "./pages/Exchange";
 import Games from "./pages/Games";
 import Library from "./pages/Library";
@@ -12,7 +13,6 @@ import GameDetail from "./pages/GameDetail";
 import PackageLinks from "./pages/PackageLinks";
 import PinList from "./pages/PinList";
 import PriceGroups from "./pages/PriceGroups";
-import DealerPrices from "./pages/DealerPrices";
 import Providers from "./pages/Providers";
 import Orders from "./pages/Orders";
 import Pool from "./pages/Pool";
@@ -72,13 +72,13 @@ export default function App() {
           <Route path="/oyunpin/package-links" element={Admin(<PackageLinks />)} />
           <Route path="/oyunpin/orders" element={Admin(<Orders />)} />
           <Route path="/oyunpin/price-groups" element={Admin(<PriceGroups />)} />
-          <Route path="/oyunpin/dealer-prices" element={Admin(<DealerPrices />)} />
           <Route path="/oyunpin/pool" element={Admin(<Pool />)} />
           <Route path="/oyunpin/providers" element={Admin(<Providers />)} />
           <Route path="/oyunpin/:id" element={Admin(<GameDetail />)} />
 
           {/* الوكلاء */}
           <Route path="/dealers" element={Admin(<Dealers />)} />
+          <Route path="/dealers/sub" element={Admin(<SubDealers />)} />
           <Route path="/ayarlar/payments" element={Admin(<PaymentTracking />)} />
           <Route path="/ayarlar/payment-methods" element={Admin(<PaymentMethods />)} />
           <Route path="/ayarlar/exchange" element={Admin(<Exchange />)} />

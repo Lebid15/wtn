@@ -9,7 +9,7 @@ import { downloadCsv } from "../csv";
 import Icon from "../components/Icon";
 import { symbolOf, useBaseCurrency, useBaseSymbol } from "../currency";
 
-type Filter = "all" | "active" | "neg" | "off";
+type Filter = "all" | "neg";
 
 export default function Dealers() {
   const cur = useBaseSymbol();
@@ -24,6 +24,33 @@ export default function Dealers() {
   const [statementFor, setStatementFor] = useState<Dealer | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
+  /** الجدول الأول للنشطين وحدهم؛ زرّ «إظهار المعطّلين» يقلبه إلى جدول المعطّلين. */
+  const [showDisabled, setShowDisabled] = useState(false);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+
+  /**
+   * الكرة هي الحالة والزرّ معاً: خضراء تعمل ⇒ اضغطها فيُعطَّل ويغادر الجدول،
+   * حمراء ⇒ اضغطها فيعود. لا قوائم ولا نافذة — نقرة واحدة في الاتّجاهين.
+   */
+  async function toggleActive(d: Dealer) {
+    const next = d.active ? "passive" : "active";
+    setTogglingId(d.id);
+    try {
+      await api.post(`/dealers/${d.id}/settings/`, { status: next });
+      setDealers((ds) => ds.map((x) =>
+        x.id === d.id ? { ...x, active: !d.active, status: next } : x));
+      setToast({
+        ok: true,
+        text: d.active
+          ? `عُطِّل «${d.name}» — تجده في «إظهار المعطّلين»`
+          : `فُعِّل «${d.name}» — عاد إلى قائمة الوكلاء`,
+      });
+    } catch (e: any) {
+      setToast({ ok: false, text: e?.response?.data?.detail || "تعذّر تغيير الحالة" });
+    } finally {
+      setTogglingId(null);
+    }
+  }
 
   /** إرسال تنبيه الرصيد لوكيل واحد — يقصده المالك بعينه، فلا شرط موافقة. */
   async function notifyOne(d: Dealer) {
@@ -57,12 +84,13 @@ export default function Dealers() {
 
   // الرصيد واحد موقّع: سالب = مديونية
   const shown = useMemo(() => dealers.filter((d) => {
-    const bal = Number(d.balance);
-    if (filter === "active") return d.active;
-    if (filter === "off") return !d.active;
-    if (filter === "neg") return bal < 0;
-    return true;
-  }), [dealers, filter]);
+    if (showDisabled) return !d.active;         // جدول المعطّلين وحدهم
+    if (!d.active) return false;                // المعطّل لا يظهر في الجدول الأول
+    return filter === "neg" ? Number(d.balance) < 0 : true;
+  }), [dealers, filter, showDisabled]);
+
+  const disabledCount = useMemo(
+    () => dealers.filter((d) => !d.active).length, [dealers]);
 
   const stats = useMemo(() => ({
     total: dealers.length,
@@ -77,10 +105,10 @@ export default function Dealers() {
   function exportExcel() {
     downloadCsv(
       "قائمة-الوكلاء",
-      ["رقم الوكيل", "الاسم", "الرصيد", "عملة الدفتر", "عملة الوكيل",
+      ["رقم الوكيل", "رقم الدخول", "الاسم", "الرصيد", "عملة الدفتر", "عملة الوكيل",
        "الحد الائتماني", "الحالة", "المجموعة", "عدد الدكاكين"],
       shown.map((d) => [
-        d.login_id, d.name, d.balance, d.currency, d.display_currency || base,
+        String(d.dealer_no ?? ""), d.login_id, d.name, d.balance, d.currency, d.display_currency || base,
         d.credit_limit, d.active ? "نشط" : "موقوف", d.group || "", d.children_count,
       ]),
     );
@@ -121,11 +149,19 @@ export default function Dealers() {
             <Icon name="search" size={17} />
           </span>
         </div>
-        <div className="segment">
-          {([["all", "الكل"], ["active", "نشط"], ["neg", "رصيد سالب"], ["off", "موقوف"]] as [Filter, string][]).map(([k, label]) => (
-            <button key={k} className={filter === k ? "active" : ""} onClick={() => setFilter(k)}>{label}</button>
-          ))}
-        </div>
+        {!showDisabled && (
+          <div className="segment">
+            {([["all", "الكل"], ["neg", "رصيد سالب"]] as [Filter, string][]).map(([k, label]) => (
+              <button key={k} className={filter === k ? "active" : ""} onClick={() => setFilter(k)}>{label}</button>
+            ))}
+          </div>
+        )}
+        <button className="btn" style={{ background: showDisabled ? "var(--primary)" : "#8a999e" }}
+          onClick={() => setShowDisabled((v) => !v)}
+          title="المعطّلون لا يظهرون في القائمة الأولى — من هنا تراهم وتعيدهم">
+          <Icon name={showDisabled ? "users" : "eye"} size={15} style={ib} />
+          {showDisabled ? "العودة إلى النشطين" : `إظهار المعطّلين${disabledCount ? ` (${disabledCount})` : ""}`}
+        </button>
         <span style={{ marginInlineStart: "auto", color: "var(--muted)", fontSize: 13 }}>
           العدد: <b style={{ color: "var(--text)" }}>{shown.length}</b>
         </span>
@@ -145,7 +181,10 @@ export default function Dealers() {
 
       {/* الجدول — النمط المعتمد */}
       <div className="card">
-        <div className="card-title"><Icon name="users" size={16} style={{ color: "var(--primary)" }} /> قائمة الوكلاء</div>
+        <div className="card-title">
+          <Icon name={showDisabled ? "eye" : "users"} size={16} style={{ color: "var(--primary)" }} />
+          {showDisabled ? " الوكلاء المعطّلون — اضغط الكرة الحمراء لإعادته" : " قائمة الوكلاء"}
+        </div>
         <div className="table-scroll">
           <table className="grid">
             <thead>
@@ -165,13 +204,16 @@ export default function Dealers() {
               {loading ? (
                 <tr><td colSpan={9} style={{ padding: 30, color: "var(--muted)" }}>جارٍ التحميل...</td></tr>
               ) : shown.length === 0 ? (
-                <tr><td colSpan={9} style={{ padding: 30, color: "var(--muted)" }}>لا يوجد وكلاء مطابقون</td></tr>
+                <tr><td colSpan={9} style={{ padding: 30, color: "var(--muted)" }}>
+                  {showDisabled ? "لا وكلاء معطّلين" : "لا يوجد وكلاء مطابقون"}
+                </td></tr>
               ) : shown.map((d) => {
                 const bal = Number(d.balance);
                 return (
                   <tr key={d.id}>
                     <td><input type="checkbox" /></td>
-                    <td className="num" style={{ color: "var(--faint)", fontSize: 12.5 }}>{d.login_id}</td>
+                    <td className="num" style={{ color: "var(--faint)", fontSize: 12.5 }}
+                      title={`رقم الدخول: ${d.login_id}`}>{d.dealer_no ?? "—"}</td>
                     <td className="cell-start">
                       <div style={{ fontWeight: 700 }}>
                         {d.name}
@@ -188,11 +230,19 @@ export default function Dealers() {
                     </td>
                     <td className="num" style={{ color: "var(--muted)" }}>{money(d.credit_limit)}</td>
                     <td>
-                      <span className={`pill ${d.active ? "on" : "off"}`}>{d.active ? "نشط" : "موقوف"}</span>
-                      <div className="chips">
-                        <span className={`chip ${d.shopping ? "on" : ""}`}>مشتريات</span>
-                        <span className={`chip ${d.oyun ? "on" : ""}`}>ألعاب</span>
-                      </div>
+                      <button type="button" onClick={() => toggleActive(d)}
+                        disabled={togglingId === d.id}
+                        title={d.active
+                          ? "نشط — اضغط لتعطيله (يختفي من هذه القائمة)"
+                          : "معطّل — اضغط لإعادته إلى قائمة الوكلاء"}
+                        aria-label={d.active ? "تعطيل الوكيل" : "تفعيل الوكيل"}
+                        style={{
+                          width: 18, height: 18, borderRadius: "50%", padding: 0,
+                          border: "2px solid rgba(0,0,0,.12)", cursor: "pointer",
+                          background: d.active ? "var(--ok)" : "var(--danger)",
+                          opacity: togglingId === d.id ? 0.4 : 1,
+                          boxShadow: "0 1px 3px rgba(0,0,0,.25)",
+                        }} />
                     </td>
                     <td className="num" style={{ fontWeight: 700, color: "var(--muted)" }}>{d.group || "—"}</td>
                     <td>
