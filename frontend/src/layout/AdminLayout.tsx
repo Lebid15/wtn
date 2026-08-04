@@ -27,7 +27,7 @@ const ALERTS: { key: string; icon: string; to: string; label: string; hot?: bool
   { key: "announcement", icon: "bell", to: "/home", label: "إعلان من إدارة المنصّة", hot: true },
   { key: "tickets", icon: "chat", to: "/settings/support", label: "رسائل لم تُقرأ" },
   { key: "orders_pending", icon: "games", to: "/oyunpin/orders", label: "طلبات قيد الانتظار" },
-  { key: "orders_stuck", icon: "warning", to: "/oyunpin/orders", label: "طلبات عالقة", hot: true },
+  { key: "orders_stuck", icon: "warning", to: "/oyunpin/providers", label: "طلبات عالقة — راجع المزوّدين", hot: true },
   { key: "deposits_pending", icon: "card", to: "/ayarlar/payments", label: "إيداعات تنتظر قرارك" },
   { key: "dealers_negative", icon: "user", to: "/dealers", label: "وكلاء برصيد سالب" },
   { key: "providers", icon: "api", to: "/oyunpin/providers", label: "مزوّدون معطّلون أو رصيدهم منخفض" },
