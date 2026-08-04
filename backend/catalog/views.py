@@ -485,6 +485,49 @@ def library_browse_view(request):
     return Response({"count": len(rows), "results": rows})
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def game_library_packages_view(request, game_id):
+    """
+    أرقام الربط المتاحة لهذه اللعبة من المكتبة العالمية.
+
+    رقم الربط جسرٌ بين الباقات، ومصدره المكتبة العالمية **حصراً**. هنا نُرجع ما
+    عرّفه مالك المنصّة لهذه اللعبة ولم يُضَف بعد إلى المتجر — فإن حذف صاحب المتجر
+    باقةً عاد رقمها إلى القائمة، ولا يظهر رقم أُخِذ مرّتين.
+
+    `linked=false` تعني لعبةً أنشأها صاحب المتجر بنفسه (لا أصل لها في المكتبة)،
+    فتبقى الإضافة اليدوية مسموحة استثناءً.
+    """
+    tenant = request.user.tenant
+    try:
+        game = Game.objects.prefetch_related("products").get(pk=game_id, tenant=tenant)
+    except Game.DoesNotExist:
+        return Response({"detail": "اللعبة غير موجودة"}, status=404)
+
+    if not game.master_library_uuid:
+        return Response({"linked": False, "results": []})
+
+    lib = LibraryGame.objects.filter(uuid=game.master_library_uuid).first()
+    if lib is None:
+        return Response({"linked": False, "results": []})
+
+    used = {p.kupur.strip() for p in game.products.all() if p.kupur.strip()}
+    rows = [
+        {
+            "kupur": p.kupur.strip(),
+            "name": p.name,
+            "suggested_cost": str(p.suggested_cost),
+            "suggested_price": str(p.suggested_price),
+            "is_parcali": p.is_parcali,
+            "execution_type": p.execution_type,
+            "description": p.description,
+        }
+        for p in lib.products.filter(is_active=True).order_by("sort_order", "id")
+        if p.kupur.strip() and p.kupur.strip() not in used
+    ]
+    return Response({"linked": True, "library_game": lib.name, "results": rows})
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def library_import_view(request, library_game_id):

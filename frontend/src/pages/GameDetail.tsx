@@ -3,6 +3,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, type GameDetail as GameDetailType, type Product, type Provider } from "../api";
 import Icon from "../components/Icon";
 
+/** باقة في المكتبة العالمية لم تُضَف بعد إلى هذه اللعبة. */
+type LibPkg = {
+  kupur: string;
+  name: string;
+  suggested_cost: string;
+  suggested_price: string;
+};
+
 export default function GameDetail() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -11,11 +19,19 @@ export default function GameDetail() {
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
   const [newP, setNewP] = useState({ name: "", cost_price: "", recommended_price: "", kupur: "" });
+  // أرقام الربط المتاحة من المكتبة العالمية (ما لم يُؤخَذ بعد) + هل اللعبة أصلاً منها
+  const [libPkgs, setLibPkgs] = useState<LibPkg[]>([]);
+  const [libLinked, setLibLinked] = useState(false);
+  const [addErr, setAddErr] = useState("");
   // نافذة تعديل الباقة: "edit" بيانات المنتج · "routing" المزوّدون + رقم الربط
   const [editing, setEditing] = useState<{ product: Product; mode: "edit" | "routing" } | null>(null);
 
   function load() {
     api.get(`/catalog/games/${id}/`).then((r) => setGame(r.data));
+    // تُقرأ مع كل تحميل: إضافةُ باقة تسحب رقمها من القائمة، وحذفُها يعيده
+    api.get(`/catalog/games/${id}/library-packages/`)
+      .then((r) => { setLibPkgs(r.data.results || []); setLibLinked(!!r.data.linked); })
+      .catch(() => { setLibPkgs([]); setLibLinked(false); });
   }
   useEffect(() => { load(); }, [id]);
   useEffect(() => {
@@ -43,15 +59,44 @@ export default function GameDetail() {
     }
   }
 
+  /** اختيار رقم ربط يملأ الاسم والسعرين من قيم المكتبة — وكلّها قابلة للتعديل قبل الحفظ. */
+  function pickKupur(kupur: string) {
+    const lib = libPkgs.find((p) => p.kupur === kupur);
+    setAddErr("");
+    setNewP(lib
+      ? { kupur, name: lib.name, cost_price: lib.suggested_cost, recommended_price: lib.suggested_price }
+      : { ...newP, kupur });
+  }
+
   async function addProduct(e: React.FormEvent) {
     e.preventDefault();
     if (!newP.name) return;
-    await api.post("/catalog/products/", {
-      game: game!.id, name: newP.name,
-      cost_price: newP.cost_price || "0", recommended_price: newP.recommended_price || "0",
-      kupur: newP.kupur,
-    });
-    setNewP({ name: "", cost_price: "", recommended_price: "", kupur: "" });
+    setAddErr("");
+    try {
+      await api.post("/catalog/products/", {
+        game: game!.id, name: newP.name,
+        cost_price: newP.cost_price || "0", recommended_price: newP.recommended_price || "0",
+        kupur: newP.kupur,
+      });
+      setNewP({ name: "", cost_price: "", recommended_price: "", kupur: "" });
+      load();
+    } catch (e: any) {
+      const d = e?.response?.data;
+      setAddErr(d?.kupur?.[0] || d?.detail || "تعذّرت الإضافة — تحقّق من القيم");
+    }
+  }
+
+  /** تحرير خلية في الجدول: يحفظ فوراً ويعيد الربح المحسوب من الخادم. */
+  async function patchProduct(pid: number, body: Record<string, string>) {
+    const r = await api.patch(`/catalog/products/${pid}/`, body);
+    setGame((g) => g
+      ? { ...g, products: g.products.map((p) => (p.id === pid ? { ...p, ...r.data } : p)) }
+      : g);
+  }
+
+  async function deleteProduct(p: Product) {
+    if (!confirm(`حذف الباقة «${p.name}»؟ يعود رقم ربطها ${p.kupur || "—"} إلى قائمة المكتبة.`)) return;
+    await api.delete(`/catalog/products/${p.id}/`);
     load();
   }
 
@@ -114,8 +159,22 @@ export default function GameDetail() {
       <div style={{ ...panel, marginTop: 20 }}>
         <div style={panelHead}>عمليات المنتجات</div>
         <div style={{ padding: 18 }}>
-          {/* نموذج إضافة منتج */}
-          <form onSubmit={addProduct} style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap", marginBottom: 16 }}>
+          {/* نموذج إضافة منتج — يبدأ برقم الربط لأنه يملأ ما بعده */}
+          <form onSubmit={addProduct} style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap", marginBottom: 6 }}>
+            <Field label="رقم الربط">
+              {libLinked ? (
+                <select style={{ width: 210 }} value={newP.kupur}
+                  onChange={(e) => pickKupur(e.target.value)}>
+                  <option value="">— اختر من المكتبة —</option>
+                  {libPkgs.map((p) => (
+                    <option key={p.kupur} value={p.kupur}>{p.kupur} — {p.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <input style={{ width: 120 }} value={newP.kupur} dir="ltr"
+                  onChange={(e) => setNewP({ ...newP, kupur: e.target.value })} />
+              )}
+            </Field>
             <Field label="اسم المنتج">
               <input style={{ width: 180 }} value={newP.name}
                 onChange={(e) => setNewP({ ...newP, name: e.target.value })} />
@@ -128,18 +187,27 @@ export default function GameDetail() {
               <input style={{ width: 100 }} type="number" step="0.01" value={newP.recommended_price}
                 onChange={(e) => setNewP({ ...newP, recommended_price: e.target.value })} />
             </Field>
-            <Field label="Küpür">
-              <input style={{ width: 90 }} value={newP.kupur}
-                onChange={(e) => setNewP({ ...newP, kupur: e.target.value })} />
-            </Field>
-            <button className="btn g" style={{ height: 32 }}><Icon name="plus" size={14} style={{ marginInlineEnd: 4 }} />إضافة</button>
+            <button className="btn g" style={{ height: 32 }}
+              disabled={libLinked && !newP.kupur}>
+              <Icon name="plus" size={14} style={{ marginInlineEnd: 4 }} />إضافة
+            </button>
           </form>
+
+          {/* رسالة تشرح من أين تأتي الأرقام — أو لماذا لا يوجد رقم متاح */}
+          <div style={{ ...hint, marginBottom: 16 }}>
+            {!libLinked
+              ? "لعبة غير مستورَدة من المكتبة العالمية — اكتب رقم الربط يدوياً (وضع استثنائي)."
+              : libPkgs.length === 0
+                ? "كل أرقام ربط هذه اللعبة في المكتبة العالمية مُضافة عندك. احذف باقةً ليعود رقمها إلى القائمة."
+                : `أرقام الربط تأتي من المكتبة العالمية حصراً — ${libPkgs.length} رقماً متاحاً. الاختيار يملأ الاسم والسعرين تلقائياً، وكلّها قابلة للتعديل بعد الإضافة إلا رقم الربط.`}
+          </div>
+          {addErr && <div style={{ color: "var(--debt)", fontSize: 13, marginBottom: 10 }}>{addErr}</div>}
 
           {/* جدول المنتجات */}
           <table style={table}>
             <thead>
               <tr>
-                {["المنتج", "التكلفة", "الموصى", "الربح", "Küpür", "رقم الربط", "المزوّد",
+                {["المنتج", "التكلفة", "الموصى", "الربح", "رقم الربط", "المزوّد",
                   "الحالة", "Parçalı", "التاريخ", "إجراء"].map((h) => (
                   <th key={h} style={th}>{h}</th>
                 ))}
@@ -147,22 +215,33 @@ export default function GameDetail() {
             </thead>
             <tbody>
               {game.products.length === 0 ? (
-                <tr><td colSpan={11} style={{ ...td, padding: 24 }}>لا توجد منتجات — أضف أول منتج بالأعلى</td></tr>
+                <tr><td colSpan={10} style={{ ...td, padding: 24 }}>لا توجد منتجات — أضف أول منتج بالأعلى</td></tr>
               ) : (
                 game.products.map((p: Product, i) => (
                   <tr key={p.id} style={{ background: i % 2 ? "var(--row-alt)" : "#fff" }}>
-                    <td style={{ ...td, textAlign: "right", paddingInlineStart: 12, fontWeight: 600 }}>{p.name}</td>
-                    <td style={td}>{money(p.cost_price)}</td>
-                    <td style={td}>{money(p.recommended_price)}</td>
-                    <td style={{ ...td, color: "var(--ok)", fontWeight: 600 }}>{money(p.profit)}</td>
-                    <td style={td}>{p.kupur || "—"}</td>
+                    <td style={{ ...td, textAlign: "right", paddingInlineStart: 12, fontWeight: 600 }}>
+                      <CellEdit value={p.name} width={140} align="right"
+                        onSave={(v) => patchProduct(p.id, { name: v })} />
+                    </td>
                     <td style={td}>
-                      {p.provider_package_id
-                        ? <code style={linkCode}>{p.provider_package_id}</code>
-                        : <span style={{ color: "var(--debt)", fontSize: 12 }}>غير مربوط ⚠</span>}
+                      <CellEdit value={p.cost_price} width={78} numeric format={money}
+                        onSave={(v) => patchProduct(p.id, { cost_price: v || "0" })} />
+                    </td>
+                    <td style={td}>
+                      <CellEdit value={p.recommended_price} width={78} numeric format={money}
+                        onSave={(v) => patchProduct(p.id, { recommended_price: v || "0" })} />
+                    </td>
+                    <td style={{ ...td, color: Number(p.profit) < 0 ? "var(--debt)" : "var(--ok)", fontWeight: 600 }}>
+                      {money(p.profit)}
+                    </td>
+                    <td style={td} title="رقم الربط ثابت — مصدره المكتبة العالمية">
+                      {p.kupur
+                        ? <code style={linkCode}>{p.kupur}</code>
+                        : <span style={{ color: "var(--debt)", fontSize: 12 }}>بلا رقم ⚠</span>}
                     </td>
                     <td style={{ ...td, fontSize: 13 }}>
-                      {providers.find((v) => v.id === p.provider)?.name || "—"}
+                      {providers.find((v) => v.id === p.provider)?.name
+                        || <span style={{ color: "var(--muted)" }}>غير موجَّه</span>}
                     </td>
                     <td style={td}>{p.status_label}</td>
                     <td style={td}>{p.is_parcali ? "نعم" : "لا"}</td>
@@ -173,9 +252,13 @@ export default function GameDetail() {
                           onClick={() => setEditing({ product: p, mode: "edit" })}>
                           <Icon name="edit" size={15} color="var(--primary)" />
                         </button>
-                        <button type="button" title="التوجيه ورقم الربط" style={iconBtn}
+                        <button type="button" title="التوجيه إلى المزوّدين" style={iconBtn}
                           onClick={() => setEditing({ product: p, mode: "routing" })}>
                           <Icon name="settings" size={15} />
+                        </button>
+                        <button type="button" title="حذف الباقة" style={iconBtn}
+                          onClick={() => deleteProduct(p)}>
+                          <Icon name="trash" size={15} color="var(--debt)" />
                         </button>
                       </div>
                     </td>
@@ -197,6 +280,67 @@ export default function GameDetail() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * خلية قابلة للتحرير داخل الجدول — اضغطها فتصير حقلاً، وتُحفظ عند الخروج أو Enter.
+ *
+ * الاسم والتكلفة والسعر الموصى يملكها صاحب المتجر، فتُحرَّر من مكانها بلا نافذة.
+ * رقم الربط ليس منها: مصدره المكتبة العالمية وهو جسر ثابت، فيُعرض نصّاً فقط.
+ */
+function CellEdit({
+  value, width, numeric, align, format, onSave,
+}: {
+  value: string;
+  width: number;
+  numeric?: boolean;
+  align?: "right" | "center";
+  format?: (v: string) => string;
+  onSave: (v: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [v, setV] = useState(value);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { setV(value); }, [value]);
+
+  async function commit() {
+    setOpen(false);
+    const next = v.trim();
+    if (next === value.trim()) return;
+    setBusy(true);
+    try {
+      await onSave(next);
+    } catch {
+      setV(value);   // فشل الحفظ ⇒ ترتدّ الخلية لقيمتها المحفوظة
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} disabled={busy}
+        title="اضغط للتعديل"
+        style={{
+          background: "none", border: 0, borderBottom: "1px dashed var(--border)",
+          padding: "2px 4px", cursor: "text", font: "inherit", color: "inherit",
+          width, textAlign: align || "center", opacity: busy ? 0.5 : 1,
+        }}>
+        {busy ? "…" : (format ? format(value) : value) || "—"}
+      </button>
+    );
+  }
+  return (
+    <input autoFocus value={v} style={{ width }} dir={numeric ? "ltr" : undefined}
+      type={numeric ? "number" : "text"} step={numeric ? "0.01" : undefined}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+        if (e.key === "Escape") { setV(value); setOpen(false); }
+      }} />
   );
 }
 
@@ -235,8 +379,9 @@ function ProductModal({
     // كل نافذة ترسل حقولها فقط — لئلا تدهس نافذةٌ حقولَ الأخرى
     const body: any = mode === "edit"
       ? {
+          // بلا kupur — رقم الربط جسر ثابت يأتي من المكتبة العالمية
           name: f.name, cost_price: f.cost_price || "0",
-          recommended_price: f.recommended_price || "0", kupur: f.kupur,
+          recommended_price: f.recommended_price || "0",
           status: f.status, is_parcali: f.is_parcali,
           execution_type: f.execution_type, description: f.description,
         }
@@ -259,7 +404,7 @@ function ProductModal({
     <div style={overlay} onClick={onClose}>
       <div style={modal} onClick={(e) => e.stopPropagation()}>
         <div style={panelHead}>
-          {mode === "edit" ? "تعديل الباقة" : "التوجيه ورقم الربط"} — {product.game_name} / {product.name}
+          {mode === "edit" ? "تعديل الباقة" : "التوجيه إلى المزوّدين"} — {product.game_name} / {product.name}
         </div>
         <div style={{ padding: 18, display: "grid", gap: 12 }}>
           {mode === "edit" ? (
@@ -276,9 +421,13 @@ function ProductModal({
                   <input style={{ ...mInp, width: 120 }} type="number" step="0.01"
                     value={f.recommended_price} onChange={(e) => upd("recommended_price", e.target.value)} />
                 </Field>
-                <Field label="Küpür">
-                  <input style={{ ...mInp, width: 100 }} value={f.kupur}
-                    onChange={(e) => upd("kupur", e.target.value)} />
+                <Field label="رقم الربط (ثابت)">
+                  <div style={{ ...mInp, width: 110, padding: "6px 8px", direction: "ltr",
+                    background: "var(--row-alt)", border: "1px solid var(--border)",
+                    borderRadius: 4, color: "var(--muted)", fontSize: 13 }}
+                    title="مصدره المكتبة العالمية — لا يُعدَّل">
+                    {f.kupur || "—"}
+                  </div>
                 </Field>
               </div>
               <div style={{ display: "flex", gap: 10 }}>
@@ -308,15 +457,17 @@ function ProductModal({
             </>
           ) : (
             <>
-              <Field label="رقم الربط لدى المزوّد (معرّف الباقة)">
+              <Field label="معرّف الباقة لدى المزوّد">
                 <input style={mInp} value={f.provider_package_id} dir="ltr"
                   placeholder="مثال: 1547"
                   onChange={(e) => upd("provider_package_id", e.target.value)} />
               </Field>
               <div style={hint}>
-                هذا الرقم هو صلة الوصل: اسم الباقة عندك قد يختلف عن اسمها لدى المزوّد،
-                لكن رقم الربط ثابت. يُرسَل في المعامل <code>oyun</code> لـ ZNET
-                وكـ <code>package_id</code> لمتاجر البطاقات. بدونه لن يعرف المزوّد أي باقة تقصد.
+                لا تخلطه برقم الربط: رقم الربط ({product.kupur || "—"}) جسرك أنت،
+                مصدره المكتبة العالمية وواحد لكل باقة. أمّا هذا فرقم الباقة **في دفاتر
+                المزوّد** ويختلف من مزوّد لآخر — يُرسَل كـ <code>package_id</code>،
+                وبدونه لا يعرف المزوّد أيّ باقة تقصد. للأرقام لكل مزوّد على حدة
+                استخدم صفحة «ربط الباقات».
               </div>
               <ProviderPick label="API القابلة للإرسال (الرئيسي)" providers={providers}
                 value={f.provider} onChange={(v) => upd("provider", v)} />

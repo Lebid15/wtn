@@ -8,7 +8,9 @@ from core.models import Tenant, User
 from providers.adapters.base import PackageList
 from providers.models import Provider
 
-from .models import Game, PriceGroup, Product, ProductLink, ProductPrice
+from .models import (
+    Game, LibraryGame, LibraryProduct, PriceGroup, Product, ProductLink, ProductPrice,
+)
 
 
 class CatalogToolsTest(APITestCase):
@@ -431,3 +433,114 @@ class CatalogToolsTest(APITestCase):
     def _price(self, product):
         pp = self._row(product)
         return pp.price if pp else None
+
+
+class LibraryLinkNumberTest(APITestCase):
+    """
+    رقم الربط جسر ثابت مصدره المكتبة العالمية.
+
+    ثلاث قواعد تُختبَر هنا: لا يُخترع رقم من خارج المكتبة، ولا يتكرّر رقمان في
+    لعبة واحدة، ولا يتغيّر رقم بعد إنشائه — ويعود إلى قائمة المتاح متى حُذفت باقته.
+    """
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(subdomain="t2", name="متجر", base_currency="USD")
+        self.admin = User.objects.create(
+            login_id="admin2", name="مدير", tenant=self.tenant, role=User.Role.TENANT_ADMIN,
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        self.lib = LibraryGame.objects.create(name="PUBG")
+        for i, (kupur, name, cost, price) in enumerate([
+            ("60", "60 UC", "0.92", "1.20"),
+            ("325", "325 UC", "4.57", "3.81"),
+            ("660", "660 UC", "6.70", "7.52"),
+        ]):
+            LibraryProduct.objects.create(
+                game=self.lib, name=name, kupur=kupur, sort_order=i,
+                suggested_cost=Decimal(cost), suggested_price=Decimal(price),
+            )
+
+        self.game = Game.objects.create(
+            tenant=self.tenant, name="PUBG", master_library_uuid=self.lib.uuid,
+        )
+        self.p60 = Product.objects.create(
+            tenant=self.tenant, game=self.game, name="60 UC", kupur="60",
+            cost_price=Decimal("0.92"), recommended_price=Decimal("1.20"),
+        )
+
+    def _available(self):
+        r = self.client.get(f"/api/catalog/games/{self.game.id}/library-packages/")
+        self.assertEqual(r.status_code, 200, r.content)
+        return r.json()
+
+    def _add(self, kupur, name="باقة"):
+        return self.client.post(
+            "/api/catalog/products/",
+            {"game": self.game.id, "name": name, "kupur": kupur,
+             "cost_price": "1", "recommended_price": "2"},
+            format="json",
+        )
+
+    def test_available_excludes_numbers_already_taken(self):
+        data = self._available()
+        self.assertTrue(data["linked"])
+        self.assertEqual([p["kupur"] for p in data["results"]], ["325", "660"])
+        # القيم المقترحة تصل معها لتملأ النموذج
+        self.assertEqual(data["results"][0]["suggested_cost"], "4.57")
+
+    def test_deleting_a_package_returns_its_number_to_the_pool(self):
+        self.client.delete(f"/api/catalog/products/{self.p60.id}/")
+        self.assertEqual([p["kupur"] for p in self._available()["results"]], ["60", "325", "660"])
+
+    def test_number_outside_the_library_is_refused(self):
+        r = self._add("999")
+        self.assertEqual(r.status_code, 400, r.content)
+        self.assertIn("المكتبة", str(r.json()["kupur"]))
+
+    def test_empty_number_is_refused_for_a_library_game(self):
+        self.assertEqual(self._add("").status_code, 400)
+
+    def test_duplicate_number_in_the_same_game_is_refused(self):
+        r = self._add("60")
+        self.assertEqual(r.status_code, 400, r.content)
+        self.assertIn("مستعمل", str(r.json()["kupur"]))
+
+    def test_available_number_is_accepted_with_its_library_values(self):
+        r = self._add("325", name="325 UC")
+        self.assertEqual(r.status_code, 201, r.content)
+        self.assertEqual(r.json()["kupur"], "325")
+
+    def test_update_never_changes_the_number(self):
+        r = self.client.patch(
+            f"/api/catalog/products/{self.p60.id}/",
+            {"kupur": "999", "name": "اسم جديد", "cost_price": "2.00"}, format="json",
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        self.p60.refresh_from_db()
+        self.assertEqual(self.p60.kupur, "60")          # الجسر ثابت
+        self.assertEqual(self.p60.name, "اسم جديد")      # وما يملكه صاحب المتجر يتغيّر
+        self.assertEqual(self.p60.cost_price, Decimal("2.00"))
+
+    def test_game_outside_the_library_keeps_manual_numbers(self):
+        own = Game.objects.create(tenant=self.tenant, name="لعبة يدوية")
+        r = self.client.post(
+            "/api/catalog/products/",
+            {"game": own.id, "name": "باقة", "kupur": "abc",
+             "cost_price": "1", "recommended_price": "2"}, format="json",
+        )
+        self.assertEqual(r.status_code, 201, r.content)
+        data = self.client.get(f"/api/catalog/games/{own.id}/library-packages/").json()
+        self.assertFalse(data["linked"])
+
+    def test_library_refuses_two_packages_with_the_same_number(self):
+        owner = User.objects.create(
+            login_id="owner", name="مالك المنصّة", role=User.Role.PLATFORM_OWNER,
+        )
+        self.client.force_authenticate(user=owner)
+        r = self.client.post(
+            "/api/platform/library/products/",
+            {"game": self.lib.id, "name": "مكرّر", "kupur": "60",
+             "suggested_cost": "1", "suggested_price": "2"}, format="json",
+        )
+        self.assertEqual(r.status_code, 400, r.content)

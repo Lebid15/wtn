@@ -15,6 +15,15 @@ class PriceGroupSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    """
+    باقة المتجر.
+
+    **رقم الربط (`kupur`) لا يُعدَّل بعد الإنشاء.** هو جسر ثابت بين باقتك وباقة
+    المكتبة العالمية وباقات المزوّدين؛ تغييره يقطع الجسر على طلبات قائمة، ولذلك
+    يُختار مرّةً واحدة عند الإضافة من قائمة أرقام المكتبة، ثم يبقى. أمّا الاسم
+    والتكلفة والسعر الموصى فيملكها صاحب المتجر ويعدّلها متى شاء.
+    """
+
     profit = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     created_at = serializers.DateTimeField(format="%Y-%m-%d", read_only=True)
@@ -29,6 +38,45 @@ class ProductSerializer(serializers.ModelSerializer):
             "description", "sort_order", "created_at",
         ]
         read_only_fields = ["tenant"]
+
+    def validate(self, attrs):
+        # التحقّق عند الإضافة فقط — التعديل لا يمسّ رقم الربط أصلاً (انظر update)
+        if self.instance is not None:
+            return attrs
+
+        game = attrs.get("game")
+        kupur = (attrs.get("kupur") or "").strip()
+        attrs["kupur"] = kupur
+        if game is None:
+            return attrs
+
+        if kupur and Product.objects.filter(game=game, kupur=kupur).exists():
+            raise serializers.ValidationError(
+                {"kupur": f"رقم الربط {kupur} مستعمل في باقة أخرى ضمن هذه اللعبة."}
+            )
+
+        # لعبة مستورَدة من المكتبة ⇒ رقم الربط من المكتبة حصراً
+        if game.master_library_uuid:
+            lib = LibraryGame.objects.filter(uuid=game.master_library_uuid).first()
+            if lib is not None:
+                allowed = {
+                    (p.kupur or "").strip()
+                    for p in lib.products.filter(is_active=True)
+                    if (p.kupur or "").strip()
+                }
+                if not kupur:
+                    raise serializers.ValidationError(
+                        {"kupur": "اختر رقم ربط من المكتبة العالمية."}
+                    )
+                if kupur not in allowed:
+                    raise serializers.ValidationError(
+                        {"kupur": f"رقم الربط {kupur} غير معرّف في المكتبة العالمية لهذه اللعبة."}
+                    )
+        return attrs
+
+    def update(self, instance, validated_data):
+        validated_data.pop("kupur", None)  # ثابت — مصدره المكتبة العالمية
+        return super().update(instance, validated_data)
 
 
 class GameSerializer(serializers.ModelSerializer):
@@ -62,6 +110,22 @@ class LibraryProductSerializer(serializers.ModelSerializer):
             "kupur", "is_parcali", "execution_type", "description", "sort_order", "is_active",
         ]
         read_only_fields = ["uuid"]
+
+    def validate(self, attrs):
+        """رقم الربط فريد داخل اللعبة — رقمان متطابقان يجعلان الجسر ملتبساً."""
+        game = attrs.get("game") or getattr(self.instance, "game", None)
+        kupur = (attrs.get("kupur") if "kupur" in attrs else getattr(self.instance, "kupur", ""))
+        kupur = (kupur or "").strip()
+        attrs["kupur"] = kupur
+        if game and kupur:
+            clash = LibraryProduct.objects.filter(game=game, kupur=kupur)
+            if self.instance is not None:
+                clash = clash.exclude(pk=self.instance.pk)
+            if clash.exists():
+                raise serializers.ValidationError(
+                    {"kupur": f"رقم الربط {kupur} مستعمل في باقة أخرى ضمن هذه اللعبة."}
+                )
+        return attrs
 
 
 class LibraryGameSerializer(serializers.ModelSerializer):

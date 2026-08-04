@@ -73,8 +73,15 @@ export default function Library() {
               {open === g.id && (
                 <div style={{ marginTop: 8, background: "#f7f9fa", borderRadius: 6, padding: "6px 10px", maxHeight: 150, overflowY: "auto" }}>
                   {g.products.map((p, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0", borderBottom: "1px solid #eef1f2" }}>
-                      <span>{p.name}</span>
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, padding: "3px 0", borderBottom: "1px solid #eef1f2" }}>
+                      <span>
+                        {p.kupur && (
+                          <code style={{ background: "#e8edf0", borderRadius: 3, padding: "1px 5px",
+                            marginInlineEnd: 6, direction: "ltr", display: "inline-block" }}
+                            title="رقم الربط">{p.kupur}</code>
+                        )}
+                        {p.name}
+                      </span>
                       <b style={{ color: "var(--primary-dark)" }}>{money(p.suggested_price)}</b>
                     </div>
                   ))}

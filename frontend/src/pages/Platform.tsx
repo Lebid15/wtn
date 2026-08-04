@@ -253,7 +253,7 @@ function ManagePackages({ game, onClose }: { game: LibGame; onClose: () => void 
         <div style={{ padding: 18 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
-              <tr>{["الباقة", "التكلفة", "السعر المقترح", "الكوبور", ""].map((h) => <th key={h} style={{ ...th, background: "#e2e8f0", color: "#475569" }}>{h}</th>)}</tr>
+              <tr>{["الباقة", "التكلفة", "السعر المقترح", "رقم الربط", ""].map((h) => <th key={h} style={{ ...th, background: "#e2e8f0", color: "#475569" }}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
@@ -273,9 +273,13 @@ function ManagePackages({ game, onClose }: { game: LibGame; onClose: () => void 
             <Field label="الباقة"><input style={{ ...inp, width: 140 }} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></Field>
             <Field label="التكلفة"><input style={{ ...inp, width: 90 }} type="number" step="0.01" value={f.suggested_cost} onChange={(e) => setF({ ...f, suggested_cost: e.target.value })} /></Field>
             <Field label="السعر"><input style={{ ...inp, width: 90 }} type="number" step="0.01" value={f.suggested_price} onChange={(e) => setF({ ...f, suggested_price: e.target.value })} /></Field>
-            <Field label="الكوبور"><input style={{ ...inp, width: 90 }} value={f.kupur} onChange={(e) => setF({ ...f, kupur: e.target.value })} /></Field>
+            <Field label="رقم الربط"><input style={{ ...inp, width: 90 }} value={f.kupur} onChange={(e) => setF({ ...f, kupur: e.target.value })} required dir="ltr" /></Field>
             <button className="btn g" style={{ height: 38 }} disabled={busy}>{busy ? "..." : "➕ إضافة"}</button>
           </form>
+          <div style={{ marginTop: 10, fontSize: 12.5, color: "#64748b", lineHeight: 1.7 }}>
+            رقم الربط جسر الباقة: منه تُبنى قائمة الأرقام التي يختار منها أصحاب المتاجر،
+            ولا يستطيع أحدهم تغييره بعد الإضافة. اجعله فريداً داخل اللعبة الواحدة.
+          </div>
         </div>
       </div>
     </div>
