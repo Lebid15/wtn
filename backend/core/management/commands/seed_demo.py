@@ -97,3 +97,52 @@ class Command(BaseCommand):
             shop.parent = big
             shop.save(update_fields=["parent"])
         self.stdout.write(f"دكان تحت الوكيل الكبير: {shop.login_id} / shop123")
+
+        # وكيل كبير ثانٍ بدكانين — نموذج حيّ لشجرة الوكلاء في «قائمة الوكلاء»
+        ahmad, created = User.objects.get_or_create(
+            login_id="5553333333",
+            defaults=dict(
+                tenant=tenant, role=User.Role.ANA_BAYI, name="أحمد العلي",
+                status=User.Status.ACTIVE, modules={"oyun": True, "shopping": True},
+            ),
+        )
+        if created:
+            ahmad.set_password("ahmad123")
+            ahmad.save()
+            Wallet.objects.create(tenant=tenant, user=ahmad, balance=Decimal("3000"))
+        self.stdout.write(f"وكيل كبير: {ahmad.login_id} / ahmad123 — أحمد العلي")
+
+        for login_id, shop_name, balance in [
+            ("7770000011", "محل النور", Decimal("450")),
+            ("7770000012", "محل الأمانة", Decimal("120")),
+        ]:
+            sub, created = User.objects.get_or_create(
+                login_id=login_id,
+                defaults=dict(
+                    tenant=tenant, role=User.Role.BAYI, parent=ahmad, name=shop_name,
+                    status=User.Status.ACTIVE, modules={"oyun": True, "shopping": True},
+                ),
+            )
+            if created:
+                sub.set_password("shop123")
+                sub.save()
+                Wallet.objects.create(tenant=tenant, user=sub, balance=balance)
+            elif sub.parent_id != ahmad.id:
+                sub.parent = ahmad
+                sub.save(update_fields=["parent"])
+            self.stdout.write(f"  دكان تحت أحمد العلي: {sub.login_id} / shop123 — {shop_name}")
+
+        # ترقيم أي وكيل بلا رقم تسلسلي (حسابات أُنشئت قبل حقل dealer_no)
+        unnumbered = User.objects.filter(
+            tenant=tenant, role__in=[User.Role.BAYI, User.Role.ANA_BAYI], dealer_no__isnull=True,
+        ).order_by("id")
+        if unnumbered.exists():
+            last = User.objects.filter(
+                tenant=tenant, role__in=[User.Role.BAYI, User.Role.ANA_BAYI],
+            ).exclude(dealer_no=None).order_by("-dealer_no").first()
+            n = (last.dealer_no if last else 0) + 1
+            for u in unnumbered:
+                u.dealer_no = n
+                u.save(update_fields=["dealer_no"])
+                n += 1
+            self.stdout.write(f"رُقّم {n - 1} وكيلاً تسلسلياً.")

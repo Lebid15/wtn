@@ -136,7 +136,7 @@ class DealerListTest(APITestCase):
         return r.json()["results"]
 
     def test_list_carries_the_sequential_number(self):
-        self.assertEqual([d["dealer_no"] for d in self._list()], [2])
+        self.assertEqual([d["dealer_no"] for d in self._list()], [1])
 
     def test_new_dealer_gets_the_next_number(self):
         r = self.client.post(
@@ -148,15 +148,15 @@ class DealerListTest(APITestCase):
         self.assertEqual(User.objects.get(login_id="bayi10").dealer_no, 3)
 
     def test_toggling_status_disables_and_re_enables(self):
-        url = f"/api/dealers/{self.dealer.id}/settings/"
+        url = f"/api/dealers/{self.big.id}/settings/"
         self.assertEqual(self.client.post(url, {"status": "passive"}, format="json").status_code, 200)
-        self.dealer.refresh_from_db()
-        self.assertEqual(self.dealer.status, User.Status.PASSIVE)
+        self.big.refresh_from_db()
+        self.assertEqual(self.big.status, User.Status.PASSIVE)
         self.assertFalse(self._list()[0]["active"])   # يبقى في الردّ، والواجهة تُخفيه
 
         self.client.post(url, {"status": "active"}, format="json")
-        self.dealer.refresh_from_db()
-        self.assertEqual(self.dealer.status, User.Status.ACTIVE)
+        self.big.refresh_from_db()
+        self.assertEqual(self.big.status, User.Status.ACTIVE)
 
     def test_settings_carry_and_save_group_and_load_limit(self):
         url = f"/api/dealers/{self.dealer.id}/settings/"
@@ -178,20 +178,87 @@ class DealerListTest(APITestCase):
         )
         self.assertEqual(r.status_code, 404)
 
-    def test_hierarchy_groups_dealers_under_their_big_agent(self):
-        r = self.client.get("/api/dealers/hierarchy/")
-        self.assertEqual(r.status_code, 200, r.content)
-        data = r.json()
-        self.assertEqual(len(data["results"]), 1)
-        group = data["results"][0]
-        self.assertEqual(group["agent"]["name"], "وكيل كبير")
-        self.assertEqual([d["name"] for d in group["dealers"]], ["دكان"])
-        self.assertEqual(group["dealers_count"], 1)
-        self.assertEqual(group["dealers_balance"], "-25.00")
+    def test_sub_dealer_is_nested_under_its_big_agent(self):
+        """الدكان التابع لا يقف صفّاً مستقلاً — مكانه داخل صفّ وكيله."""
+        rows = self._list()
+        self.assertEqual([r["name"] for r in rows], ["وكيل كبير"])
+        big = rows[0]
+        self.assertTrue(big["is_big"])
+        self.assertEqual(big["children_count"], 1)
+        self.assertEqual([c["name"] for c in big["children"]], ["دكان"])
 
-    def test_hierarchy_is_for_the_store_owner_only(self):
-        self.client.force_authenticate(user=self.dealer)
-        self.assertEqual(self.client.get("/api/dealers/hierarchy/").status_code, 403)
+    def test_independent_dealer_stands_on_its_own_row(self):
+        solo = User.objects.create(
+            login_id="solo9", name="دكان مستقلّ", tenant=self.tenant,
+            role=User.Role.BAYI, dealer_no=3,
+        )
+        Wallet.objects.create(tenant=self.tenant, user=solo)
+        names = [r["name"] for r in self._list()]
+        self.assertIn("دكان مستقلّ", names)
+        self.assertNotIn("دكان", names)   # التابع يبقى مطويّاً تحت وكيله
+
+    def test_promoting_a_dealer_to_big_agent(self):
+        solo = User.objects.create(
+            login_id="solo10", name="مرشّح", tenant=self.tenant,
+            role=User.Role.BAYI, parent=self.big, dealer_no=4,
+        )
+        r = self.client.post(
+            f"/api/dealers/{solo.id}/settings/", {"role": "ana_bayi"}, format="json",
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        solo.refresh_from_db()
+        self.assertEqual(solo.role, User.Role.ANA_BAYI)
+        self.assertIsNone(solo.parent_id)   # الكبير لا يتبع أحداً
+
+    def test_big_agent_with_shops_cannot_be_demoted(self):
+        r = self.client.post(
+            f"/api/dealers/{self.big.id}/settings/", {"role": "bayi"}, format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+        self.big.refresh_from_db()
+        self.assertEqual(self.big.role, User.Role.ANA_BAYI)
+
+    def test_attaching_a_dealer_to_a_big_agent(self):
+        solo = User.objects.create(
+            login_id="solo11", name="دكان حرّ", tenant=self.tenant,
+            role=User.Role.BAYI, dealer_no=5,
+        )
+        r = self.client.post(
+            f"/api/dealers/{solo.id}/settings/", {"parent": self.big.id}, format="json",
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        solo.refresh_from_db()
+        self.assertEqual(solo.parent_id, self.big.id)
+        self.assertNotIn("دكان حرّ", [x["name"] for x in self._list()])
+
+    def test_a_big_agent_cannot_follow_another(self):
+        other = User.objects.create(
+            login_id="big10", name="كبير آخر", tenant=self.tenant,
+            role=User.Role.ANA_BAYI, dealer_no=6,
+        )
+        r = self.client.post(
+            f"/api/dealers/{other.id}/settings/", {"parent": self.big.id}, format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_creating_a_big_agent_with_a_follower(self):
+        r = self.client.post(
+            "/api/dealers/",
+            {"login_id": "ahmad9", "name": "أحمد العلي", "password": "pass123",
+             "role": "ana_bayi"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 201, r.content)
+        ahmad_id = r.json()["id"]
+        r2 = self.client.post(
+            "/api/dealers/",
+            {"login_id": "shop9", "name": "محل النور", "password": "pass123",
+             "parent": ahmad_id},
+            format="json",
+        )
+        self.assertEqual(r2.status_code, 201, r2.content)
+        row = next(x for x in self._list() if x["id"] == ahmad_id)
+        self.assertEqual([c["name"] for c in row["children"]], ["محل النور"])
 
     def test_removed_dealer_prices_endpoints_are_gone(self):
         self.assertEqual(self.client.get("/api/catalog/dealer-prices/").status_code, 404)

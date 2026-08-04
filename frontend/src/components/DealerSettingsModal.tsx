@@ -14,6 +14,9 @@ interface Settings {
   // انتقلا إلى هنا بعد حذف صفحة «أسعار الوكلاء»
   oyun_load_limit: string; price_group: number | null;
   price_groups: { id: number; name: string }[];
+  // الشجرة: وكيل كبير أم دكان يتبع كبيراً
+  parent: number | null; parent_name: string; children_count: number;
+  big_agents: { id: number; name: string }[];
 }
 
 /** حدود تحميل الألعاب المعتادة — والقيمة المحفوظة تُضاف إن كانت خارجها. */
@@ -87,6 +90,8 @@ export default function DealerSettingsModal({
         status: f.status,
         oyun_load_limit: f.oyun_load_limit || "0",
         price_group: f.price_group,
+        role: f.role,
+        parent: f.role === "ana_bayi" ? null : f.parent,
         phone: f.phone,
         whatsapp: f.whatsapp,
         country: f.country,
@@ -159,6 +164,45 @@ export default function DealerSettingsModal({
                 <div style={hint}>
                   الحد الائتماني أقصى دَين تسمح به: <b>-500</b> يعني أن رصيده يهبط
                   إلى −500 ثم يتوقّف شراؤه.
+                </div>
+
+                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--primary-dark)", marginBottom: 10 }}>
+                    نوع الوكيل وموقعه في الشجرة
+                  </div>
+                  <div style={grid2}>
+                    <Fld label="النوع">
+                      <select value={f.role} style={inp}
+                        onChange={(e) => set("role", e.target.value)}>
+                        <option value="bayi">وكيل</option>
+                        <option value="ana_bayi">★ وكيل كبير</option>
+                      </select>
+                    </Fld>
+                    {f.role === "bayi" ? (
+                      <Fld label="يتبع الوكيل الكبير">
+                        <select value={f.parent ?? ""} style={inp}
+                          onChange={(e) => set("parent", e.target.value ? Number(e.target.value) : null)}>
+                          <option value="">— مستقلّ (يتبع المتجر مباشرةً) —</option>
+                          {f.big_agents.map((b) => (
+                            <option key={b.id} value={b.id}>{b.name}</option>
+                          ))}
+                        </select>
+                      </Fld>
+                    ) : (
+                      <Fld label="دكاكينه">
+                        <div style={{ ...inp, display: "flex", alignItems: "center",
+                          background: "var(--surface-2)", fontWeight: 700 }}>
+                          {f.children_count} دكاناً
+                        </div>
+                      </Fld>
+                    )}
+                  </div>
+                  <div style={{ ...hint, marginTop: 10 }}>
+                    الوكيل الكبير تظهر بجانبه نجمة في القائمة، ويُفتح صفّه على دكاكينه.
+                    الدكان التابع لا يقف صفّاً مستقلاً — مكانه داخل جدول وكيله.
+                    {f.role === "ana_bayi" && f.children_count > 0 &&
+                      " لتحويله إلى وكيل عادي انقل دكاكينه إلى وكيل كبير آخر أوّلاً."}
+                  </div>
                 </div>
 
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>

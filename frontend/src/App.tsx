@@ -3,7 +3,6 @@ import { AuthProvider, useAuth, roleHome } from "./auth";
 import AdminLayout from "./layout/AdminLayout";
 import Login from "./pages/Login";
 import Dealers from "./pages/Dealers";
-import SubDealers from "./pages/SubDealers";
 import Exchange from "./pages/Exchange";
 import Games from "./pages/Games";
 import Library from "./pages/Library";
@@ -78,7 +77,6 @@ export default function App() {
 
           {/* الوكلاء */}
           <Route path="/dealers" element={Admin(<Dealers />)} />
-          <Route path="/dealers/sub" element={Admin(<SubDealers />)} />
           <Route path="/ayarlar/payments" element={Admin(<PaymentTracking />)} />
           <Route path="/ayarlar/payment-methods" element={Admin(<PaymentMethods />)} />
           <Route path="/ayarlar/exchange" element={Admin(<Exchange />)} />

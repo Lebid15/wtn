@@ -47,7 +47,6 @@ const SUBNAV_OYUNPIN = [
 // قسم الوكلاء — كل ما يخصّ الوكيل وماله
 const SUBNAV_BAYILER = [
   { label: "قائمة الوكلاء", to: "/dealers" },
-  { label: "وكلاء تحت وكيل", to: "/dealers/sub" },
   { label: "متابعة الدفع", to: "/ayarlar/payments" },
   { label: "طرق الدفع", to: "/ayarlar/payment-methods" },
   { label: "أسعار الصرف", to: "/ayarlar/exchange" },

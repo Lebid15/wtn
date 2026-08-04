@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../api";
 
 interface Props {
@@ -21,8 +21,18 @@ export default function DealerCreateModal({ onClose, onDone }: Props) {
   const [creditLimit, setCreditLimit] = useState("0");
   const [country, setCountry] = useState("SY");
   const [group, setGroup] = useState("");
+  const [role, setRole] = useState("bayi");
+  const [parent, setParent] = useState("");
+  const [bigAgents, setBigAgents] = useState<{ id: number; name: string }[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // الوكلاء الكبار المتاحون ليتبعهم الوكيل الجديد
+  useEffect(() => {
+    api.get("/dealers/").then((r) => setBigAgents(
+      (r.data.results || []).filter((d: any) => d.is_big).map((d: any) => ({ id: d.id, name: d.name })),
+    )).catch(() => setBigAgents([]));
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,6 +46,8 @@ export default function DealerCreateModal({ onClose, onDone }: Props) {
         credit_limit: creditLimit || "0",
         country,
         group: group.trim(),
+        role,
+        parent: role === "bayi" && parent ? Number(parent) : null,
       });
       onDone();
     } catch (e: any) {
@@ -98,6 +110,27 @@ export default function DealerCreateModal({ onClose, onDone }: Props) {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <label style={lbl}>نوع الوكيل</label>
+              <select style={inp} value={role} onChange={(e) => setRole(e.target.value)}>
+                <option value="bayi">وكيل</option>
+                <option value="ana_bayi">★ وكيل كبير</option>
+              </select>
+            </div>
+            {role === "bayi" && (
+              <div style={{ flex: 1 }}>
+                <label style={lbl}>يتبع الوكيل الكبير</label>
+                <select style={inp} value={parent} onChange={(e) => setParent(e.target.value)}>
+                  <option value="">— مستقلّ —</option>
+                  {bigAgents.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <label style={lbl}>المجموعة (اختياري)</label>

@@ -27,6 +27,11 @@ export default function Dealers() {
   /** الجدول الأول للنشطين وحدهم؛ زرّ «إظهار المعطّلين» يقلبه إلى جدول المعطّلين. */
   const [showDisabled, setShowDisabled] = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+  /** الوكلاء الكبار المفتوحون — صفّ الكبير يطوي دكاكينه تحته. */
+  const [expanded, setExpanded] = useState<number[]>([]);
+
+  const toggleExpanded = (id: number) =>
+    setExpanded((ids) => ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
 
   /**
    * الكرة هي الحالة والزرّ معاً: خضراء تعمل ⇒ اضغطها فيُعطَّل ويغادر الجدول،
@@ -37,8 +42,13 @@ export default function Dealers() {
     setTogglingId(d.id);
     try {
       await api.post(`/dealers/${d.id}/settings/`, { status: next });
-      setDealers((ds) => ds.map((x) =>
-        x.id === d.id ? { ...x, active: !d.active, status: next } : x));
+      const flip = (x: Dealer): Dealer => ({
+        ...x,
+        active: x.id === d.id ? !d.active : x.active,
+        status: x.id === d.id ? next : x.status,
+        children: x.children?.map(flip),
+      });
+      setDealers((ds) => ds.map(flip));
       setToast({
         ok: true,
         text: d.active
@@ -207,18 +217,33 @@ export default function Dealers() {
                 <tr><td colSpan={9} style={{ padding: 30, color: "var(--muted)" }}>
                   {showDisabled ? "لا وكلاء معطّلين" : "لا يوجد وكلاء مطابقون"}
                 </td></tr>
-              ) : shown.map((d) => {
+              ) : shown.flatMap((d) => {
                 const bal = Number(d.balance);
-                return (
-                  <tr key={d.id}>
+                const open = expanded.includes(d.id);
+                const rows = [
+                  <tr key={d.id} style={d.is_big && open ? bigOpenRow : undefined}>
                     <td><input type="checkbox" /></td>
                     <td className="num" style={{ color: "var(--faint)", fontSize: 12.5 }}
                       title={`رقم الدخول: ${d.login_id}`}>{d.dealer_no ?? "—"}</td>
                     <td className="cell-start">
-                      <div style={{ fontWeight: 700 }}>
-                        {d.name}
-                        {d.children_count > 0 && <span style={{ color: "var(--primary)", fontSize: 11, fontWeight: 700 }}> ({d.children_count})</span>}
-                      </div>
+                      {d.is_big ? (
+                        <button type="button" onClick={() => toggleExpanded(d.id)}
+                          title="وكيل كبير — اضغط لعرض دكاكينه"
+                          style={{
+                            background: "none", border: 0, padding: 0, cursor: "pointer",
+                            font: "inherit", fontWeight: 800, color: GOLD_INK,
+                            display: "flex", alignItems: "center", gap: 5,
+                          }}>
+                          <span style={{ fontSize: 11, color: "var(--faint)" }}>{open ? "▾" : "▸"}</span>
+                          <span title="وكيل كبير" style={{ color: GOLD }}>★</span>
+                          {d.name}
+                          <span style={{ color: "var(--faint)", fontSize: 11, fontWeight: 700 }}>
+                            ({d.children_count})
+                          </span>
+                        </button>
+                      ) : (
+                        <div style={{ fontWeight: 700 }}>{d.name}</div>
+                      )}
                     </td>
                     <td>
                       <span className={`num ${balCls(bal)}`} style={{ fontSize: 14.5 }}>{money(bal)}</span>
@@ -258,8 +283,84 @@ export default function Dealers() {
                           onClick={() => setSettingsFor(d.id)} />
                       </div>
                     </td>
-                  </tr>
-                );
+                  </tr>,
+                ];
+
+                // دكاكين الوكيل الكبير: تُفتح تحته داخل إطار ذهبي، فلا تختلط
+                // بالصفوف الأصلية ولا تُقرأ معزولةً عن وكيلها.
+                if (d.is_big && open) {
+                  rows.push(
+                    <tr key={`${d.id}-kids`}>
+                      <td colSpan={9} style={{ padding: 0, background: GOLD_BG }}>
+                        <div style={goldBox}>
+                          <div style={goldHead}>
+                            <span style={{ color: GOLD }}>★</span> دكاكين {d.name}
+                            <span style={{ color: "var(--muted)", fontWeight: 400 }}>
+                              {" "}· رصيد الوكيل الكبير{" "}
+                              <b className={`num ${balCls(bal)}`}>{money(bal)} {symbolOf(d.currency)}</b>
+                            </span>
+                          </div>
+                          {(d.children || []).length === 0 ? (
+                            <div style={{ padding: "14px 16px", color: "var(--muted)", fontSize: 13 }}>
+                              لا دكاكين تحته بعد — اربط وكيلاً به من ⚙ إعدادات الوكيل.
+                            </div>
+                          ) : (
+                            <table className="grid" style={{ background: "transparent" }}>
+                              <thead>
+                                <tr>
+                                  <th>الرقم</th>
+                                  <th className="cell-start">اسم الدكان</th>
+                                  <th>الرصيد</th>
+                                  <th>الحد الائتماني</th>
+                                  <th>الحالة</th>
+                                  <th>إجراءات</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(d.children || []).map((c) => (
+                                  <tr key={c.id}>
+                                    <td className="num" style={{ color: "var(--faint)", fontSize: 12.5 }}
+                                      title={`رقم الدخول: ${c.login_id}`}>{c.dealer_no ?? "—"}</td>
+                                    <td className="cell-start" style={{ fontWeight: 700 }}>{c.name}</td>
+                                    <td>
+                                      <span className={`num ${balCls(Number(c.balance))}`} style={{ fontSize: 14 }}>
+                                        {money(c.balance)}
+                                      </span>
+                                      <span style={{ fontSize: 11, color: "var(--faint)", marginInlineStart: 3 }}>
+                                        {symbolOf(c.currency)}
+                                      </span>
+                                    </td>
+                                    <td className="num" style={{ color: "var(--muted)" }}>{money(c.credit_limit)}</td>
+                                    <td>
+                                      <button type="button" onClick={() => toggleActive(c)}
+                                        disabled={togglingId === c.id}
+                                        title={c.active ? "نشط — اضغط لتعطيله" : "معطّل — اضغط لتفعيله"}
+                                        style={{
+                                          width: 16, height: 16, borderRadius: "50%", padding: 0,
+                                          border: "2px solid rgba(0,0,0,.12)", cursor: "pointer",
+                                          background: c.active ? "var(--ok)" : "var(--danger)",
+                                          opacity: togglingId === c.id ? 0.4 : 1,
+                                        }} />
+                                    </td>
+                                    <td>
+                                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                                        <IconBtn name="chart" color="var(--primary)" title="كشف حساب"
+                                          onClick={() => setStatementFor(c)} />
+                                        <IconBtn name="settings" color="var(--primary-dark)" title="إعدادات الدكان"
+                                          onClick={() => setSettingsFor(c.id)} />
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </td>
+                    </tr>,
+                  );
+                }
+                return rows;
               })}
             </tbody>
           </table>
@@ -324,3 +425,17 @@ function IconBtn({ name, color, title, onClick }:
 }
 
 const ib: React.CSSProperties = { marginInlineEnd: 5, verticalAlign: -2 };
+
+/* الذهبي للوكيل الكبير: نجمته واسمه وإطار دكاكينه */
+const GOLD = "#e0a800";
+const GOLD_INK = "#8a6100";
+const GOLD_BG = "rgba(224,168,0,.05)";
+const bigOpenRow: React.CSSProperties = { background: GOLD_BG };
+const goldBox: React.CSSProperties = {
+  border: `2px solid ${GOLD}`, borderRadius: 8, margin: "6px 10px 10px",
+  overflow: "hidden", background: "var(--surface)",
+};
+const goldHead: React.CSSProperties = {
+  background: "rgba(224,168,0,.12)", borderBottom: `1px solid ${GOLD}`,
+  padding: "8px 12px", fontSize: 13, fontWeight: 800, color: GOLD_INK,
+};

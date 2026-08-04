@@ -199,12 +199,26 @@ def _create_dealer(request):
     country = (data.get("country") or "SY").strip()[:2] or "SY"
     group = (data.get("group") or "").strip()
 
+    # وكيل كبير أم وكيل عادي؟ والعادي قد يتبع وكيلاً كبيراً
+    role = data.get("role") or User.Role.BAYI
+    if role not in (User.Role.BAYI, User.Role.ANA_BAYI):
+        return Response({"detail": "نوع وكيل غير معروف"}, status=400)
+
+    parent = None
+    if role == User.Role.BAYI and data.get("parent"):
+        parent = User.objects.filter(
+            pk=data["parent"], tenant=tenant, role=User.Role.ANA_BAYI
+        ).first()
+        if parent is None:
+            return Response({"detail": "الوكيل الكبير المحدّد غير موجود"}, status=404)
+
     from django.db import transaction as db_transaction
 
     with db_transaction.atomic():
         u = User(
             tenant=tenant,
-            role=User.Role.BAYI,
+            role=role,
+            parent=parent,
             login_id=login_id,
             dealer_no=_next_dealer_no(tenant),
             name=name,
@@ -219,7 +233,8 @@ def _create_dealer(request):
         )
 
     return Response(
-        {"id": u.id, "login_id": u.login_id, "name": u.name},
+        {"id": u.id, "login_id": u.login_id, "name": u.name,
+         "role": u.role, "parent": u.parent_id},
         status=status.HTTP_201_CREATED,
     )
 
@@ -230,20 +245,21 @@ def dealers_view(request):
     """قائمة الوكلاء (Bayi Listesi) للمستأجر الحالي + إنشاء وكيل جديد (Bayi Ekle)."""
     if request.method == "POST":
         return _create_dealer(request)
-    qs = (
-        User.objects.filter(tenant=request.user.tenant, role=User.Role.BAYI)
-        .select_related("wallet")
-        .order_by("name")
-    )
-    search = request.query_params.get("q", "").strip()
-    if search:
-        qs = qs.filter(name__icontains=search)
 
-    rows = []
-    for u in qs:
+    tenant = request.user.tenant
+    everyone = list(
+        User.objects.filter(
+            tenant=tenant, role__in=[User.Role.BAYI, User.Role.ANA_BAYI]
+        ).select_related("wallet", "parent").order_by("dealer_no", "name")
+    )
+    big_ids = {u.id for u in everyone if u.role == User.Role.ANA_BAYI}
+
+    search = request.query_params.get("q", "").strip()
+
+    def row(u):
         wallet = getattr(u, "wallet", None)
         mods = u.modules or {}
-        rows.append({
+        return {
             "id": u.id,
             "login_id": u.login_id,
             "dealer_no": u.dealer_no,
@@ -259,77 +275,35 @@ def dealers_view(request):
             "shopping": mods.get("shopping", True),   # Alışveriş
             "oyun": mods.get("oyun", True),           # لعبة OyunPin
             "active": u.status == User.Status.ACTIVE,  # Aktif
-            "children_count": u.children.count(),
+            # وكيل كبير: تحته دكاكين، ويُميَّز بنجمة وصفوف تتفرّع منه
+            "is_big": u.role == User.Role.ANA_BAYI,
+            "role": u.role,
+            "parent": u.parent_id,
+            "parent_name": u.parent.name if u.parent_id else "",
             # واتساب: الرقم وموافقة التحصيل — يقرأهما زرّا الإرسال في الجدول
             "whatsapp": u.whatsapp,
             "auto_debt_collection": u.auto_debt_collection,
-        })
-    return Response({"count": len(rows), "results": rows})
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def dealers_hierarchy_view(request):
-    """
-    «وكلاء تحت وكيل»: كل وكيل كبير ومَن يتبعه.
-
-    الوكيل الكبير يشتري من المتجر ويبيع لدكاكينه، فربحه فرقُ سعرين. هنا يراه
-    صاحب المتجر مجموعةً واحدة: رصيد الكبير أعلى الجدول، وتحته دكاكينه بأرصدتها
-    ومجموع ما لهم وما عليهم — فلا يُقرأ الدكان معزولاً عن الشجرة التي يعيش فيها.
-    """
-    if request.user.role != User.Role.TENANT_ADMIN:
-        return Response({"detail": "غير مصرّح"}, status=403)
-
-    tenant = request.user.tenant
-    parents = (
-        User.objects.filter(tenant=tenant, role=User.Role.ANA_BAYI)
-        .select_related("wallet").order_by("dealer_no", "name")
-    )
-    children = (
-        User.objects.filter(tenant=tenant, role=User.Role.BAYI, parent__isnull=False)
-        .select_related("wallet").order_by("dealer_no", "name")
-    )
-
-    by_parent = {}
-    for c in children:
-        by_parent.setdefault(c.parent_id, []).append(c)
-
-    def row(u):
-        wallet = getattr(u, "wallet", None)
-        return {
-            "id": u.id,
-            "dealer_no": u.dealer_no,
-            "login_id": u.login_id,
-            "name": u.name,
-            "balance": str(wallet.balance) if wallet else "0.00",
-            "credit_limit": str(wallet.credit_limit) if wallet else "0.00",
-            "currency": wallet.currency if wallet else currency.base_currency(tenant),
-            "active": u.status == User.Status.ACTIVE,
-            "whatsapp": u.whatsapp,
         }
 
-    groups = []
-    for p in parents:
-        kids = by_parent.pop(p.id, [])
-        groups.append({
-            "agent": row(p),
-            "dealers": [row(c) for c in kids],
-            "dealers_count": len(kids),
-            "dealers_balance": str(
-                sum(Decimal(getattr(c, "wallet", None).balance if getattr(c, "wallet", None) else 0)
-                    for c in kids) if kids else Decimal("0")
-            ),
-        })
+    # الدكان التابع لوكيل كبير لا يقف صفّاً مستقلاً: مكانه داخل جدول وكيله.
+    children_of = {}
+    for u in everyone:
+        if u.parent_id in big_ids:
+            children_of.setdefault(u.parent_id, []).append(u)
 
-    # دكاكين معلّقة تحت وكيل ليس كبيراً (أو حُذف دوره) — تُعرض ولا تُخفى
-    orphans = [row(c) for ids in by_parent.values() for c in ids]
+    rows = []
+    for u in everyone:
+        if u.parent_id in big_ids:
+            continue
+        if search and search not in u.name and search not in u.login_id:
+            continue
+        r = row(u)
+        kids = children_of.get(u.id, [])
+        r["children"] = [row(c) for c in kids]
+        r["children_count"] = len(kids)
+        rows.append(r)
 
-    return Response({
-        "count": len(groups),
-        "base_currency": currency.base_currency(tenant),
-        "results": groups,
-        "orphans": orphans,
-    })
+    return Response({"count": len(rows), "results": rows})
 
 
 def _get_dealer_wallet(request, dealer_id):
@@ -355,6 +329,16 @@ def _dealer_settings_row(u):
         "name": u.name,
         "role": u.role,
         "role_label": u.get_role_display(),
+        # الشجرة: وكيل كبير أم دكان يتبع أحدهم
+        "parent": u.parent_id,
+        "parent_name": u.parent.name if u.parent_id else "",
+        "children_count": u.children.count(),
+        "big_agents": [
+            {"id": b.id, "name": b.name}
+            for b in User.objects.filter(
+                tenant=tenant, role=User.Role.ANA_BAYI
+            ).exclude(pk=u.pk).order_by("name")
+        ],
         # إعدادات انتقلت من صفحة «أسعار الوكلاء» المحذوفة
         "oyun_load_limit": str(u.oyun_load_limit),
         "price_group": u.price_group_id,
@@ -424,6 +408,40 @@ def dealer_settings_view(request, dealer_id):
             return Response({"detail": "حالة غير معروفة"}, status=400)
         u.status = data["status"]
         fields.append("status")
+
+    # النوع والتبعية: ترقية وكيل إلى كبير، أو ضمّ دكان تحت كبير
+    if "role" in data:
+        new_role = data["role"]
+        if new_role not in (User.Role.BAYI, User.Role.ANA_BAYI):
+            return Response({"detail": "نوع وكيل غير معروف"}, status=400)
+        if new_role == User.Role.BAYI and u.children.exists():
+            return Response(
+                {"detail": "لا يمكن تحويله إلى وكيل عادي وتحته دكاكين — انقلها أولاً"},
+                status=400,
+            )
+        if new_role == User.Role.ANA_BAYI and u.parent_id:
+            u.parent = None            # الكبير لا يتبع أحداً
+            fields.append("parent")
+        u.role = new_role
+        fields.append("role")
+
+    if "parent" in data:
+        pid = data["parent"]
+        if pid in (None, ""):
+            u.parent = None
+        else:
+            if int(pid) == u.id:
+                return Response({"detail": "لا يتبع الوكيل نفسه"}, status=400)
+            parent = User.objects.filter(
+                pk=pid, tenant=tenant, role=User.Role.ANA_BAYI
+            ).first()
+            if parent is None:
+                return Response({"detail": "الوكيل الكبير المحدّد غير موجود"}, status=404)
+            if u.role == User.Role.ANA_BAYI:
+                return Response({"detail": "الوكيل الكبير لا يتبع وكيلاً آخر"}, status=400)
+            u.parent = parent
+        if "parent" not in fields:
+            fields.append("parent")
 
     # حدّ تحميل الألعاب ومجموعة الأسعار — كانا في صفحة «أسعار الوكلاء» قبل حذفها
     if "oyun_load_limit" in data:

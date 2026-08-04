@@ -136,6 +136,13 @@ export interface Dealer {
   oyun: boolean;
   active: boolean;
   children_count: number;
+  /** وكيل كبير: تحته دكاكين، يُميَّز بنجمة وصفوف تتفرّع منه */
+  is_big: boolean;
+  role: string;
+  parent: number | null;
+  parent_name: string;
+  /** دكاكين هذا الوكيل الكبير — تُعرض عند فتح صفّه، ولا تقف صفوفاً مستقلّة */
+  children?: Dealer[];
   /** رقم واتساب مطبَّعاً بلا + — فارغ يعني أن زرّ الإرسال معطّل لهذا الوكيل */
   whatsapp: string;
   /** موافقته على التحصيل الآلي — عليها يُفلتر الإرسال الجماعي */
