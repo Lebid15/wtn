@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from core import currency, services as wallet_services
 from core.models import User, WalletTransaction
-from catalog.models import AgentMargin, Product, ProductPrice
+from catalog.models import AgentMargin, AgentProductPrice, Product, ProductPrice
 from .models import Order
 
 
@@ -22,29 +22,51 @@ def _gen_receipt_no() -> str:
     return timezone.now().strftime("%y%m%d") + str(random.randint(10000, 99999))
 
 
-def resolve_sell_price(dealer: User, product: Product) -> Decimal:
-    """
-    السعر النهائي للمشتري:
-    1) سعر مجموعته (يحدّده صاحب المتجر) وإلا السعر الموصى.
-    2) إن كان المشتري دكاناً تابعاً لوكيل كبير، يُضاف هامش الوكيل الكبير للمنتج.
-    """
-    base = product.recommended_price
-    if dealer.price_group_id:
+def big_agent_of(dealer: User):
+    """الوكيل الكبير الذي يتبعه هذا الدكان — أو None إن كان يشتري من المتجر مباشرةً."""
+    if dealer.parent_id and getattr(dealer.parent, "role", None) == User.Role.ANA_BAYI:
+        return dealer.parent
+    return None
+
+
+def resolve_store_price(buyer: User, product: Product) -> Decimal:
+    """ما يقبضه **المتجر**: سعر مجموعة المشتري عند صاحب المتجر، وإلا السعر الموصى."""
+    if buyer.price_group_id:
         pp = ProductPrice.objects.filter(
-            product=product, price_group_id=dealer.price_group_id
+            product=product, price_group_id=buyer.price_group_id
         ).first()
         if pp:
-            base = pp.price
+            return pp.price.quantize(Decimal("0.01"))
+    return product.recommended_price.quantize(Decimal("0.01"))
 
-    # هامش الوكيل الكبير (إن كان الدكان تابعاً له)
-    if dealer.parent_id and getattr(dealer.parent, "role", None) == User.Role.ANA_BAYI:
-        margin = AgentMargin.objects.filter(
-            agent_id=dealer.parent_id, product=product
+
+def resolve_sell_price(dealer: User, product: Product) -> Decimal:
+    """
+    ما يدفعه المشتري.
+
+    دكانٌ تابع لوكيل كبير **لا يشتري من المتجر**: يشتري من وكيله بسعر مجموعة
+    وضعه الكبير فيها. فإن لم يسعّر له الكبير بعد، نرتدّ إلى هامشه المئوي القديم،
+    ثم إلى سعر الكبير نفسه — فلا يُباع الدكان بأرخص ممّا اشترى به وكيله.
+    """
+    agent = big_agent_of(dealer)
+    if agent is None:
+        return resolve_store_price(dealer, product)
+
+    agent_cost = resolve_store_price(agent, product)
+
+    if dealer.agent_price_group_id:
+        row = AgentProductPrice.objects.filter(
+            group_id=dealer.agent_price_group_id, product=product
         ).first()
-        if margin and margin.margin_percent:
-            base = base * (Decimal("1") + margin.margin_percent / Decimal("100"))
+        if row:
+            return row.price.quantize(Decimal("0.01"))
 
-    return base.quantize(Decimal("0.01"))
+    margin = AgentMargin.objects.filter(agent_id=agent.id, product=product).first()
+    if margin and margin.margin_percent:
+        return (agent_cost * (Decimal("1") + margin.margin_percent / Decimal("100"))).quantize(
+            Decimal("0.01")
+        )
+    return agent_cost
 
 
 def resolve_dealer_sell_price(product: Product, raw=None) -> Decimal:
@@ -72,7 +94,9 @@ def create_order(dealer: User, product: Product, *, player_id="", customer_phone
     if product.status != Product.Status.ACTIVE:
         raise OrderError("المنتج غير متاح للبيع")
 
-    sell = resolve_sell_price(dealer, product)
+    agent = big_agent_of(dealer)
+    buyer_price = resolve_sell_price(dealer, product)          # ما يدفعه المشتري
+    store_price = resolve_store_price(agent or dealer, product)  # ما يقبضه المتجر
     cost = product.cost_price
     retail = resolve_dealer_sell_price(product, dealer_sell_price)
 
@@ -83,19 +107,39 @@ def create_order(dealer: User, product: Product, *, player_id="", customer_phone
     # خصم المحفظة (يحترم الحد الائتماني) — قد يرفع WalletError
     try:
         txn = wallet_services.apply_transaction(
-            wallet.id, -sell, WalletTransaction.Type.ORDER_DEBIT,
+            wallet.id, -buyer_price, WalletTransaction.Type.ORDER_DEBIT,
             created_by=dealer, note=f"طلب {product.name}",
         )
     except wallet_services.WalletError as e:
         raise OrderError(str(e))
+
+    # ساقا الوكيل الكبير: يقبض من دكانه أوّلاً ثم يدفع للمتجر، فلا يُوقفه حدّه
+    # الائتماني في المنتصف على طلب ربحُه موجب أصلاً.
+    if agent is not None:
+        agent_wallet = getattr(agent, "wallet", None)
+        if agent_wallet is None:
+            raise OrderError("لا توجد محفظة للوكيل الكبير")
+        try:
+            wallet_services.apply_transaction(
+                agent_wallet.id, buyer_price, WalletTransaction.Type.TOPUP,
+                created_by=dealer, note=f"بيع {product.name} لـ{dealer.name}",
+            )
+            wallet_services.apply_transaction(
+                agent_wallet.id, -store_price, WalletTransaction.Type.ORDER_DEBIT,
+                created_by=dealer, note=f"شراء {product.name} من المتجر لـ{dealer.name}",
+            )
+        except wallet_services.WalletError as e:
+            raise OrderError(f"محفظة الوكيل الكبير: {e}")
 
     order = Order.objects.create(
         tenant_id=dealer.tenant_id,
         receipt_no=_gen_receipt_no(),
         dealer=dealer, game=product.game, product=product,
         player_id=player_id, customer_phone=customer_phone,
-        cost_price=cost, sell_price=sell, profit=sell - cost,
-        dealer_sell_price=retail, dealer_profit=retail - sell,
+        cost_price=cost, sell_price=store_price, profit=store_price - cost,
+        agent=agent, buyer_price=buyer_price,
+        agent_profit=(buyer_price - store_price) if agent else Decimal("0"),
+        dealer_sell_price=retail, dealer_profit=retail - buyer_price,
         status=Order.Status.PENDING,
         balance_before=txn.balance_before, balance_after=txn.balance_after,
     )
@@ -104,6 +148,33 @@ def create_order(dealer: User, product: Product, *, player_id="", customer_phone
     txn.ref_id = order.id
     txn.save(update_fields=["ref_type", "ref_id"])
     return order
+
+
+def _agent_legs(order: Order, *, sign: int) -> None:
+    """
+    ساقا الوكيل الكبير على طلب دكانه — تُطبَّقان معاً أو لا تُطبَّقان.
+
+    `sign=1` تعني تنفيذ الطلب (يقبض من دكانه ثم يدفع للمتجر)، و`sign=-1` تعني
+    نقضه (يردّ للدكان ويستردّ من المتجر). الترتيب مقصود: القبض قبل الدفع في
+    الحالتين، فلا يوقف الحدّ الائتماني عمليةً محصّلتها في صالح المحفظة.
+    """
+    if order.agent_id is None:
+        return
+    wallet = getattr(order.agent, "wallet", None)
+    if wallet is None:
+        return
+    legs = (
+        [(order.buyer_price, "بيع"), (-order.sell_price, "شراء من المتجر")] if sign == 1
+        else [(order.sell_price, "استرداد من المتجر"), (-order.buyer_price, "ردّ لدكانه")]
+    )
+    for amount, label in legs:
+        wallet_services.apply_transaction(
+            wallet.id,
+            amount,
+            WalletTransaction.Type.TOPUP if amount > 0 else WalletTransaction.Type.ORDER_DEBIT,
+            note=f"{label} — طلب {order.receipt_no}",
+            ref_type="order", ref_id=order.id, allow_below_limit=True,
+        )
 
 
 @transaction.atomic
@@ -125,10 +196,11 @@ def execute_order(order: Order, *, provider=None, pin="") -> Order:
     if reinstated:
         try:
             wallet_services.apply_transaction(
-                order.dealer.wallet.id, -order.sell_price, WalletTransaction.Type.ORDER_DEBIT,
+                order.dealer.wallet.id, -order.buyer_price, WalletTransaction.Type.ORDER_DEBIT,
                 note=f"إعادة خصم طلب {order.receipt_no} بعد قبوله",
                 ref_type="order", ref_id=order.id,
             )
+            _agent_legs(order, sign=1)   # يقبض من دكانه ويدفع للمتجر من جديد
         except wallet_services.WalletError as e:
             raise OrderError(f"تعذّر إعادة خصم المبلغ: {e}")
 
@@ -370,10 +442,11 @@ def cancel_order(order: Order) -> Order:
 
     wallet = order.dealer.wallet
     wallet_services.apply_transaction(
-        wallet.id, order.sell_price, WalletTransaction.Type.REFUND,
+        wallet.id, order.buyer_price, WalletTransaction.Type.REFUND,
         created_by=order.dealer, note=f"إلغاء طلب {order.receipt_no}",
         ref_type="order", ref_id=order.id, allow_below_limit=True,
     )
+    _agent_legs(order, sign=-1)   # ينقض ربح الوكيل الكبير مع المبلغ
     order.status = Order.Status.CANCELLED
     order.api_response = (
         "أبطله المشغّل بعد نجاحه — استُرجع المبلغ" if revoked

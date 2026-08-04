@@ -27,15 +27,16 @@ class OrderSerializer(serializers.ModelSerializer):
 
 class StoreOrderSerializer(serializers.ModelSerializer):
     """
-    الطلب **بمنظور الوكيل**: شراؤه هو ما دفعه لصاحب المتجر (`sell_price`)،
-    وبيعه هو ما باع به لزبونه. أرقام المالك (تكلفة المزوّد وربحه) واسم
-    المزوّد وسجلّ التوجيه لا تخرج إلى لوحة الوكيل.
+    الطلب **بمنظور الوكيل**: شراؤه هو ما دفعه فعلاً (`buyer_price`) — لصاحب
+    المتجر إن كان مستقلاً، ولوكيله الكبير إن كان تابعاً — وبيعه هو ما باع به
+    لزبونه. أرقام المالك (تكلفة المزوّد وربحه) واسم المزوّد وسجلّ التوجيه لا
+    تخرج إلى لوحة الوكيل.
     """
     game_name = serializers.CharField(source="game.name", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     paid_price = serializers.DecimalField(
-        source="sell_price", max_digits=12, decimal_places=2, read_only=True
+        source="buyer_price", max_digits=12, decimal_places=2, read_only=True
     )
     created_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M", read_only=True)
 

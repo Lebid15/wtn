@@ -134,6 +134,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         "catalog.PriceGroup", null=True, blank=True,
         on_delete=models.SET_NULL, related_name="dealers",
     )
+    # مجموعة أسعار **وكيله الكبير** — بها يشتري الدكان من وكيله لا من المتجر.
+    # فارغة تعني أن الكبير لم يسعّر له بعد (انظر orders.services.resolve_sell_price).
+    agent_price_group = models.ForeignKey(
+        "catalog.AgentPriceGroup", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="dealers",
+    )
     # عملة العرض في لوحة الوكيل — فارغة تعني عملة الموقع.
     # عرضٌ فقط: الدفتر كلّه يبقى بعملة الموقع (انظر core/currency.py).
     display_currency = models.CharField(max_length=8, blank=True, default="")

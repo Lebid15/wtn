@@ -1,3 +1,285 @@
-from django.test import TestCase
+"""
+اختبارات المسار المالي للوكيل الكبير.
 
-# Create your tests here.
+القاعدة التي تحرسها: **دكان الوكيل الكبير لا يشتري من المتجر**. يدفع لوكيله بسعر
+مجموعته عنده، والوكيل يدفع للمتجر بسعر مجموعته هو، والفرق ربح الوكيل يدخل محفظته
+لحظة الطلب. وأي نقض للطلب يعكس الساقين معاً — وإلّا بقي ربحٌ على طلب ملغى.
+"""
+from decimal import Decimal
+
+from rest_framework.test import APITestCase
+
+from catalog.models import (
+    AgentPriceGroup, AgentProductPrice, Game, PriceGroup, Product, ProductPrice,
+)
+from core.models import Tenant, User, Wallet
+
+from .models import Order
+from .services import cancel_order, create_order, execute_order
+
+
+class BigAgentMoneyTest(APITestCase):
+    """أحمد يشتري من المتجر بـ 8، ويبيع دكانه بـ 10، فربحه 2 على كل طلب."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(subdomain="tm", name="متجر", base_currency="USD")
+
+        # مجموعتان عند صاحب المتجر: واحدة لأحمد وأخرى لا تخصّ دكانه
+        self.store_group = PriceGroup.objects.create(tenant=self.tenant, name="وكلاء كبار")
+        self.other_group = PriceGroup.objects.create(tenant=self.tenant, name="عادية")
+
+        self.game = Game.objects.create(tenant=self.tenant, name="PUBG")
+        self.product = Product.objects.create(
+            tenant=self.tenant, game=self.game, name="60 UC",
+            cost_price=Decimal("6.00"), recommended_price=Decimal("12.00"),
+        )
+        ProductPrice.objects.create(
+            tenant=self.tenant, product=self.product,
+            price_group=self.store_group, price=Decimal("8.00"),
+        )
+        ProductPrice.objects.create(
+            tenant=self.tenant, product=self.product,
+            price_group=self.other_group, price=Decimal("11.00"),
+        )
+
+        self.ahmad = User.objects.create(
+            login_id="ahmad", name="أحمد العلي", tenant=self.tenant,
+            role=User.Role.ANA_BAYI, price_group=self.store_group, dealer_no=1,
+        )
+        self.ahmad_wallet = Wallet.objects.create(
+            tenant=self.tenant, user=self.ahmad, balance=Decimal("100"),
+        )
+
+        # مجموعة أحمد لدكاكينه: يبيعهم الباقة بـ 10
+        self.group = AgentPriceGroup.objects.create(
+            tenant=self.tenant, agent=self.ahmad, name="ذهبية",
+        )
+        AgentProductPrice.objects.create(
+            tenant=self.tenant, group=self.group, product=self.product, price=Decimal("10.00"),
+        )
+
+        self.shop = User.objects.create(
+            login_id="shop", name="محل النور", tenant=self.tenant, role=User.Role.BAYI,
+            parent=self.ahmad, agent_price_group=self.group,
+            price_group=self.other_group,   # مجموعة المتجر لا تعنيه: وكيله يسعّره
+            dealer_no=2,
+        )
+        self.shop_wallet = Wallet.objects.create(
+            tenant=self.tenant, user=self.shop, balance=Decimal("50"),
+        )
+
+    def _balances(self):
+        self.shop_wallet.refresh_from_db()
+        self.ahmad_wallet.refresh_from_db()
+        return self.shop_wallet.balance, self.ahmad_wallet.balance
+
+    def test_order_moves_all_three_legs(self):
+        order = create_order(self.shop, self.product)
+
+        self.assertEqual(order.buyer_price, Decimal("10.00"))   # دفع الدكان
+        self.assertEqual(order.sell_price, Decimal("8.00"))     # قبض المتجر
+        self.assertEqual(order.agent_id, self.ahmad.id)
+        self.assertEqual(order.agent_profit, Decimal("2.00"))   # ربح أحمد
+        self.assertEqual(order.profit, Decimal("2.00"))         # ربح المتجر (8−6)
+
+        shop, ahmad = self._balances()
+        self.assertEqual(shop, Decimal("40.00"))    # 50 − 10
+        self.assertEqual(ahmad, Decimal("102.00"))  # 100 + 10 − 8
+
+    def test_store_group_of_the_shop_is_ignored(self):
+        """سعر الدكان من وكيله حصراً — لا من مجموعته عند صاحب المتجر."""
+        order = create_order(self.shop, self.product)
+        self.assertEqual(order.buyer_price, Decimal("10.00"))   # لا 11.00
+
+    def test_independent_dealer_buys_from_the_store(self):
+        solo = User.objects.create(
+            login_id="solo", name="دكان مستقلّ", tenant=self.tenant,
+            role=User.Role.BAYI, price_group=self.other_group, dealer_no=3,
+        )
+        wallet = Wallet.objects.create(tenant=self.tenant, user=solo, balance=Decimal("50"))
+
+        order = create_order(solo, self.product)
+        self.assertIsNone(order.agent_id)
+        self.assertEqual(order.buyer_price, Decimal("11.00"))
+        self.assertEqual(order.sell_price, Decimal("11.00"))
+        self.assertEqual(order.agent_profit, Decimal("0"))
+        wallet.refresh_from_db()
+        self.assertEqual(wallet.balance, Decimal("39.00"))
+        self.ahmad_wallet.refresh_from_db()
+        self.assertEqual(self.ahmad_wallet.balance, Decimal("100"))   # لم تُمَسّ
+
+    def test_shop_without_a_group_pays_the_agent_cost(self):
+        """بلا تسعير من وكيله يشتري بسعر تكلفة وكيله — لا بأرخص منها."""
+        self.shop.agent_price_group = None
+        self.shop.save(update_fields=["agent_price_group"])
+
+        order = create_order(self.shop, self.product)
+        self.assertEqual(order.buyer_price, Decimal("8.00"))
+        self.assertEqual(order.agent_profit, Decimal("0.00"))
+        shop, ahmad = self._balances()
+        self.assertEqual(shop, Decimal("42.00"))
+        self.assertEqual(ahmad, Decimal("100.00"))   # قبض 8 ودفع 8
+
+    def test_cancelling_reverses_both_legs(self):
+        order = create_order(self.shop, self.product)
+        cancel_order(order)
+
+        shop, ahmad = self._balances()
+        self.assertEqual(shop, Decimal("50.00"))     # عاد كما كان
+        self.assertEqual(ahmad, Decimal("100.00"))   # لا ربح على طلب ملغى
+
+    def test_re_accepting_a_cancelled_order_re_applies_both_legs(self):
+        order = create_order(self.shop, self.product)
+        cancel_order(order)
+        order.refresh_from_db()
+        execute_order(order)
+
+        shop, ahmad = self._balances()
+        self.assertEqual(shop, Decimal("40.00"))
+        self.assertEqual(ahmad, Decimal("102.00"))
+        self.assertEqual(Order.objects.get(pk=order.pk).status, Order.Status.SUCCESS)
+
+    def test_agent_profit_is_independent_of_provider_cost(self):
+        """تكلفة المزوّد تمسّ ربح المتجر وحده، لا ربح الوكيل."""
+        order = create_order(self.shop, self.product)
+        order.cost_price = Decimal("7.00")
+        order.profit = order.sell_price - order.cost_price
+        order.save(update_fields=["cost_price", "profit"])
+
+        order.refresh_from_db()
+        self.assertEqual(order.profit, Decimal("1.00"))
+        self.assertEqual(order.agent_profit, Decimal("2.00"))
+
+
+class AgentPriceGroupApiTest(APITestCase):
+    """لوحة الوكيل الكبير: مجموعاته وأسعاره وربط دكاكينه — كلّها مقيّدة بشجرته."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(subdomain="tg", name="متجر", base_currency="USD")
+        self.group_store = PriceGroup.objects.create(tenant=self.tenant, name="كبار")
+        self.game = Game.objects.create(tenant=self.tenant, name="PUBG")
+        self.product = Product.objects.create(
+            tenant=self.tenant, game=self.game, name="60 UC",
+            cost_price=Decimal("6.00"), recommended_price=Decimal("12.00"),
+        )
+        ProductPrice.objects.create(
+            tenant=self.tenant, product=self.product,
+            price_group=self.group_store, price=Decimal("8.00"),
+        )
+        self.ahmad = User.objects.create(
+            login_id="ahmad2", name="أحمد", tenant=self.tenant,
+            role=User.Role.ANA_BAYI, price_group=self.group_store, dealer_no=1,
+        )
+        Wallet.objects.create(tenant=self.tenant, user=self.ahmad)
+        self.shop = User.objects.create(
+            login_id="shop2", name="دكان", tenant=self.tenant, role=User.Role.BAYI,
+            parent=self.ahmad, dealer_no=2,
+        )
+        Wallet.objects.create(tenant=self.tenant, user=self.shop, balance=Decimal("50"))
+        self.client.force_authenticate(user=self.ahmad)
+
+    def test_create_group_price_it_and_attach_a_shop(self):
+        r = self.client.post("/api/agent/price-groups/", {"name": "ذهبية"}, format="json")
+        self.assertEqual(r.status_code, 201, r.content)
+        gid = r.json()["id"]
+
+        rows = self.client.get("/api/agent/price-groups/prices/", {"group": gid}).json()
+        self.assertEqual(rows["results"][0]["cost"], "8.00")
+        self.assertEqual(rows["results"][0]["price"], "")     # لم يُسعَّر بعد
+
+        r = self.client.post(
+            "/api/agent/price-groups/prices/",
+            {"group": gid, "product": self.product.id, "price": "10"}, format="json",
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+
+        r = self.client.post(
+            "/api/agent/dealer-group/",
+            {"dealer": self.shop.id, "price_group": gid}, format="json",
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        self.shop.refresh_from_db()
+        self.assertEqual(self.shop.agent_price_group_id, gid)
+
+        order = create_order(self.shop, self.product)
+        self.assertEqual(order.buyer_price, Decimal("10.00"))
+
+    def test_price_below_own_cost_is_refused(self):
+        gid = self.client.post(
+            "/api/agent/price-groups/", {"name": "خاسرة"}, format="json",
+        ).json()["id"]
+        r = self.client.post(
+            "/api/agent/price-groups/prices/",
+            {"group": gid, "product": self.product.id, "price": "5"}, format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("تكلفتك", r.json()["detail"])
+
+    def test_cannot_touch_another_agents_shop(self):
+        other = User.objects.create(
+            login_id="other", name="كبير آخر", tenant=self.tenant,
+            role=User.Role.ANA_BAYI, dealer_no=3,
+        )
+        foreign = User.objects.create(
+            login_id="foreign", name="دكان غريب", tenant=self.tenant,
+            role=User.Role.BAYI, parent=other, dealer_no=4,
+        )
+        gid = self.client.post(
+            "/api/agent/price-groups/", {"name": "ذهبية"}, format="json",
+        ).json()["id"]
+        r = self.client.post(
+            "/api/agent/dealer-group/",
+            {"dealer": foreign.id, "price_group": gid}, format="json",
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_a_shop_cannot_manage_price_groups(self):
+        self.client.force_authenticate(user=self.shop)
+        self.assertEqual(self.client.get("/api/agent/price-groups/").status_code, 403)
+
+
+class BigAgentPanelNumbersTest(APITestCase):
+    """لوحة الوكيل الكبير تعرض **ربحه هو** لا ربح صاحب المتجر."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(subdomain="tp", name="متجر", base_currency="USD")
+        store_group = PriceGroup.objects.create(tenant=self.tenant, name="كبار")
+        self.game = Game.objects.create(tenant=self.tenant, name="PUBG")
+        self.product = Product.objects.create(
+            tenant=self.tenant, game=self.game, name="60 UC",
+            cost_price=Decimal("6.00"), recommended_price=Decimal("12.00"),
+        )
+        ProductPrice.objects.create(
+            tenant=self.tenant, product=self.product,
+            price_group=store_group, price=Decimal("8.00"),
+        )
+        self.ahmad = User.objects.create(
+            login_id="ahmad3", name="أحمد", tenant=self.tenant,
+            role=User.Role.ANA_BAYI, price_group=store_group, dealer_no=1,
+        )
+        Wallet.objects.create(tenant=self.tenant, user=self.ahmad, balance=Decimal("100"))
+        group = AgentPriceGroup.objects.create(
+            tenant=self.tenant, agent=self.ahmad, name="ذهبية",
+        )
+        AgentProductPrice.objects.create(
+            tenant=self.tenant, group=group, product=self.product, price=Decimal("10.00"),
+        )
+        self.shop = User.objects.create(
+            login_id="shop3", name="دكان", tenant=self.tenant, role=User.Role.BAYI,
+            parent=self.ahmad, agent_price_group=group, dealer_no=2,
+        )
+        Wallet.objects.create(tenant=self.tenant, user=self.shop, balance=Decimal("50"))
+
+        order = create_order(self.shop, self.product)
+        execute_order(order)
+        self.client.force_authenticate(user=self.ahmad)
+
+    def test_summary_shows_the_agents_own_profit(self):
+        data = self.client.get("/api/agent/summary/").json()
+        self.assertEqual(data["profit"], "2.00")    # لا 2.00 للمتجر مصادفةً؟ 8−6=2
+        self.assertEqual(data["orders"], 1)
+
+    def test_orders_list_shows_what_the_shop_paid_him(self):
+        row = self.client.get("/api/agent/orders/").json()["results"][0]
+        self.assertEqual(row["sell_price"], "10.00")   # دفع دكانه 10
+        self.assertEqual(row["profit"], "2.00")        # وربح هو 2

@@ -29,12 +29,22 @@ class Order(models.Model):
     player_id = models.CharField(max_length=60, blank=True, default="")     # Oyuncu ID
     customer_phone = models.CharField(max_length=20, blank=True, default="")  # Müşteri Tel
 
-    # أرقام **صاحب المتجر**: ما دفعه للمزوّد، وما قبضه من الوكيل، وربحه هو.
+    # أرقام **صاحب المتجر**: ما دفعه للمزوّد، وما قبضه فعلاً، وربحه هو.
+    # مع وكيل كبير وسيط يبقى `sell_price` ما قبضه المتجر **من الكبير** لا ما دفعه
+    # الدكان — وإلّا تضخّمت إيرادات المتجر بربح الوكيل في كل تقرير.
     cost_price = models.DecimalField(max_digits=12, decimal_places=2)   # Alış
     sell_price = models.DecimalField(max_digits=12, decimal_places=2)   # Satış
     profit = models.DecimalField(max_digits=12, decimal_places=2)       # Kazanç
 
-    # أرقام **الوكيل**: بكم باع لزبونه وكم ربح. شراؤه هو `sell_price` أعلاه.
+    # الوسيط: وكيل كبير اشترى من المتجر وباع لدكانه. فارغ = لا وسيط.
+    agent = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.PROTECT, related_name="agent_orders"
+    )
+    # ما دفعه المشتري فعلاً: يساوي sell_price بلا وسيط، ويزيد عنه بربح الوسيط.
+    buyer_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    agent_profit = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+
+    # أرقام **الوكيل**: بكم باع لزبونه وكم ربح. شراؤه هو `buyer_price` أعلاه.
     # سعر التوصية تخمين من صاحب المتجر، والوكيل قد يبيع أغلى أو أرخص — لذا
     # يُثبَّت السعر الفعلي وقت البيع ولا يُشتقّ لاحقاً من المنتج.
     dealer_sell_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))

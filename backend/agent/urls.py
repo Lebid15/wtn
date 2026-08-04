@@ -9,4 +9,7 @@ urlpatterns = [
     path("orders/", views.orders_view, name="agent-orders"),
     path("margins/", views.margins_view, name="agent-margins"),
     path("set-margin/", views.set_margin_view, name="agent-set-margin"),
+    path("price-groups/", views.price_groups_view, name="agent-price-groups"),
+    path("price-groups/prices/", views.group_prices_view, name="agent-group-prices"),
+    path("dealer-group/", views.set_dealer_group_view, name="agent-set-dealer-group"),
 ]

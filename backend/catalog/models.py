@@ -60,6 +60,51 @@ class PriceGroup(models.Model):
         return f"مجموعة {self.name}"
 
 
+class AgentPriceGroup(models.Model):
+    """
+    مجموعة أسعار **يملكها وكيل كبير** لدكاكينه.
+
+    صاحب المتجر يبيع الوكيل الكبير بسعر مجموعته عنده، ثم الكبير حرٌّ يبيع
+    دكاكينه بما يشاء: ينشئ مجموعاته هو، ويسعّر فيها كل باقة، ويضع كل دكان في
+    مجموعة. ربحه فرقُ السعرين، ويدخل محفظته لحظة الطلب.
+    """
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="agent_price_groups")
+    agent = models.ForeignKey(
+        "core.User", on_delete=models.CASCADE, related_name="owned_price_groups"
+    )
+    name = models.CharField(max_length=60)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "agent_price_groups"
+        constraints = [
+            models.UniqueConstraint(fields=["agent", "name"], name="uniq_agent_group_name")
+        ]
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.agent.name} / {self.name}"
+
+
+class AgentProductPrice(models.Model):
+    """سعر باقة داخل مجموعة الوكيل الكبير — ما يدفعه دكانه فيها."""
+
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="agent_product_prices")
+    group = models.ForeignKey(AgentPriceGroup, on_delete=models.CASCADE, related_name="prices")
+    product = models.ForeignKey("catalog.Product", on_delete=models.CASCADE, related_name="agent_prices")
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        db_table = "agent_product_prices"
+        constraints = [
+            models.UniqueConstraint(fields=["group", "product"], name="uniq_agent_group_product")
+        ]
+
+    def __str__(self):
+        return f"{self.group} — {self.product_id} = {self.price}"
+
+
 class Product(models.Model):
     """منتج داخل لعبة (60 UC, 300 UC …)."""
 
