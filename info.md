@@ -4,6 +4,24 @@
 
 ---
 
+## 0. سياسة الفروع — `main` وحده 🚫🌿
+
+**قرار المالك (2026-08-05):** لا نعمل على فروع أخرى إطلاقاً. **كل التطوير والالتزام
+والرفع يجري مباشرةً على `main`.**
+
+- ❌ لا تُنشأ فروع ميزات (`feature/…`) ولا فروع وكلاء (`claude/…`) ولا Pull Requests.
+- ✅ أي فرع قائم يُدمَج فوراً في `main` ثم يُحذف.
+- ✅ التسلسل المعتاد: `git add -A` ← `git commit` ← `git push origin main`.
+- ⚠️ **إعداد Render:** يجب أن يكون فرع خدمة `wtn` هو `main`
+  (Dashboard ← خدمة `wtn` ← Settings ← Branch). كان سابقاً
+  `claude/website-clone-auth-access-xp4oj8`؛ إن لم يُبدَّل فلن تصل التحديثات للموقع.
+
+> **الحالة (2026-08-05):** فرع `claude/website-clone-auth-access-xp4oj8` دُمج في `main`
+> بـ fast-forward (113 التزاماً)، والفرعان الآن على نفس الالتزام. يُحذف الفرع القديم
+> فور تبديل إعداد الفرع على Render إلى `main`.
+
+---
+
 ## 1. أين الموقع مرفوع
 
 | البند | القيمة |
@@ -11,7 +29,7 @@
 | **الاستضافة** | [Render](https://render.com) — خطة **Free** |
 | **الرابط المباشر** | <https://wtn.onrender.com> |
 | **المستودع** | `https://github.com/Lebid15/wtn` |
-| **الفرع المنشور** | `claude/website-clone-auth-access-xp4oj8` |
+| **الفرع المنشور** | `main` — **الفرع الوحيد المعتمد** (انظر §0) |
 | **اسم الخدمة على Render** | `wtn` (نوع: Web Service · Docker) |
 | **قاعدة البيانات** | `wtn-db` — PostgreSQL خطة Free |
 | **طريقة الإعداد** | Render **Blueprint** يقرأ ملف [render.yaml](render.yaml) تلقائياً |
@@ -51,12 +69,12 @@ React المبنية من نفس الأصل (same-origin)، فلا حاجة إل
 
 ## 3. طريقة التحديث (كل مرة لاحقاً)
 
-النشر **تلقائي**: أي دفعة إلى الفرع المنشور تُطلق بناءً جديداً على Render.
+النشر **تلقائي**: أي دفعة إلى `main` تُطلق بناءً جديداً على Render (§0 — لا فروع أخرى).
 
 ```bash
 git add -A
 git commit -m "وصف التغيير"
-git push origin claude/website-clone-auth-access-xp4oj8
+git push origin main
 ```
 
 ثم تُتابَع حالة البناء من Render Dashboard → خدمة `wtn` → **Logs**
@@ -155,8 +173,8 @@ python manage.py convert_base_currency --to USD --rate 41.5 --tenant alaya --app
   للتحقّق والمزامنة:
   ```bash
   git fetch origin
-  git log --oneline HEAD..origin/claude/website-clone-auth-access-xp4oj8
-  git pull origin claude/website-clone-auth-access-xp4oj8
+  git log --oneline HEAD..origin/main
+  git pull origin main
   ```
 
 ---
