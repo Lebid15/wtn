@@ -80,16 +80,18 @@ const AGENT_TABS = [
   { key: "bayiler", label: "الوكلاء", icon: "users", to: "/bigagent/dealers" },
 ];
 const SUBNAV_AGENT_OYUNPIN = [
+  { label: "متابعة الطلبات", to: "/bigagent/orders" },
   { label: "مجموعات الأسعار", to: "/bigagent/price-groups" },
 ];
 const SUBNAV_AGENT_BAYILER = [
   { label: "قائمة الوكلاء", to: "/bigagent/dealers" },
-  { label: "طلبات وكلائي", to: "/bigagent/orders" },
 ];
 
 function agentSubnavFor(path: string) {
   if (path === "/bigagent") return [];                       // الرئيسية بلا قائمة
-  if (path.startsWith("/bigagent/price-groups")) return SUBNAV_AGENT_OYUNPIN;
+  if (path.startsWith("/bigagent/price-groups") || path.startsWith("/bigagent/orders")) {
+    return SUBNAV_AGENT_OYUNPIN;
+  }
   return SUBNAV_AGENT_BAYILER;
 }
 
@@ -158,10 +160,10 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             // التبويب النشط واحد فقط — يُحدَّد من المسار الحالي
             const active = isAgent
               ? (t.key === "home" && loc.pathname === "/bigagent") ||
-                (t.key === "oyunpin" && loc.pathname.startsWith("/bigagent/price-groups")) ||
-                (t.key === "bayiler" &&
-                  (loc.pathname.startsWith("/bigagent/dealers") ||
-                   loc.pathname.startsWith("/bigagent/orders")))
+                (t.key === "oyunpin" &&
+                  (loc.pathname.startsWith("/bigagent/price-groups") ||
+                   loc.pathname.startsWith("/bigagent/orders"))) ||
+                (t.key === "bayiler" && loc.pathname.startsWith("/bigagent/dealers"))
               : (t.key === "home" && loc.pathname.startsWith("/home")) ||
                 (t.key === "oyunpin" && loc.pathname.startsWith("/oyunpin")) ||
                 (t.key === "raporlar" && loc.pathname.startsWith("/reports")) ||
