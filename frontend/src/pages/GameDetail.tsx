@@ -22,6 +22,8 @@ export default function GameDetail() {
   // أرقام الربط المتاحة من المكتبة العالمية (ما لم يُؤخَذ بعد) + هل اللعبة أصلاً منها
   const [libPkgs, setLibPkgs] = useState<LibPkg[]>([]);
   const [libLinked, setLibLinked] = useState(false);
+  const [libGames, setLibGames] = useState<{ id: number; name: string; packages: number }[]>([]);
+  const [linkTo, setLinkTo] = useState("");
   const [addErr, setAddErr] = useState("");
   // نافذة تعديل الباقة: "edit" بيانات المنتج · "routing" المزوّدون + رقم الربط
   const [editing, setEditing] = useState<{ product: Product; mode: "edit" | "routing" } | null>(null);
@@ -30,8 +32,12 @@ export default function GameDetail() {
     api.get(`/catalog/games/${id}/`).then((r) => setGame(r.data));
     // تُقرأ مع كل تحميل: إضافةُ باقة تسحب رقمها من القائمة، وحذفُها يعيده
     api.get(`/catalog/games/${id}/library-packages/`)
-      .then((r) => { setLibPkgs(r.data.results || []); setLibLinked(!!r.data.linked); })
-      .catch(() => { setLibPkgs([]); setLibLinked(false); });
+      .then((r) => {
+        setLibPkgs(r.data.results || []);
+        setLibLinked(!!r.data.linked);
+        setLibGames(r.data.library_games || []);
+      })
+      .catch(() => { setLibPkgs([]); setLibLinked(false); setLibGames([]); });
   }
   useEffect(() => { load(); }, [id]);
   useEffect(() => {
@@ -56,6 +62,24 @@ export default function GameDetail() {
       setSavedMsg("تم الحفظ ✅");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /** ربط اللعبة بنظيرتها في المكتبة — بعده تنفتح قائمة أرقام الربط. */
+  async function linkLibrary() {
+    if (!linkTo) return;
+    setAddErr("");
+    try {
+      const r = await api.post(`/catalog/games/${id}/link-library/`, {
+        library_game: Number(linkTo),
+      });
+      setLinkTo("");
+      if (r.data?.adopted) {
+        alert(`رُبطت اللعبة، ونالت ${r.data.adopted} باقة عندك أرقامَها من المكتبة بمطابقة الاسم.`);
+      }
+      load();
+    } catch (e: any) {
+      setAddErr(e?.response?.data?.detail || "تعذّر الربط");
     }
   }
 
@@ -159,48 +183,70 @@ export default function GameDetail() {
       <div style={{ ...panel, marginTop: 20 }}>
         <div style={panelHead}>عمليات المنتجات</div>
         <div style={{ padding: 18 }}>
-          {/* نموذج إضافة منتج — يبدأ برقم الربط لأنه يملأ ما بعده */}
-          <form onSubmit={addProduct} style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap", marginBottom: 6 }}>
-            <Field label="رقم الربط">
-              {libLinked ? (
-                <select style={{ width: 210 }} value={newP.kupur}
-                  onChange={(e) => pickKupur(e.target.value)}>
-                  <option value="">— اختر من المكتبة —</option>
-                  {libPkgs.map((p) => (
-                    <option key={p.kupur} value={p.kupur}>{p.kupur} — {p.name}</option>
-                  ))}
-                </select>
-              ) : (
-                <input style={{ width: 120 }} value={newP.kupur} dir="ltr"
-                  onChange={(e) => setNewP({ ...newP, kupur: e.target.value })} />
-              )}
-            </Field>
-            <Field label="اسم المنتج">
-              <input style={{ width: 180 }} value={newP.name}
-                onChange={(e) => setNewP({ ...newP, name: e.target.value })} />
-            </Field>
-            <Field label="التكلفة">
-              <input style={{ width: 100 }} type="number" step="0.01" value={newP.cost_price}
-                onChange={(e) => setNewP({ ...newP, cost_price: e.target.value })} />
-            </Field>
-            <Field label="السعر الموصى">
-              <input style={{ width: 100 }} type="number" step="0.01" value={newP.recommended_price}
-                onChange={(e) => setNewP({ ...newP, recommended_price: e.target.value })} />
-            </Field>
-            <button className="btn g" style={{ height: 32 }}
-              disabled={libLinked && !newP.kupur}>
-              <Icon name="plus" size={14} style={{ marginInlineEnd: 4 }} />إضافة
-            </button>
-          </form>
+          {libLinked ? (
+            <>
+              {/* نموذج إضافة منتج — يبدأ برقم الربط لأنه يملأ ما بعده */}
+              <form onSubmit={addProduct} style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap", marginBottom: 6 }}>
+                <Field label="رقم الربط">
+                  <select style={{ width: 230 }} value={newP.kupur}
+                    disabled={libPkgs.length === 0}
+                    onChange={(e) => pickKupur(e.target.value)}>
+                    <option value="">
+                      {libPkgs.length === 0 ? "— لا أرقام متاحة —" : "— اختر من المكتبة —"}
+                    </option>
+                    {libPkgs.map((p) => (
+                      <option key={p.kupur} value={p.kupur}>{p.kupur} — {p.name}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="اسم المنتج">
+                  <input style={{ width: 180 }} value={newP.name}
+                    onChange={(e) => setNewP({ ...newP, name: e.target.value })} />
+                </Field>
+                <Field label="التكلفة">
+                  <input style={{ width: 100 }} type="number" step="0.01" value={newP.cost_price}
+                    onChange={(e) => setNewP({ ...newP, cost_price: e.target.value })} />
+                </Field>
+                <Field label="السعر الموصى">
+                  <input style={{ width: 100 }} type="number" step="0.01" value={newP.recommended_price}
+                    onChange={(e) => setNewP({ ...newP, recommended_price: e.target.value })} />
+                </Field>
+                <button className="btn g" style={{ height: 32 }} disabled={!newP.kupur}>
+                  <Icon name="plus" size={14} style={{ marginInlineEnd: 4 }} />إضافة
+                </button>
+              </form>
 
-          {/* رسالة تشرح من أين تأتي الأرقام — أو لماذا لا يوجد رقم متاح */}
-          <div style={{ ...hint, marginBottom: 16 }}>
-            {!libLinked
-              ? "لعبة غير مستورَدة من المكتبة العالمية — اكتب رقم الربط يدوياً (وضع استثنائي)."
-              : libPkgs.length === 0
-                ? "كل أرقام ربط هذه اللعبة في المكتبة العالمية مُضافة عندك. احذف باقةً ليعود رقمها إلى القائمة."
-                : `أرقام الربط تأتي من المكتبة العالمية حصراً — ${libPkgs.length} رقماً متاحاً. الاختيار يملأ الاسم والسعرين تلقائياً، وكلّها قابلة للتعديل بعد الإضافة إلا رقم الربط.`}
-          </div>
+              <div style={{ ...hint, marginBottom: 16 }}>
+                {libPkgs.length === 0
+                  ? "كل أرقام ربط هذه اللعبة في المكتبة العالمية مُضافة عندك. احذف باقةً ليعود رقمها إلى القائمة، أو أضف باقةً جديدة في المكتبة."
+                  : `أرقام الربط من المكتبة العالمية حصراً — ${libPkgs.length} رقماً متاحاً. الاختيار يملأ الاسم والسعرين تلقائياً، وكلّها قابلة للتعديل بعد الإضافة إلا رقم الربط.`}
+              </div>
+            </>
+          ) : (
+            /* لا نظير لهذه اللعبة في المكتبة: يُختار مرّةً واحدة، ولا كتابة يدوية */
+            <div style={{ ...hint, marginBottom: 16, display: "flex", gap: 10,
+              alignItems: "center", flexWrap: "wrap" }}>
+              <span>
+                هذه اللعبة غير مرتبطة بالمكتبة العالمية، وأرقام الربط تأتي منها حصراً.
+                اربطها بنظيرتها لتظهر لك أرقامها:
+              </span>
+              <select style={{ width: 240 }} value={linkTo} onChange={(e) => setLinkTo(e.target.value)}>
+                <option value="">— اختر لعبة من المكتبة —</option>
+                {libGames.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name} ({g.packages} باقة)</option>
+                ))}
+              </select>
+              <button type="button" className="btn g" style={{ height: 32 }}
+                disabled={!linkTo} onClick={linkLibrary}>
+                <Icon name="link" size={14} style={{ marginInlineEnd: 4 }} />ربط
+              </button>
+              {libGames.length === 0 && (
+                <span style={{ color: "var(--debt)" }}>
+                  لا ألعاب في المكتبة بعد — يضيفها مالك المنصّة من لوحته.
+                </span>
+              )}
+            </div>
+          )}
           {addErr && <div style={{ color: "var(--debt)", fontSize: 13, marginBottom: 10 }}>{addErr}</div>}
 
           {/* جدول المنتجات */}

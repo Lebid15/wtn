@@ -544,3 +544,75 @@ class LibraryLinkNumberTest(APITestCase):
              "suggested_cost": "1", "suggested_price": "2"}, format="json",
         )
         self.assertEqual(r.status_code, 400, r.content)
+
+
+class LibraryLinkingTest(APITestCase):
+    """ربط لعبة المتجر بنظيرتها في المكتبة — بالاسم تلقائياً أو باختيار المالك."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(subdomain="t3", name="متجر", base_currency="USD")
+        self.admin = User.objects.create(
+            login_id="admin3", name="مدير", tenant=self.tenant, role=User.Role.TENANT_ADMIN,
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        self.lib = LibraryGame.objects.create(name="PUBG Mobile UC")
+        for i, (kupur, name) in enumerate([("60", "60 UC"), ("325", "325 UC"), ("660", "660 UC")]):
+            LibraryProduct.objects.create(
+                game=self.lib, name=name, kupur=kupur, sort_order=i,
+                suggested_cost=Decimal("1"), suggested_price=Decimal("2"),
+            )
+
+    def _packages(self, game):
+        return self.client.get(f"/api/catalog/games/{game.id}/library-packages/").json()
+
+    def test_name_match_links_and_adopts_numbers(self):
+        """«PUBG Mobile» تجد «PUBG Mobile UC»، وباقاتها تنال أرقامها بالاسم."""
+        game = Game.objects.create(tenant=self.tenant, name="PUBG Mobile")
+        p60 = Product.objects.create(tenant=self.tenant, game=game, name="60 UC")
+        p325 = Product.objects.create(tenant=self.tenant, game=game, name="325 UC")
+
+        data = self._packages(game)
+        self.assertTrue(data["linked"])
+        p60.refresh_from_db(); p325.refresh_from_db()
+        self.assertEqual(p60.kupur, "60")
+        self.assertEqual(p325.kupur, "325")
+        # ولا يبقى متاحاً إلا ما لم يُؤخَذ
+        self.assertEqual([r["kupur"] for r in data["results"]], ["660"])
+
+    def test_unmatched_game_offers_the_library_list(self):
+        game = Game.objects.create(tenant=self.tenant, name="لعبة لا نظير لها")
+        data = self._packages(game)
+        self.assertFalse(data["linked"])
+        self.assertEqual([g["name"] for g in data["library_games"]], ["PUBG Mobile UC"])
+        self.assertEqual(data["library_games"][0]["packages"], 3)
+
+    def test_manual_link_adopts_numbers_too(self):
+        game = Game.objects.create(tenant=self.tenant, name="ببجي")
+        Product.objects.create(tenant=self.tenant, game=game, name="660 UC")
+
+        r = self.client.post(
+            f"/api/catalog/games/{game.id}/link-library/", {"library_game": self.lib.id},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["adopted"], 1)
+        self.assertEqual([x["kupur"] for x in self._packages(game)["results"]], ["60", "325"])
+
+    def test_adoption_never_overwrites_an_existing_number(self):
+        game = Game.objects.create(tenant=self.tenant, name="ببجي 2")
+        p = Product.objects.create(tenant=self.tenant, game=game, name="60 UC", kupur="325")
+
+        self.client.post(
+            f"/api/catalog/games/{game.id}/link-library/", {"library_game": self.lib.id},
+            format="json",
+        )
+        p.refresh_from_db()
+        self.assertEqual(p.kupur, "325")   # ما وضعه المالك يبقى
+        self.assertEqual([x["kupur"] for x in self._packages(game)["results"]], ["60", "660"])
+
+    def test_two_similar_library_games_stay_unlinked(self):
+        """الاحتواء المتعدّد لا يُخمَّن — يختار المالك بنفسه."""
+        LibraryGame.objects.create(name="PUBG Mobile Global")
+        game = Game.objects.create(tenant=self.tenant, name="PUBG Mobile")
+        self.assertFalse(self._packages(game)["linked"])

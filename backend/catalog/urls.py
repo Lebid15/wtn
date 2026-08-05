@@ -6,6 +6,7 @@ from .views import (
     GameViewSet, PriceGroupViewSet, ProductViewSet,
     auto_route_view, bulk_price_view,
     game_library_packages_view, library_browse_view, library_import_view,
+    link_game_to_library_view,
     price_matrix_view, product_links_view, refresh_costs_view, refresh_link_prices_view,
     set_price_view,
 )
@@ -23,6 +24,8 @@ urlpatterns = [
     path("refresh-costs/", refresh_costs_view, name="refresh-costs"),
     path("games/<int:game_id>/library-packages/", game_library_packages_view,
          name="game-library-packages"),
+    path("games/<int:game_id>/link-library/", link_game_to_library_view,
+         name="game-link-library"),
     path("library/", library_browse_view, name="library-browse"),
     path("library/<int:library_game_id>/import/", library_import_view, name="library-import"),
     path("product-links/", product_links_view, name="product-links"),

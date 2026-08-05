@@ -410,18 +410,115 @@ def library_browse_view(request):
     return Response({"count": len(rows), "results": rows})
 
 
+def _norm(name: str) -> str:
+    """اسم للمقارنة: بلا مسافات ولا حالة أحرف — «PUBG Mobile» و«pubgmobile» سواء."""
+    return "".join((name or "").split()).lower()
+
+
+def _library_game_for(game):
+    """
+    لعبة المكتبة التي تُغذّي هذه اللعبة بأرقام الربط.
+
+    الأصل `master_library_uuid`. وإن كان فارغاً — لعبة أُنشئت من بذرة الكتالوج
+    أو بيد صاحب المتجر — نبحث بالاسم: تطابقاً ثم احتواءً **وحيداً**، فتجد
+    «PUBG Mobile» نظيرتها «PUBG Mobile UC». وعند العثور نثبّت الرابط فلا يتكرّر
+    التخمين ولا يتبدّل المصدر من وراء المالك.
+    """
+    if game.master_library_uuid:
+        lib = LibraryGame.objects.filter(uuid=game.master_library_uuid).first()
+        if lib is not None:
+            return lib
+
+    candidates = list(LibraryGame.objects.filter(is_active=True))
+    target = _norm(game.name)
+    matches = [g for g in candidates if _norm(g.name) == target]
+    if not matches and target:
+        matches = [
+            g for g in candidates
+            if target in _norm(g.name) or _norm(g.name) in target
+        ]
+    if len(matches) != 1:
+        return None
+
+    lib = matches[0]
+    game.master_library_uuid = lib.uuid
+    game.save(update_fields=["master_library_uuid"])
+    _adopt_kupur_from_library(game, lib)
+    return lib
+
+
+def _adopt_kupur_from_library(game, lib) -> int:
+    """
+    يمنح باقات المتجر أرقامَها من المكتبة بمطابقة الاسم.
+
+    بدونه تُقرأ لعبةٌ فيها «60 UC» بلا رقم وكأن رقم 60 ما زال متاحاً، فيضيفه
+    المالك ثانيةً ويصير عنده باقتان لباقة واحدة. نملأ **الفارغ فقط** ولا نلمس
+    رقماً موضوعاً، ولا نمنح رقماً أخذته باقة أخرى.
+    """
+    products = list(game.products.all())
+    taken = {p.kupur.strip() for p in products if p.kupur.strip()}
+    by_name = {}
+    for lp in lib.products.filter(is_active=True):
+        if lp.kupur.strip() and lp.kupur.strip() not in taken:
+            by_name.setdefault(_norm(lp.name), lp.kupur.strip())
+
+    adopted = 0
+    for p in products:
+        if p.kupur.strip():
+            continue
+        kupur = by_name.pop(_norm(p.name), None)
+        if kupur:
+            p.kupur = kupur
+            p.save(update_fields=["kupur"])
+            adopted += 1
+    return adopted
+
+
+def _library_games_payload():
+    return [
+        {"id": g.id, "name": g.name,
+         "packages": g.products.filter(is_active=True).count()}
+        for g in LibraryGame.objects.filter(is_active=True).order_by("sort_order", "id")
+    ]
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def link_game_to_library_view(request, game_id):
+    """
+    ربط لعبة المتجر بنظيرتها في المكتبة العالمية — مرّة واحدة يدوياً.
+
+    مخرج اللعبة التي لم يجد اسمُها نظيراً: يختار صاحب المتجر النظير فتصير أرقام
+    الربط متاحةً لها. الربط لا يمسّ باقاته القائمة، إنما يفتح له قائمة الأرقام.
+    """
+    tenant = request.user.tenant
+    try:
+        game = Game.objects.get(pk=game_id, tenant=tenant)
+    except Game.DoesNotExist:
+        return Response({"detail": "اللعبة غير موجودة"}, status=404)
+
+    lib = LibraryGame.objects.filter(pk=request.data.get("library_game")).first()
+    if lib is None:
+        return Response({"detail": "لعبة المكتبة غير موجودة"}, status=404)
+
+    game.master_library_uuid = lib.uuid
+    game.save(update_fields=["master_library_uuid"])
+    adopted = _adopt_kupur_from_library(game, lib)
+    return Response({"linked": True, "library_game": lib.name, "adopted": adopted})
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def game_library_packages_view(request, game_id):
     """
     أرقام الربط المتاحة لهذه اللعبة من المكتبة العالمية.
 
-    رقم الربط جسرٌ بين الباقات، ومصدره المكتبة العالمية **حصراً**. هنا نُرجع ما
-    عرّفه مالك المنصّة لهذه اللعبة ولم يُضَف بعد إلى المتجر — فإن حذف صاحب المتجر
-    باقةً عاد رقمها إلى القائمة، ولا يظهر رقم أُخِذ مرّتين.
+    رقم الربط جسرٌ بين الباقات، ومصدره المكتبة العالمية **حصراً** — لا كتابة
+    يدوية. نُرجع ما عرّفه مالك المنصّة لهذه اللعبة ولم يُؤخَذ بعد: فإن حُذفت باقة
+    عاد رقمها إلى القائمة، ولا يظهر رقم مأخوذ مرّتين.
 
-    `linked=false` تعني لعبةً أنشأها صاحب المتجر بنفسه (لا أصل لها في المكتبة)،
-    فتبقى الإضافة اليدوية مسموحة استثناءً.
+    `linked=false` تعني لعبةً بلا نظير في المكتبة، ومعها تصل `library_games`
+    ليختار صاحب المتجر نظيرها مرّةً واحدة.
     """
     tenant = request.user.tenant
     try:
@@ -429,12 +526,11 @@ def game_library_packages_view(request, game_id):
     except Game.DoesNotExist:
         return Response({"detail": "اللعبة غير موجودة"}, status=404)
 
-    if not game.master_library_uuid:
-        return Response({"linked": False, "results": []})
-
-    lib = LibraryGame.objects.filter(uuid=game.master_library_uuid).first()
+    lib = _library_game_for(game)
     if lib is None:
-        return Response({"linked": False, "results": []})
+        return Response({
+            "linked": False, "results": [], "library_games": _library_games_payload(),
+        })
 
     used = {p.kupur.strip() for p in game.products.all() if p.kupur.strip()}
     rows = [
