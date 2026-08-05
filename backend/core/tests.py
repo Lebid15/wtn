@@ -262,3 +262,57 @@ class DealerListTest(APITestCase):
 
     def test_removed_dealer_prices_endpoints_are_gone(self):
         self.assertEqual(self.client.get("/api/catalog/dealer-prices/").status_code, 404)
+
+
+class DealerPasswordTest(APITestCase):
+    """تغيير كلمة سرّ وكيل من نافذة الإعدادات — ثم دخوله بها فعلاً."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(subdomain="tpw", name="متجر", base_currency="USD")
+        self.admin = User.objects.create(
+            login_id="adminpw", name="مدير", tenant=self.tenant, role=User.Role.TENANT_ADMIN,
+        )
+        self.agent = User.objects.create(
+            login_id="5553333333", name="أحمد العلي", tenant=self.tenant,
+            role=User.Role.ANA_BAYI, dealer_no=1,
+        )
+        self.agent.set_password("old12345")
+        self.agent.save()
+        Wallet.objects.create(tenant=self.tenant, user=self.agent, balance=Decimal("3000"))
+        self.client.force_authenticate(user=self.admin)
+
+    def _login(self, login_id, password):
+        self.client.force_authenticate(user=None)
+        r = self.client.post(
+            "/api/auth/login/", {"login_id": login_id, "password": password}, format="json",
+        )
+        self.client.force_authenticate(user=self.admin)
+        return r
+
+    def test_changed_password_works_and_is_acknowledged(self):
+        r = self.client.post(
+            f"/api/dealers/{self.agent.id}/settings/",
+            {"new_password": "Asdf1212asdf"}, format="json",
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertTrue(r.json()["password_changed"])          # إقرار صريح
+        self.assertEqual(self._login("5553333333", "Asdf1212asdf").status_code, 200)
+        self.assertEqual(self._login("5553333333", "old12345").status_code, 401)
+
+    def test_saving_without_a_password_says_so(self):
+        r = self.client.post(
+            f"/api/dealers/{self.agent.id}/settings/", {"status": "active"}, format="json",
+        )
+        self.assertFalse(r.json()["password_changed"])
+        self.assertEqual(self._login("5553333333", "old12345").status_code, 200)
+
+    def test_login_id_with_stray_spaces_still_works(self):
+        """مسافة من نسخٍ ولصق كانت تُفشل الدخول برسالة «بيانات غير صحيحة»."""
+        self.assertEqual(self._login("  5553333333 ", "old12345").status_code, 200)
+
+    def test_short_password_is_refused(self):
+        r = self.client.post(
+            f"/api/dealers/{self.agent.id}/settings/", {"new_password": "abc"}, format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self._login("5553333333", "old12345").status_code, 200)

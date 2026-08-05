@@ -81,7 +81,10 @@ export default function DealerSettingsModal({
 
   async function save() {
     if (!f) return;
+    // كلمة سرّ بلا تأكيد كانت تُرسَل ناقصة فيظنّ المالك أنه غيّرها وهي لم تتغيّر
+    if (pw && !pw2) { setMsg({ ok: false, text: "أكّد كلمة السر في الحقل الثاني قبل الحفظ" }); return; }
     if (pw && pw !== pw2) { setMsg({ ok: false, text: "كلمتا السر غير متطابقتين" }); return; }
+    if (pw && pw.length < 5) { setMsg({ ok: false, text: "كلمة السر قصيرة (5 أحرف على الأقل)" }); return; }
     setBusy(true); setMsg(null);
     try {
       const r = await api.post(`/dealers/${dealerId}/settings/`, {
@@ -102,7 +105,12 @@ export default function DealerSettingsModal({
         ...(pw ? { new_password: pw } : {}),
       });
       setF(r.data); setPw(""); setPw2("");
-      setMsg({ ok: true, text: "حُفظت الإعدادات" });
+      setMsg({
+        ok: true,
+        text: r.data?.password_changed
+          ? `حُفظت الإعدادات — وكلمة السر الجديدة فعّالة الآن لرقم الدخول ${r.data.login_id}`
+          : "حُفظت الإعدادات (لم تتغيّر كلمة السر)",
+      });
       onSaved();
     } catch (e: any) {
       setMsg({ ok: false, text: e?.response?.data?.detail || "تعذّر الحفظ" });
@@ -239,6 +247,17 @@ export default function DealerSettingsModal({
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--primary-dark)", marginBottom: 10 }}>
                     تغيير كلمة السر
+                  </div>
+                  <div style={{ ...hint, marginBottom: 10, display: "flex", gap: 8, alignItems: "center" }}>
+                    <span>يدخل بهذا الرقم:</span>
+                    <b style={{ direction: "ltr", fontFamily: "monospace", fontSize: 14 }}>{f.login_id}</b>
+                    <button type="button" className="btn" style={{ height: 26, padding: "0 10px", fontSize: 12 }}
+                      onClick={() => navigator.clipboard?.writeText(f.login_id)}>
+                      نسخ
+                    </button>
+                    <span style={{ marginInlineStart: "auto" }}>
+                      املأ الحقلين معاً — الحفظ لا يغيّر السرّ إن كان التأكيد فارغاً.
+                    </span>
                   </div>
                   <div style={grid2}>
                     <Fld label="كلمة سر جديدة">

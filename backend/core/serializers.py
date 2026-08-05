@@ -54,6 +54,9 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class LoginSerializer(serializers.Serializer):
+    # رقم الدخول يُشذَّب (افتراض CharField): مسافةٌ من نسخٍ ولصق كانت تُفشل الدخول
+    # برسالة «بيانات غير صحيحة» المبهمة.
     login_id = serializers.CharField()
-    password = serializers.CharField(write_only=True)
+    # أمّا كلمة السر فلا تُشذَّب — مسافتها قد تكون منها.
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
     totp = serializers.CharField(required=False, allow_blank=True)

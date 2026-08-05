@@ -533,7 +533,9 @@ def dealer_settings_view(request, dealer_id):
         wallet.save(update_fields=["credit_limit"])
 
     u.refresh_from_db()
-    return Response(_dealer_settings_row(u))
+    # إقرارٌ صريح بأن السرّ تبدّل فعلاً — الواجهة تعرضه، فلا يظنّ المالك أنه
+    # غيّره وهو لم يُرسَل أصلاً (حقل التأكيد الفارغ كان يُسقطه بصمت).
+    return Response(_dealer_settings_row(u) | {"password_changed": bool(new_password)})
 
 
 @api_view(["POST"])
