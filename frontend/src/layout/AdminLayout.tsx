@@ -7,7 +7,7 @@ import ThemeCustomizer from "../components/ThemeCustomizer";
 import { applyThemeConfig, THEME_DEFAULTS, type ThemeConfig } from "../theme";
 
 // أقسام القائمة الرئيسية (مطابقة للمرجع؛ Fatura/Kontor مستبعدان)
-const MAIN_TABS = [
+const ADMIN_TABS = [
   { key: "home", label: "الرئيسية", icon: "home", to: "/home" },
   { key: "oyunpin", label: "الألعاب", icon: "games", to: "/oyunpin" },
   { key: "bayiler", label: "الوكلاء", icon: "users", to: "/dealers" },
@@ -67,6 +67,32 @@ const SUBNAV_RAPORLAR = [
   { label: "الجرد النهائي", to: "/reports/inventory" },
 ];
 
+/**
+ * لوحة الوكيل الكبير: **نفس الهيكل، صلاحيات أقلّ**.
+ *
+ * هو لا يشحن ألعاباً من الموقع ولا يملك كتالوجاً ولا مزوّدين — يدير دكاكينه
+ * وأسعارهم. فثلاثة أقسام تكفيه، وما عداها لا يُعرض له أصلاً كي لا يطرق باباً
+ * مغلقاً.
+ */
+const AGENT_TABS = [
+  { key: "home", label: "الرئيسية", icon: "home", to: "/bigagent" },
+  { key: "oyunpin", label: "الألعاب", icon: "games", to: "/bigagent/price-groups" },
+  { key: "bayiler", label: "الوكلاء", icon: "users", to: "/bigagent/dealers" },
+];
+const SUBNAV_AGENT_OYUNPIN = [
+  { label: "مجموعات الأسعار", to: "/bigagent/price-groups" },
+];
+const SUBNAV_AGENT_BAYILER = [
+  { label: "قائمة الوكلاء", to: "/bigagent/dealers" },
+  { label: "طلبات وكلائي", to: "/bigagent/orders" },
+];
+
+function agentSubnavFor(path: string) {
+  if (path === "/bigagent") return [];                       // الرئيسية بلا قائمة
+  if (path.startsWith("/bigagent/price-groups")) return SUBNAV_AGENT_OYUNPIN;
+  return SUBNAV_AGENT_BAYILER;
+}
+
 function subnavFor(path: string) {
   if (path.startsWith("/home")) return [];   // الرئيسية بلا قائمة فرعية
   if (path.startsWith("/oyunpin")) return SUBNAV_OYUNPIN;
@@ -77,6 +103,7 @@ function subnavFor(path: string) {
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
+  const isAgent = user?.role === "ana_bayi";
   const loc = useLocation();
   const [ann, setAnn] = useState<{ message: string; ticker: string } | null>(null);
   const [themeCfg, setThemeCfg] = useState<ThemeConfig>({});
@@ -95,6 +122,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   /** عدّادات شريط التنبيه — نداء واحد كل دقيقة، ومرّة عند كل تنقّل. */
   useEffect(() => {
+    if (isAgent) return;      // عدّادات صاحب المتجر لا تعنيه
     let alive = true;
     const pull = () => api.get("/alerts/")
       .then((r) => alive && setCounts(r.data))
@@ -102,10 +130,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     pull();
     const t = setInterval(pull, 60_000);
     return () => { alive = false; clearInterval(t); };
-  }, [loc.pathname]);
+  }, [loc.pathname, isAgent]);
 
   const flags = { ...THEME_DEFAULTS, ...themeCfg };
   const tickerItems = (ann?.ticker || "").split("\n").map((s) => s.trim()).filter(Boolean);
+  const mainTabs = isAgent ? AGENT_TABS : ADMIN_TABS;
+  const subLinks = isAgent ? agentSubnavFor(loc.pathname) : subnavFor(loc.pathname);
 
   return (
     <div className="app">
@@ -124,15 +154,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       {/* ===== Navbar ===== */}
       <div style={topbar}>
         <div style={{ display: "flex", gap: 1 }}>
-          {MAIN_TABS.map((t) => {
+          {mainTabs.map((t) => {
             // التبويب النشط واحد فقط — يُحدَّد من المسار الحالي
-            const active =
-              (t.key === "home" && loc.pathname.startsWith("/home")) ||
-              (t.key === "oyunpin" && loc.pathname.startsWith("/oyunpin")) ||
-              (t.key === "raporlar" && loc.pathname.startsWith("/reports")) ||
-              (t.key === "ayarlar" && loc.pathname.startsWith("/settings")) ||
-              (t.key === "bayiler" &&
-                (loc.pathname.startsWith("/dealers") || loc.pathname.startsWith("/ayarlar")));
+            const active = isAgent
+              ? (t.key === "home" && loc.pathname === "/bigagent") ||
+                (t.key === "oyunpin" && loc.pathname.startsWith("/bigagent/price-groups")) ||
+                (t.key === "bayiler" &&
+                  (loc.pathname.startsWith("/bigagent/dealers") ||
+                   loc.pathname.startsWith("/bigagent/orders")))
+              : (t.key === "home" && loc.pathname.startsWith("/home")) ||
+                (t.key === "oyunpin" && loc.pathname.startsWith("/oyunpin")) ||
+                (t.key === "raporlar" && loc.pathname.startsWith("/reports")) ||
+                (t.key === "ayarlar" && loc.pathname.startsWith("/settings")) ||
+                (t.key === "bayiler" &&
+                  (loc.pathname.startsWith("/dealers") || loc.pathname.startsWith("/ayarlar")));
             return (
               <Link
                 key={t.key}
@@ -149,7 +184,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           })}
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          {ALERTS.map((a) => {
+          {(isAgent ? [] : ALERTS).map((a) => {
             const n = counts[a.key] || 0;
             const live = n > 0;
             return (
@@ -180,9 +215,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       </div>
 
       {/* ===== Sub-nav (تتغيّر حسب القسم) ===== */}
-      {subnavFor(loc.pathname).length > 0 && (
+      {subLinks.length > 0 && (
         <div style={subnav}>
-          {subnavFor(loc.pathname).map((s) => {
+          {subLinks.map((s) => {
             const active = loc.pathname === s.to;
             return (
               <Link key={s.to} to={s.to} style={{ ...subLink, ...(active ? subActive : {}) }}>

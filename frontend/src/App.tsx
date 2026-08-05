@@ -27,7 +27,10 @@ import Ledger from "./pages/Ledger";
 import SmsSettings from "./pages/SmsSettings";
 import WhatsAppSettings from "./pages/WhatsAppSettings";
 import DealerReport from "./pages/DealerReport";
-import BigAgent from "./pages/BigAgent";
+import AgentHome from "./pages/AgentHome";
+import AgentDealers from "./pages/AgentDealers";
+import AgentPrices from "./pages/AgentPrices";
+import AgentOrders from "./pages/AgentOrders";
 import Home from "./pages/Home";
 
 // حارس صلاحيات: يمنع الوصول لغير المصرّح ويوجّه كل دور للوحته
@@ -42,6 +45,8 @@ function Guard({ children, roles, bare }:
 
 // صفحات لوحة الأدمن → لصاحب المتجر فقط
 const Admin = (el: React.ReactNode) => <Guard roles={["tenant_admin"]}>{el}</Guard>;
+// لوحة الوكيل الكبير — نفس الهيكل، صلاحياته وحده
+const Agent = (el: React.ReactNode) => <Guard roles={["ana_bayi"]}>{el}</Guard>;
 
 function RoleHomeRedirect() {
   const { user, loading } = useAuth();
@@ -58,8 +63,13 @@ export default function App() {
 
           {/* لوحات مستقلة (بحسب الدور) */}
           <Route path="/platform" element={<Guard roles={["platform_owner"]} bare><Platform /></Guard>} />
-          <Route path="/bigagent" element={<Guard roles={["ana_bayi"]} bare><BigAgent /></Guard>} />
-          <Route path="/store/*" element={<Guard roles={["bayi", "ana_bayi"]} bare><Store /></Guard>} />
+          {/* لوحة الوكيل الكبير — هيكل لوحة صاحب المتجر نفسه بأقسام ثلاثة */}
+          <Route path="/bigagent" element={Agent(<AgentHome />)} />
+          <Route path="/bigagent/dealers" element={Agent(<AgentDealers />)} />
+          <Route path="/bigagent/price-groups" element={Agent(<AgentPrices />)} />
+          <Route path="/bigagent/orders" element={Agent(<AgentOrders />)} />
+          {/* متجر الشراء للدكاكين وحدها — الوكيل الكبير يدير ولا يشتري لنفسه */}
+          <Route path="/store/*" element={<Guard roles={["bayi"]} bare><Store /></Guard>} />
 
           {/* الصفحة الرئيسية (صاحب المتجر) */}
           <Route path="/home" element={Admin(<Home />)} />

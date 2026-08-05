@@ -9,7 +9,7 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from core import currency
-from core.models import User, Wallet
+from core.models import User, Wallet, WalletTransaction
 from catalog.models import AgentMargin, AgentPriceGroup, AgentProductPrice, Product
 from orders.models import Order
 from orders.services import resolve_sell_price
@@ -201,6 +201,105 @@ def group_prices_view(request):
         })
     return Response({
         "group": {"id": group.id, "name": group.name},
+        "results": rows,
+        "currency": currency.display_currency(agent),
+    })
+
+
+@api_view(["POST"])
+@permission_classes(AGENT)
+def dealer_wallet_view(request, dealer_id):
+    """
+    تحويل رصيد بين الوكيل الكبير ودكانه — {action: topup|deduct, amount, note}.
+
+    **حوالة لا هبة:** ما يُضاف إلى الدكان يُخصم من محفظة وكيله، والعكس بالعكس.
+    الوكيل الكبير لا يطبع رصيداً من العدم؛ يوزّع ما اشتراه من صاحب المتجر.
+    والساقان في معاملة واحدة: إمّا تمّتا أو لم تحدث أيّ منهما.
+    """
+    agent = request.user
+    dealer = User.objects.filter(
+        pk=dealer_id, parent=agent, role=User.Role.BAYI
+    ).select_related("wallet").first()
+    if dealer is None:
+        return Response({"detail": "الدكان ليس من دكاكينك"}, status=404)
+
+    action = request.data.get("action")
+    if action not in ("topup", "deduct"):
+        return Response({"detail": "عملية غير معروفة"}, status=400)
+
+    try:
+        amount = currency.from_display(agent, Decimal(str(request.data.get("amount", ""))))
+    except (InvalidOperation, TypeError):
+        return Response({"detail": "مبلغ غير صحيح"}, status=400)
+    if amount <= 0:
+        return Response({"detail": "المبلغ يجب أن يكون أكبر من صفر"}, status=400)
+
+    agent_wallet = getattr(agent, "wallet", None)
+    dealer_wallet = getattr(dealer, "wallet", None)
+    if agent_wallet is None or dealer_wallet is None:
+        return Response({"detail": "لا توجد محفظة"}, status=400)
+
+    note = str(request.data.get("note") or "")[:255]
+    sign = Decimal("1") if action == "topup" else Decimal("-1")
+
+    from core import services as wallet_services
+
+    try:
+        with transaction.atomic():
+            # الخصم أوّلاً حين يشحن دكانه: لا يُشحن الدكان من رصيد لا يملكه وكيله
+            wallet_services.apply_transaction(
+                agent_wallet.id, -sign * amount,
+                WalletTransaction.Type.MANUAL_DEBIT if action == "topup"
+                else WalletTransaction.Type.MANUAL_CREDIT,
+                created_by=agent,
+                note=note or (f"تحويل إلى {dealer.name}" if action == "topup"
+                              else f"سحب من {dealer.name}"),
+            )
+            wallet_services.apply_transaction(
+                dealer_wallet.id, sign * amount,
+                WalletTransaction.Type.MANUAL_CREDIT if action == "topup"
+                else WalletTransaction.Type.MANUAL_DEBIT,
+                created_by=agent,
+                note=note or (f"شحن من وكيلك {agent.name}" if action == "topup"
+                              else f"سحب لصالح وكيلك {agent.name}"),
+            )
+    except wallet_services.WalletError as e:
+        return Response({"detail": str(e)}, status=400)
+
+    agent_wallet.refresh_from_db()
+    dealer_wallet.refresh_from_db()
+    return Response({
+        "dealer_balance": str(currency.to_display(agent, dealer_wallet.balance)),
+        "agent_balance": str(currency.to_display(agent, agent_wallet.balance)),
+    })
+
+
+@api_view(["GET"])
+@permission_classes(AGENT)
+def dealer_statement_view(request, dealer_id):
+    """كشف حركات دكان بعينه — بعملة عرض الوكيل الكبير."""
+    agent = request.user
+    dealer = User.objects.filter(
+        pk=dealer_id, parent=agent, role=User.Role.BAYI
+    ).select_related("wallet").first()
+    if dealer is None or getattr(dealer, "wallet", None) is None:
+        return Response({"detail": "الدكان ليس من دكاكينك"}, status=404)
+
+    show = currency.to_display
+    rows = [{
+        "id": t.id,
+        "type": t.type,
+        "type_label": t.get_type_display(),
+        "amount": str(show(agent, t.amount)),
+        "balance_after": str(show(agent, t.balance_after)),
+        "note": t.note,
+        "created_at": t.created_at.strftime("%Y-%m-%d %H:%M"),
+    } for t in dealer.wallet.transactions.all()[:100]]
+    return Response({
+        "dealer": {
+            "id": dealer.id, "name": dealer.name,
+            "balance": str(show(agent, dealer.wallet.balance)),
+        },
         "results": rows,
         "currency": currency.display_currency(agent),
     })

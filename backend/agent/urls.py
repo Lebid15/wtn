@@ -12,4 +12,6 @@ urlpatterns = [
     path("price-groups/", views.price_groups_view, name="agent-price-groups"),
     path("price-groups/prices/", views.group_prices_view, name="agent-group-prices"),
     path("dealer-group/", views.set_dealer_group_view, name="agent-set-dealer-group"),
+    path("dealers/<int:dealer_id>/wallet/", views.dealer_wallet_view, name="agent-dealer-wallet"),
+    path("dealers/<int:dealer_id>/statement/", views.dealer_statement_view, name="agent-dealer-statement"),
 ]

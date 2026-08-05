@@ -283,3 +283,91 @@ class BigAgentPanelNumbersTest(APITestCase):
         row = self.client.get("/api/agent/orders/").json()["results"][0]
         self.assertEqual(row["sell_price"], "10.00")   # دفع دكانه 10
         self.assertEqual(row["profit"], "2.00")        # وربح هو 2
+
+
+class AgentWalletTransferTest(APITestCase):
+    """شحن الوكيل الكبير لدكانه: حوالة من محفظته لا هبة من العدم."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(subdomain="tw", name="متجر", base_currency="USD")
+        self.ahmad = User.objects.create(
+            login_id="ahmad4", name="أحمد", tenant=self.tenant,
+            role=User.Role.ANA_BAYI, dealer_no=1,
+        )
+        self.agent_wallet = Wallet.objects.create(
+            tenant=self.tenant, user=self.ahmad, balance=Decimal("100"),
+        )
+        self.shop = User.objects.create(
+            login_id="shop4", name="دكان", tenant=self.tenant,
+            role=User.Role.BAYI, parent=self.ahmad, dealer_no=2,
+        )
+        self.shop_wallet = Wallet.objects.create(
+            tenant=self.tenant, user=self.shop, balance=Decimal("0"),
+        )
+        self.client.force_authenticate(user=self.ahmad)
+
+    def _balances(self):
+        self.agent_wallet.refresh_from_db()
+        self.shop_wallet.refresh_from_db()
+        return self.agent_wallet.balance, self.shop_wallet.balance
+
+    def test_topup_moves_money_from_the_agent(self):
+        r = self.client.post(
+            f"/api/agent/dealers/{self.shop.id}/wallet/",
+            {"action": "topup", "amount": "30"}, format="json",
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(self._balances(), (Decimal("70"), Decimal("30")))
+
+    def test_deduct_returns_money_to_the_agent(self):
+        self.client.post(
+            f"/api/agent/dealers/{self.shop.id}/wallet/",
+            {"action": "topup", "amount": "30"}, format="json",
+        )
+        r = self.client.post(
+            f"/api/agent/dealers/{self.shop.id}/wallet/",
+            {"action": "deduct", "amount": "10"}, format="json",
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(self._balances(), (Decimal("80"), Decimal("20")))
+
+    def test_cannot_send_more_than_he_owns(self):
+        r = self.client.post(
+            f"/api/agent/dealers/{self.shop.id}/wallet/",
+            {"action": "topup", "amount": "500"}, format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self._balances(), (Decimal("100"), Decimal("0")))   # لا ساق نصفية
+
+    def test_cannot_touch_a_shop_that_is_not_his(self):
+        other = User.objects.create(
+            login_id="other4", name="كبير آخر", tenant=self.tenant,
+            role=User.Role.ANA_BAYI, dealer_no=3,
+        )
+        foreign = User.objects.create(
+            login_id="foreign4", name="دكان غريب", tenant=self.tenant,
+            role=User.Role.BAYI, parent=other, dealer_no=4,
+        )
+        Wallet.objects.create(tenant=self.tenant, user=foreign)
+        r = self.client.post(
+            f"/api/agent/dealers/{foreign.id}/wallet/",
+            {"action": "topup", "amount": "10"}, format="json",
+        )
+        self.assertEqual(r.status_code, 404)
+
+    def test_statement_lists_the_shop_transactions(self):
+        self.client.post(
+            f"/api/agent/dealers/{self.shop.id}/wallet/",
+            {"action": "topup", "amount": "30", "note": "دفعة أولى"}, format="json",
+        )
+        data = self.client.get(f"/api/agent/dealers/{self.shop.id}/statement/").json()
+        self.assertEqual(data["dealer"]["balance"], "30.00")
+        self.assertEqual(data["results"][0]["note"], "دفعة أولى")
+
+    def test_zero_or_negative_amount_is_refused(self):
+        for bad in ("0", "-5"):
+            r = self.client.post(
+                f"/api/agent/dealers/{self.shop.id}/wallet/",
+                {"action": "topup", "amount": bad}, format="json",
+            )
+            self.assertEqual(r.status_code, 400, bad)
