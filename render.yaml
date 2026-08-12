@@ -1,10 +1,10 @@
-# Render Blueprint — نشر مجاني بخدمة واحدة (Django يقدّم الـ API + الواجهة) + Postgres.
+# Render Blueprint — نشر مجاني بخدمة واحدة (Django يقدّم الـ API + الواجهة).
 # الاستخدام: Render Dashboard → New → Blueprint → اختر هذا المستودع → Apply.
-databases:
-  - name: wtn-db
-    plan: free
-    databaseName: wtn_db
-    user: wtn
+#
+# ⚠️ قاعدة البيانات لم تعد على Render. كانت `wtn-db` بالخطة المجانية، وهذه
+# تُحذف نهائياً بعد ٣٠ يوماً من إنشائها — وقد حُذفت فعلاً في 2026-08-12 فتوقّف
+# الموقع (فشل `migrate` ← `set -e` في start.sh ← لا خادم). القاعدة الآن على
+# مزوّد خارجي دائم (Neon)، ورابطها في `DATABASE_URL` أدناه.
 
 services:
   - type: web
@@ -25,23 +25,8 @@ services:
       # مغلقة تماماً (503) — وهو السلوك المقصود.
       - key: INTERNAL_API_KEY
         generateValue: true
-      - key: DB_HOST
-        fromDatabase:
-          name: wtn-db
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: wtn-db
-          property: port
-      - key: DB_NAME
-        fromDatabase:
-          name: wtn-db
-          property: database
-      - key: DB_USER
-        fromDatabase:
-          name: wtn-db
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: wtn-db
-          property: password
+      # رابط قاعدة Neon الكامل. `sync: false` تعني: يُلصق يدوياً مرّةً واحدة من
+      # لوحة Render (Environment)، ولا يُكتب في المستودع لأنه يحوي كلمة السرّ.
+      # صيغته: postgresql://user:pass@ep-xxx.region.aws.neon.tech/wtn_db?sslmode=require
+      - key: DATABASE_URL
+        sync: false

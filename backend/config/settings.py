@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlparse
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -98,16 +99,45 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("DB_NAME", "wtn_db"),
-        "USER": os.environ.get("DB_USER", "wtn"),
-        "PASSWORD": os.environ.get("DB_PASSWORD", "wtn_dev_pass"),
-        "HOST": os.environ.get("DB_HOST", "localhost"),
-        "PORT": os.environ.get("DB_PORT", "5432"),
+# A single DATABASE_URL (Neon, Supabase, …) takes precedence when set, so a
+# managed Postgres can be swapped in from the host dashboard alone. Any stale
+# DB_* variables left behind by a previous provider are ignored in that case.
+# Without it we fall back to the discrete DB_* variables used locally.
+_DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+
+if _DATABASE_URL:
+    _url = urlparse(_DATABASE_URL)
+    _options = {k: v[-1] for k, v in parse_qs(_url.query).items()}
+    # Managed Postgres is reached over the public internet — never in the clear.
+    _options.setdefault("sslmode", "require")
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": unquote(_url.path).lstrip("/"),
+            "USER": unquote(_url.username or ""),
+            "PASSWORD": unquote(_url.password or ""),
+            "HOST": _url.hostname or "",
+            "PORT": str(_url.port or ""),
+            "OPTIONS": _options,
+            # The database lives outside the host now, so a fresh TCP+TLS
+            # handshake per request is pure latency. Reuse connections, and
+            # health-check them since serverless Postgres drops idle ones.
+            "CONN_MAX_AGE": 600,
+            "CONN_HEALTH_CHECKS": True,
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("DB_NAME", "wtn_db"),
+            "USER": os.environ.get("DB_USER", "wtn"),
+            "PASSWORD": os.environ.get("DB_PASSWORD", "wtn_dev_pass"),
+            "HOST": os.environ.get("DB_HOST", "localhost"),
+            "PORT": os.environ.get("DB_PORT", "5432"),
+        }
+    }
 
 # Custom user model (login by login_id)
 AUTH_USER_MODEL = "core.User"
