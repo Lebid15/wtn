@@ -124,6 +124,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     shop_image = models.TextField(blank=True, default="")   # صورة لوحة المحل
     # موافقة الوكيل على تحصيل دَينه آلياً — عليها يُفلتر الإرسال الجماعي بواتساب
     auto_debt_collection = models.BooleanField(default=False)
+    # إذن صريح بأن يُستعمل هذا الحساب من متجر آخر على المنصّة كـ«مزوّد داخلي».
+    # مطفأ افتراضياً: رقم الدخول فريد عبر المنصّة كلّها وسهل التخمين، فبدون هذا
+    # الإذن كان أي صاحب متجر يوجّه طلباته إلى محفظة وكيل ليس له وينفق رصيده.
+    internal_supply_allowed = models.BooleanField(default=False)
     # رقم واتساب مطبَّعاً: أرقام فقط برمز الدولة بلا + ولا صفر بادئ (905551234567).
     # يُطبَّع عند الحفظ لا عند الإرسال — انظر whatsapp/phone.py
     whatsapp = models.CharField(max_length=24, blank=True, default="")

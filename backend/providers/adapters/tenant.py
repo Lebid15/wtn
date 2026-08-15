@@ -7,10 +7,40 @@ provider_package_id على المنتج = رقم منتج المورّد (ب).
 عند الطلب: يُنشأ طلب حقيقي داخل متجر (ب) باسم ذلك الوكيل (يخصم محفظته هناك)،
 ويُنفَّذ لدى (ب) بتوجيهات (ب) نفسها (بنك بيناته أو مزوّده الخارجي...)،
 ويعود الـ PIN إلى طلبنا. أي سلسلة توريد كاملة داخل المنصّة.
+
+**الإذن شرطٌ لا خيار:** رقم الدخول فريد عبر المنصّة كلّها وسهل التخمين
+(`bayi003`)، فلولا `internal_supply_allowed` لاستطاع أيّ صاحب متجر أن يوجّه
+طلباته إلى محفظة وكيلٍ ليس له فينفق رصيده. الإذن يضعه صاحب المتجر المورّد
+بيده على الحساب الذي فتحه لهذا الغرض — لا يُشترى ولا يُخمَّن.
 """
 from decimal import Decimal
 
 from .base import BalanceResult, BaseAdapter, ExecutionResult, PackageList
+
+
+def _resolve_dealer(config: dict, buyer_tenant_id=None):
+    """يعيد (الوكيل، سبب الرفض). الوكيل None ⇒ الرفض مشروح بالعربية."""
+    from core.models import User
+
+    login = ((config or {}).get("dealer_login") or "").strip()
+    if not login:
+        return None, "إعداد ناقص: dealer_login (رقم دخول حسابنا لدى المورّد)"
+    dealer = (
+        User.objects.filter(login_id=login, role=User.Role.BAYI)
+        .select_related("wallet", "tenant").first()
+    )
+    if dealer is None:
+        return None, f"حساب الوكيل '{login}' غير موجود لدى المورّد"
+    # الرفض واحد في الحالتين — كي لا يكشف الردّ للمخمّن أن الرقم صحيح
+    if not dealer.internal_supply_allowed:
+        return None, (
+            f"حساب '{login}' غير مأذون له بالتوجيه الداخلي. "
+            "على صاحب المتجر المورّد تفعيل «مأذون بالتوجيه الداخلي» "
+            "من إعدادات ذلك الوكيل."
+        )
+    if buyer_tenant_id is not None and dealer.tenant_id == buyer_tenant_id:
+        return None, "التوجيه الداخلي يجب أن يكون لمتجر آخر"
+    return dealer, ""
 
 
 class InternalTenantAdapter(BaseAdapter):
@@ -19,15 +49,12 @@ class InternalTenantAdapter(BaseAdapter):
 
     def get_balance(self, config: dict, provider=None) -> BalanceResult:
         """رصيد محفظتنا (كوكيل) لدى المتجر المورّد — قراءة محلية من القاعدة."""
-        from core.models import User
-
-        login = ((config or {}).get("dealer_login") or "").strip()
-        if not login:
-            return BalanceResult(ok=False, note="إعداد ناقص: dealer_login")
-        dealer = User.objects.filter(login_id=login).select_related("wallet", "tenant").first()
+        dealer, why = _resolve_dealer(config, getattr(provider, "tenant_id", None))
+        if dealer is None:
+            return BalanceResult(ok=False, note=why)
         wallet = getattr(dealer, "wallet", None)
-        if dealer is None or wallet is None:
-            return BalanceResult(ok=False, note=f"حساب '{login}' غير موجود لدى المورّد أو بلا محفظة")
+        if wallet is None:
+            return BalanceResult(ok=False, note="الحساب لدى المورّد بلا محفظة")
         bal = wallet.balance
         return BalanceResult(
             ok=True, balance=bal,
@@ -38,14 +65,10 @@ class InternalTenantAdapter(BaseAdapter):
     def list_packages(self, config: dict, provider=None) -> PackageList:
         """كتالوج المورّد: منتجات المتجر الذي نملك حساب وكيل لديه."""
         from catalog.models import Product
-        from core.models import User
 
-        login = ((config or {}).get("dealer_login") or "").strip()
-        if not login:
-            return PackageList(ok=False, note="إعداد ناقص: dealer_login")
-        dealer = User.objects.filter(login_id=login).select_related("tenant").first()
+        dealer, why = _resolve_dealer(config, getattr(provider, "tenant_id", None))
         if dealer is None:
-            return PackageList(ok=False, note=f"حساب '{login}' غير موجود لدى المورّد")
+            return PackageList(ok=False, note=why)
         rows = Product.objects.filter(
             tenant=dealer.tenant, status=Product.Status.ACTIVE
         ).select_related("game").order_by("game__sort_order", "sort_order")
@@ -59,22 +82,12 @@ class InternalTenantAdapter(BaseAdapter):
         return PackageList(ok=True, packages=packages)
 
     def place_order(self, order, config: dict, provider=None, depth: int = 0) -> ExecutionResult:
-        from core.models import User
         from catalog.models import Product
         from orders import services
 
-        login = (config.get("dealer_login") or "").strip()
-        if not login:
-            return ExecutionResult(status="failed", note="إعداد ناقص: dealer_login (حسابنا لدى المورّد)")
-
-        dealer = (
-            User.objects.filter(login_id=login, role=User.Role.BAYI)
-            .select_related("tenant", "wallet").first()
-        )
+        dealer, why = _resolve_dealer(config, order.tenant_id)
         if dealer is None:
-            return ExecutionResult(status="failed", note=f"حساب الوكيل '{login}' غير موجود لدى المورّد")
-        if dealer.tenant_id == order.tenant_id:
-            return ExecutionResult(status="failed", note="التوجيه الداخلي يجب أن يكون لمتجر آخر")
+            return ExecutionResult(status="failed", note=why)
 
         try:
             package_id, _extra = self.link_for(order, provider)

@@ -360,6 +360,7 @@ def _dealer_settings_row(u):
         "id_image": u.id_image,
         "shop_image": u.shop_image,
         "auto_debt_collection": u.auto_debt_collection,
+        "internal_supply_allowed": u.internal_supply_allowed,
         # مرجع العملات
         "base_currency": currency.base_currency(tenant),
         "available_currencies": sorted(
@@ -504,6 +505,10 @@ def dealer_settings_view(request, dealer_id):
     if "auto_debt_collection" in data:
         u.auto_debt_collection = bool(data["auto_debt_collection"])
         fields.append("auto_debt_collection")
+
+    if "internal_supply_allowed" in data:
+        u.internal_supply_allowed = bool(data["internal_supply_allowed"])
+        fields.append("internal_supply_allowed")
 
     new_password = str(data.get("new_password") or "")
     if new_password:

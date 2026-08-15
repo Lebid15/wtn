@@ -42,13 +42,18 @@ class Command(BaseCommand):
         # حسابنا كوكيل لدى المورّد
         acc, created = User.objects.get_or_create(
             login_id="alaya_at_supplier",
-            defaults=dict(tenant=B, role=User.Role.BAYI, name="متجر علايا (وكيل)", status="active"),
+            defaults=dict(tenant=B, role=User.Role.BAYI, name="متجر علايا (وكيل)", status="active",
+                          internal_supply_allowed=True),
         )
         if created:
             acc.set_password("x12345")
             acc.save()
             Wallet.objects.create(tenant=B, user=acc, balance=Decimal("500"))
         else:
+            # حسابات أُنشئت قبل حقل الإذن — بدونه يرفض المحوّل التوجيه
+            if not acc.internal_supply_allowed:
+                acc.internal_supply_allowed = True
+                acc.save(update_fields=["internal_supply_allowed"])
             # جدّد الرصيد للتجارب
             w = getattr(acc, "wallet", None)
             if w and w.balance < 100:
