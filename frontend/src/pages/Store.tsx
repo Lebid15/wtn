@@ -27,7 +27,6 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "reports", label: "تقاريري", icon: "excel" },
   { key: "wallet", label: "محفظتي", icon: "wallet" },
   { key: "topup", label: "إضافة رصيد", icon: "card" },
-  { key: "api", label: "API", icon: "api" },
   { key: "support", label: "الدعم", icon: "chat" },
   { key: "settings", label: "إعداداتي", icon: "settings" },
 ];
@@ -69,6 +68,8 @@ export default function Store() {
   const nav = useNavigate();
   const loc = useLocation();
   const tab = tabFromPath(loc.pathname);
+  // /store/api لم يعد تبويباً مستقلاً — يُبرز «إعداداتي» لأنه يفتح داخله
+  const navTab: Tab = tab === "api" ? "settings" : tab;
   const goTab = (t: Tab) => nav(pathForTab(t));
   const [summary, setSummary] = useState<Summary | null>(null);
   const [unread, setUnread] = useState(0);
@@ -122,7 +123,7 @@ export default function Store() {
       <div style={subnav}>
         {TABS.map((t) => (
           <button key={t.key} onClick={() => goTab(t.key)}
-            style={{ ...tabBtn, ...(tab === t.key ? tabActive : {}) }}>
+            style={{ ...tabBtn, ...(navTab === t.key ? tabActive : {}) }}>
             <Icon name={t.icon} size={16} style={{ marginInlineEnd: 6 }} />{t.label}
             {t.key === "support" && unread > 0 && (
               <span style={{ background: "var(--danger)", color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 9, padding: "1px 6px", marginInlineStart: 5 }}>{unread}</span>
@@ -138,9 +139,10 @@ export default function Store() {
         {tab === "reports" && <ReportsTab />}
         {tab === "wallet" && <WalletTab onTopUp={() => goTab("topup")} />}
         {tab === "topup" && <TopUp onDone={loadSummary} />}
-        {tab === "api" && <ApiDocs />}
         {tab === "support" && <Tickets title="الدعم / مراسلة الإدارة" />}
-        {tab === "settings" && <SettingsTab />}
+        {(tab === "settings" || tab === "api") && (
+          <SettingsTab initial={tab === "api" ? "api" : "account"} />
+        )}
       </div>
     </div>
     </CurrencyCtx.Provider>
@@ -562,8 +564,36 @@ function WalletTab({ onTopUp }: { onTopUp: () => void }) {
   );
 }
 
-/* ===== إعداداتي (تغيير كلمة السر) ===== */
-function SettingsTab() {
+/* ===== إعداداتي: الحساب · الربط الخارجي =====
+   الربط الخارجي إعدادٌ يُضبط مرّةً ثم يُنسى، لا قسمٌ يُزار يومياً — فمكانه هنا
+   لا في شريط التبويبات. ورابط /store/api يبقى صالحاً ويفتح على قسمه مباشرةً. */
+function SettingsTab({ initial = "account" }: { initial?: "account" | "api" }) {
+  const [pane, setPane] = useState<"account" | "api">(initial);
+  useEffect(() => { setPane(initial); }, [initial]);
+
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {([["account", "الحساب", "user"], ["api", "الربط الخارجي (API)", "api"]] as const).map(
+          ([k, label, icon]) => (
+            <button key={k} onClick={() => setPane(k)} className="btn"
+              style={{
+                height: 36, padding: "0 14px", fontSize: 13,
+                ...(pane === k
+                  ? { background: "var(--primary)", color: "#fff" }
+                  : { background: "var(--surface-2)", color: "var(--text)" }),
+              }}>
+              <Icon name={icon} size={15} style={{ marginInlineEnd: 6 }} />{label}
+            </button>
+          ),
+        )}
+      </div>
+      {pane === "account" ? <AccountPane /> : <ApiDocs />}
+    </div>
+  );
+}
+
+function AccountPane() {
   const { user } = useAuth();
   const [cur, setCur] = useState("");
   const [nw, setNw] = useState("");

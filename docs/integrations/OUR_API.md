@@ -1,7 +1,7 @@
 # واجهتنا الخارجية — كي يشتري منّا متجرٌ خارج المنصّة
 
 > **الكود:** [`backend/clientapi/`](../../backend/clientapi/) — الصفحة التي يراها الوكيل:
-> [`frontend/src/components/ApiDocs.tsx`](../../frontend/src/components/ApiDocs.tsx) (تبويب **API** في `/store/api`).
+> [`frontend/src/components/ApiDocs.tsx`](../../frontend/src/components/ApiDocs.tsx) (**إعداداتي ← الربط الخارجي (API)** — ورابط `/store/api` يفتح عليه مباشرةً).
 >
 > هذه وثيقتنا نحن. أمّا وثيقة الجهة الخارجية فهي **الصفحة نفسها** في لوحة
 > الوكيل، وفيها توكنه مكتوباً داخل الأمثلة.
