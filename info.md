@@ -12,9 +12,12 @@
 - ❌ لا تُنشأ فروع ميزات (`feature/…`) ولا فروع وكلاء (`claude/…`) ولا Pull Requests.
 - ✅ أي فرع قائم يُدمَج فوراً في `main` ثم يُحذف.
 - ✅ التسلسل المعتاد: `git add -A` ← `git commit` ← `git push origin main`.
-- ⚠️ **إعداد Render:** يجب أن يكون فرع خدمة `wtn` هو `main`
-  (Dashboard ← خدمة `wtn` ← Settings ← Branch). كان سابقاً
-  `claude/website-clone-auth-access-xp4oj8`؛ إن لم يُبدَّل فلن تصل التحديثات للموقع.
+- ✅ **إعداد Render:** فرع خدمة `wtn` صار `main` (بُدِّل 2026-08-15).
+
+> **ما كلّفه هذا:** بقي الفرع على `claude/website-clone-auth-access-xp4oj8`
+> أياماً بعد الدمج، فتراكمت **خمسة التزامات** على `main` والموقع يعمل بكودٍ
+> قديم بينما نظنّه محدَّثاً. الدرس: بعد أي دفعة، تأكّد أن الأثر ظهر على الموقع
+> لا أن الدفع نجح.
 
 > **الحالة (2026-08-05):** فرع `claude/website-clone-auth-access-xp4oj8` دُمج في `main`
 > بـ fast-forward (113 التزاماً)، والفرعان الآن على نفس الالتزام. يُحذف الفرع القديم
@@ -238,7 +241,8 @@ cd ../backend && FRONTEND_DIST=../frontend/dist DEBUG=0 \
 | [docs/DEPLOY.md](docs/DEPLOY.md) | دليل النشر الأصلي المفصّل |
 | [docs/START_HERE.md](docs/START_HERE.md) | توجيه أي جلسة جديدة — نظرة شاملة |
 | [docs/NEXT_STEPS.md](docs/NEXT_STEPS.md) | ما تبقّى من خطوات |
-| [plan.md](plan.md) | **خطة العمل** — ما أُنجز جلسةً جلسة، وما تبقّى (§17) |
+| [plan.md](plan.md) | **سجلّ العمل** — ما أُنجز جلسةً جلسة |
+| [plan2.md](plan2.md) | **ما تبقّى** — جرد كامل مرتّب بالأولوية (2026-08-16) |
 | [bot/README.md](bot/README.md) | بوت واتساب: التشغيل · الأسرار · احتياطات الحظر |
 | [docs/ROLES.md](docs/ROLES.md) | الأدوار الأربعة |
 | [docs/integrations/OUR_API.md](docs/integrations/OUR_API.md) | **واجهتنا الخارجية** — كي يشتري منّا متجرٌ من خارج المنصّة |
