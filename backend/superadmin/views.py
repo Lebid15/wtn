@@ -46,7 +46,7 @@ class LibraryProductViewSet(viewsets.ModelViewSet):
 def _tenant_row(t):
     from django.utils import timezone
     dealers = User.objects.filter(tenant=t, role=User.Role.BAYI).count()
-    today = timezone.now().date()
+    today = timezone.localdate()
     days_left = (t.sub_expires_at - today).days if t.sub_expires_at else None
     return {
         "id": t.id,
@@ -63,6 +63,10 @@ def _tenant_row(t):
         "sub_expires_at": t.sub_expires_at.strftime("%Y-%m-%d") if t.sub_expires_at else None,
         "sub_active": bool(t.sub_expires_at and t.sub_expires_at >= today),
         "sub_days_left": days_left,
+        "sub_grace_days": t.sub_grace_days,
+        "sub_enforce": t.sub_enforce,
+        # مرجعٌ واحد تقرأ منه اللوحة والخادم: ok · warn · grace · blocked
+        "sub_state": t.subscription_state(today),
     }
 
 
@@ -128,7 +132,7 @@ def tenant_status_view(request, tenant_id, action):
 @permission_classes([IsAuthenticated, IsPlatformOwner])
 def tenant_subscription_view(request, tenant_id):
     """اشتراك المستأجر: ضبط الأسعار (شهري/سنوي) وتفعيل/إلغاء خطة — لمالك المنصّة."""
-    from datetime import timedelta
+    from datetime import datetime, timedelta
     from django.utils import timezone
 
     try:
@@ -150,7 +154,7 @@ def tenant_subscription_view(request, tenant_id):
         plan = request.data.get("plan")
         if plan not in (Tenant.SubPlan.MONTHLY, Tenant.SubPlan.YEARLY):
             return Response({"detail": "خطة غير معروفة"}, status=400)
-        today = timezone.now().date()
+        today = timezone.localdate()
         # التمديد من نهاية الاشتراك الحالي إن كان ساري المفعول، وإلا من اليوم
         base = t.sub_expires_at if (t.sub_expires_at and t.sub_expires_at >= today) else today
         days = 30 if plan == Tenant.SubPlan.MONTHLY else 365
@@ -164,6 +168,32 @@ def tenant_subscription_view(request, tenant_id):
             tenant=t, plan=plan, amount=amount,
             period_start=base, period_end=t.sub_expires_at,
         )
+
+    elif op == "policy":
+        # سياسة الاشتراك لهذا المتجر: مهلة السماح، والإعفاء من المنع أصلاً
+        try:
+            grace = int(request.data.get("grace_days", t.sub_grace_days))
+        except (TypeError, ValueError):
+            return Response({"detail": "أيام السماح يجب أن تكون رقماً"}, status=400)
+        if not 0 <= grace <= 90:
+            return Response({"detail": "أيام السماح بين صفر و90"}, status=400)
+        t.sub_grace_days = grace
+        if "enforce" in request.data:
+            t.sub_enforce = bool(request.data["enforce"])
+        t.save(update_fields=["sub_grace_days", "sub_enforce"])
+
+    elif op == "expires":
+        # ضبط تاريخ الانتهاء مباشرةً — بلا فاتورة ولا خطة. لتصحيح خطأ أو
+        # لمنح مدّة بقرارٍ منك، دون أن تُحسب اشتراكاً مدفوعاً.
+        raw = str(request.data.get("expires_at") or "").strip()
+        if not raw:
+            t.sub_expires_at = None
+        else:
+            try:
+                t.sub_expires_at = datetime.strptime(raw, "%Y-%m-%d").date()
+            except ValueError:
+                return Response({"detail": "التاريخ بصيغة YYYY-MM-DD"}, status=400)
+        t.save(update_fields=["sub_expires_at"])
 
     elif op == "cancel":
         t.sub_plan = Tenant.SubPlan.NONE

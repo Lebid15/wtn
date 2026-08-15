@@ -6,6 +6,7 @@ import { symbolOf } from "../currency";
 import Icon from "../components/Icon";
 import Tickets from "../components/Tickets";
 import ApiDocs from "../components/ApiDocs";
+import { CardStrip, type Card } from "../components/HomeCards";
 import TopUp from "../components/TopUp";
 import { applyThemeConfig } from "../theme";
 
@@ -151,9 +152,16 @@ export default function Store() {
 
 /* ===== الرئيسية ===== */
 function HomeTab({ summary, onSell }: { summary: Summary | null; onSell: () => void }) {
+  // بطاقات يكتبها صاحب المتجر لوكلائه (الإعدادات ← بطاقات الوكلاء)
+  const [cards, setCards] = useState<Card[]>([]);
+  useEffect(() => {
+    api.get("/my-cards/").then((r) => setCards(r.data.results)).catch(() => setCards([]));
+  }, []);
+
   if (!summary) return <div style={{ padding: 20 }}>جارٍ التحميل...</div>;
   return (
     <div>
+      <CardStrip cards={cards} />
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
         <Stat icon="wallet" label="رصيدي" value={money(summary.balance) + " " + symbolOf(summary.currency)}
           tone={Number(summary.balance) < 0 ? "danger" : "primary"} />
@@ -161,17 +169,19 @@ function HomeTab({ summary, onSell }: { summary: Summary | null; onSell: () => v
         <Stat icon="dollar" label="أرباحي" value={money(summary.profit) + " " + symbolOf(summary.currency)} />
         <Stat icon="refresh" label="قيد الانتظار" value={summary.pending} />
       </div>
-      <div style={announce}>
-        <div style={{ fontWeight: 800, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-          <Icon name="bell" size={18} />الإعلانات
+      {cards.length === 0 && (
+        <div style={announce}>
+          <div style={{ fontWeight: 800, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            <Icon name="bell" size={18} />الإعلانات
+          </div>
+          <p style={{ color: "var(--muted)", margin: "4px 0 14px", lineHeight: 1.9 }}>
+            أهلاً بك في لوحة الوكيل. اختر "البيع" لشحن الألعاب لزبائنك، وتابع طلباتك من تبويب "طلباتي".
+          </p>
+          <button className="btn g" onClick={onSell}>
+            <Icon name="cart" size={15} style={{ marginInlineEnd: 6 }} />ابدأ البيع الآن
+          </button>
         </div>
-        <p style={{ color: "var(--muted)", margin: "4px 0 14px", lineHeight: 1.9 }}>
-          أهلاً بك في لوحة الوكيل. اختر "البيع" لشحن الألعاب لزبائنك، وتابع طلباتك من تبويب "طلباتي".
-        </p>
-        <button className="btn g" onClick={onSell}>
-          <Icon name="cart" size={15} style={{ marginInlineEnd: 6 }} />ابدأ البيع الآن
-        </button>
-      </div>
+      )}
     </div>
   );
 }
@@ -195,6 +205,9 @@ function SellTab({ onBought, onFinish }: { onBought: () => void; onFinish: () =>
   const [active, setActive] = useState<SGame | null>(null);
   const [buy, setBuy] = useState<SProduct | null>(null);
   const [q, setQ] = useState("");
+  // قائمة الأسعار قسمٌ داخل «البيع» لا تبويباً تاسعاً في الشريط — ومكانها هنا
+  // طبيعي: «ماذا أبيع وبكم».
+  const [pane, setPane] = useState<"buy" | "list">("buy");
 
   useEffect(() => {
     api.get("/store/catalog/").then((r) => setGames(r.data.games));
@@ -204,7 +217,23 @@ function SellTab({ onBought, onFinish }: { onBought: () => void; onFinish: () =>
 
   return (
     <div>
-      {!active ? (
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        {([["buy", "الشراء", "cart"], ["list", "قائمة الباقات", "excel"]] as const).map(
+          ([k, label, icon]) => (
+            <button key={k} className="btn" onClick={() => setPane(k)}
+              style={{
+                height: 36, padding: "0 14px", fontSize: 13,
+                ...(pane === k
+                  ? { background: "var(--primary)", color: "#fff" }
+                  : { background: "var(--surface-2)", color: "var(--text)" }),
+              }}>
+              <Icon name={icon} size={15} style={{ marginInlineEnd: 6 }} />{label}
+            </button>
+          ),
+        )}
+      </div>
+
+      {pane === "list" ? <PackagesTab /> : !active ? (
         <>
           <div style={{ position: "relative", marginBottom: 18 }}>
             <input placeholder="ابحث عن لعبة..." value={q} onChange={(e) => setQ(e.target.value)}
@@ -249,6 +278,91 @@ function SellTab({ onBought, onFinish }: { onBought: () => void; onFinish: () =>
         <BuyModal product={buy} requirePlayer={active.require_player_id}
           onClose={() => setBuy(null)} onBought={onBought} onFinish={onFinish} />
       )}
+    </div>
+  );
+}
+
+/* ===== قائمة الباقات — قراءةٌ فقط ===== */
+function PackagesTab() {
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [cur, setCur] = useState("");
+  const [q, setQ] = useState("");
+  const [copied, setCopied] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.get("/store/packages/").then((r) => { setRows(r.data.results); setCur(r.data.currency); })
+      .catch(() => setRows([]));
+  }, []);
+
+  if (rows === null) return <div style={{ padding: 20, color: "var(--muted)" }}>جارٍ التحميل...</div>;
+
+  const needle = q.trim().toLowerCase();
+  const shown = needle
+    ? rows.filter((r) => `${r.game} ${r.name} ${r.id}`.toLowerCase().includes(needle))
+    : rows;
+
+  return (
+    <div className="card">
+      <div className="card-title">
+        <Icon name="excel" size={16} style={{ color: "var(--primary)" }} /> قائمة الباقات وأسعارها
+      </div>
+      <div style={{ padding: "0 14px 12px", color: "var(--muted)", fontSize: 12.5, lineHeight: 1.9 }}>
+        عرضٌ فقط — لا تعديل. <b>رقم الربط</b> هو رقم الباقة عندنا، وهو ما تضعه في
+        الربط الخارجي: <code style={{ direction: "ltr", display: "inline-block", background: "var(--surface-2)", borderRadius: 5, padding: "1px 6px", fontSize: 12 }}>
+          /client/api/newOrder/&#123;الرقم&#125;/params
+        </code>
+        {" "}— التفاصيل في <b>إعداداتي ← الربط الخارجي</b>.
+      </div>
+      <div style={{ padding: "0 14px 12px" }}>
+        <input placeholder="ابحث بالاسم أو الرقم..." value={q} onChange={(e) => setQ(e.target.value)}
+          style={{ width: "100%", maxWidth: 340, height: 38, paddingInlineStart: 12, borderRadius: 8 }} />
+      </div>
+      <div className="table-scroll">
+        <table className="grid">
+          <thead>
+            <tr>
+              <th>اللعبة</th>
+              <th>الباقة</th>
+              <th>رقم الربط</th>
+              <th>سعر الشراء</th>
+              <th>سعر التوصية</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((r) => (
+              <tr key={r.id}>
+                <td>{r.game}</td>
+                <td>
+                  {r.name}
+                  {r.require_player_id && (
+                    <span style={{ color: "var(--muted)", fontSize: 11.5, marginInlineStart: 6 }}>
+                      · يطلب معرّف اللاعب
+                    </span>
+                  )}
+                </td>
+                <td className="num">
+                  <button className="btn" title="نسخ الرقم"
+                    onClick={() => { navigator.clipboard?.writeText(String(r.id)); setCopied(r.id); }}
+                    style={{
+                      height: 26, padding: "0 10px", fontSize: 12.5, fontFamily: "monospace",
+                      background: copied === r.id ? "var(--ok)" : "var(--surface-2)",
+                      color: copied === r.id ? "#fff" : "var(--text)",
+                    }}>{r.id}</button>
+                </td>
+                <td className="num"><b>{money(r.buy_price)}</b> {symbolOf(cur)}</td>
+                <td className="num" style={{ color: "var(--muted)" }}>
+                  {money(r.recommended_price)} {symbolOf(cur)}
+                </td>
+              </tr>
+            ))}
+            {shown.length === 0 && (
+              <tr><td colSpan={5} style={{ textAlign: "center", padding: 24, color: "var(--muted)" }}>
+                لا باقات مطابقة
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

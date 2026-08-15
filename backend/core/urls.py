@@ -1,7 +1,7 @@
 """روابط الـ API للقلب."""
 from django.urls import path
 
-from . import alerts, tickets, views
+from . import alerts, cards, tickets, views
 
 urlpatterns = [
     path("auth/login/", views.login_view, name="login"),
@@ -23,6 +23,10 @@ urlpatterns = [
     path("tickets/<int:ticket_id>/reply/", tickets.ticket_reply_view, name="ticket-reply"),
     path("tickets/<int:ticket_id>/close/", tickets.ticket_close_view, name="ticket-close"),
     path("announcement/", views.announcement_view, name="announcement"),
+    # بطاقات الصفحة الرئيسية: كتابةٌ لمن تحتي، وقراءةٌ لما كُتب لي
+    path("cards/", cards.cards_view, name="cards"),
+    path("cards/<int:card_id>/", cards.card_detail_view, name="card-detail"),
+    path("my-cards/", cards.my_cards_view, name="my-cards"),
     path("alerts/", alerts.alerts_view, name="alerts"),
     # فواتير المستأجر الحالي
     path("invoices/", views.my_invoices_view, name="my-invoices"),

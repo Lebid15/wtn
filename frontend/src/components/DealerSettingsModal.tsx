@@ -12,6 +12,7 @@ interface Settings {
   id_image: string; shop_image: string; auto_debt_collection: boolean;
   internal_supply_allowed: boolean;
   api_access_allowed: boolean;
+  is_locked: boolean; locked_at: string; failed_login_count: number;
   base_currency: string; available_currencies: string[];
   // انتقلا إلى هنا بعد حذف صفحة «أسعار الوكلاء»
   oyun_load_limit: string; price_group: number | null;
@@ -289,9 +290,23 @@ export default function DealerSettingsModal({
                   </div>
                 </div>
 
+                {f.is_locked && (
+                  <div style={{
+                    background: "#fdece7", border: "1px solid #f0c2b6", color: "#7f1d1d",
+                    borderRadius: 9, padding: "12px 14px", fontSize: 13, lineHeight: 1.9, fontWeight: 700,
+                  }}>
+                    🔒 <b>الحساب مقفل</b> بعد محاولات دخول فاشلة
+                    {f.locked_at ? ` — ${f.locked_at}` : ""}.
+                    <br />
+                    اكتب له <b>كلمة سرّ جديدة</b> أسفله واحفظ — يُفتح القفل معها.
+                    ولا يُفتح بدونها عمداً: القديمة ثبت أن أحدهم يخمّنها.
+                  </div>
+                )}
+
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--primary-dark)", marginBottom: 10 }}>
                     تغيير كلمة السر
+                    {f.is_locked && <span style={{ color: "var(--danger)" }}> — مطلوبة لفتح القفل</span>}
                   </div>
                   <div style={{ ...hint, marginBottom: 10, display: "flex", gap: 8, alignItems: "center" }}>
                     <span>يدخل بهذا الرقم:</span>

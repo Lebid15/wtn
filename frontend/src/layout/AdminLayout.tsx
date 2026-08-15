@@ -56,6 +56,7 @@ const SUBNAV_BAYILER = [
 // قسم الإعدادات — إعدادات المتجر نفسه
 const SUBNAV_AYARLAR = [
   { label: "إعدادات الموقع", to: "/settings/site" },
+  { label: "بطاقات الوكلاء", to: "/settings/cards" },
   { label: "إعدادات SMS", to: "/settings/sms" },
   { label: "واتساب", to: "/settings/whatsapp" },
   { label: "الرسائل", to: "/settings/support" },
@@ -111,9 +112,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const [themeCfg, setThemeCfg] = useState<ThemeConfig>({});
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  // حالة الاشتراك — لصاحب المتجر وحده؛ وكيله لا شأن له بفاتورته
+  const [sub, setSub] = useState<{ state: string; expires_at: string | null; days_left: number | null } | null>(null);
 
   useEffect(() => {
     api.get("/announcement/").then((r) => setAnn(r.data)).catch(() => setAnn({ message: "", ticker: "" }));
+    api.get("/subscription/").then((r) => setSub(r.data)).catch(() => {});
     // تخصيص المظهر المحفوظ لهذا المتجر
     api.get("/settings/theme/").then((r) => {
       const cfg = r.data.config || {};
@@ -141,6 +145,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="app">
+      {/* ===== شريط الاشتراك — فوق كل شيء حين يقارب أو ينتهي ===== */}
+      {sub && sub.state !== "ok" && !isAgent && <SubBanner sub={sub} />}
+
       {/* ===== شريط تنبيه المنصّة (فوق الهيدر — المساحة محجوزة دائماً) ===== */}
       {flags.show_announce && (
         <div className={`announce${ann?.message ? "" : " is-empty"}`}>
@@ -346,3 +353,34 @@ const footer: React.CSSProperties = {
   fontSize: 13,
   marginTop: 20,
 };
+
+/**
+ * شريط الاشتراك بثلاث لهجات: تذكيرٌ قبل الانتهاء، ثم إنذارٌ في مهلة السماح،
+ * ثم خبرٌ بأن الشراء توقّف. ولا يُخفى بزرٍّ: ما يُطفأ يُنسى، وهذا لا يُنسى.
+ */
+function SubBanner({ sub }: { sub: { state: string; expires_at: string | null; days_left: number | null } }) {
+  const tone =
+    sub.state === "blocked" ? { bg: "#7f1d1d", icon: "warning" as const }
+    : sub.state === "grace" ? { bg: "#b45309", icon: "warning" as const }
+    : { bg: "#0f766e", icon: "bell" as const };
+
+  const text =
+    sub.state === "blocked"
+      ? "انتهى اشتراكك ومهلة السماح — الشراء متوقّف حتى التجديد. لوحتك وتقاريرك ومحافظ وكلائك تعمل كما هي."
+      : sub.state === "grace"
+      ? `انتهى اشتراكك في ${sub.expires_at} — أنت الآن في مهلة السماح. جدّد قبل أن يتوقّف الشراء.`
+      : `ينتهي اشتراكك بعد ${sub.days_left} يوماً (${sub.expires_at}).`;
+
+  return (
+    <div style={{
+      background: tone.bg, color: "#fff", padding: "9px 18px",
+      display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, fontWeight: 700,
+    }}>
+      <Icon name={tone.icon} size={16} />
+      <span>{text}</span>
+      <Link to="/settings/invoices" style={{ color: "#fff", marginInlineStart: "auto", fontWeight: 800 }}>
+        فواتير الاشتراك ←
+      </Link>
+    </div>
+  );
+}

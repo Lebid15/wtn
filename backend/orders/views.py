@@ -572,3 +572,59 @@ def order_trace_view(request, order_id):
         "routing_summary": routing,
         "chain": chain,
     })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def store_packages_view(request):
+    """
+    قائمة أسعار الوكيل — قراءةٌ فقط.
+
+    `id` هو **رقم المنتج عندنا**: هو ما يضعه الوكيل في
+    `newOrder/{id}/params` عند الربط الخارجي. ولا يُعرض هنا رقمُ الباقة لدى
+    مزوّد المتجر بحال — ذاك سرُّ صاحب المتجر التجاري، وكشفُه يدلّ وكلاءه على
+    مصادره.
+    """
+    from catalog.models import Game
+
+    user = request.user
+    rows = []
+    games = Game.objects.filter(
+        tenant=user.tenant, status=Game.Status.ACTIVE
+    ).prefetch_related("products").order_by("sort_order", "name")
+    for g in games:
+        for p in g.products.filter(status=Product.Status.ACTIVE).order_by("sort_order", "id"):
+            rows.append({
+                "id": p.id,
+                "game": g.name,
+                "name": p.name,
+                # سعر شرائه هو (سعر مجموعته) وسعر التوصية — كلاهما بعملة عرضه
+                "buy_price": str(currency.to_display(user, services.resolve_sell_price(user, p))),
+                "recommended_price": str(currency.to_display(user, p.recommended_price)),
+                "require_player_id": g.require_player_id,
+            })
+    return Response({
+        "count": len(rows), "results": rows,
+        "currency": currency.display_currency(user),
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def subscription_state_view(request):
+    """حالة اشتراك متجري — يقرأها شريط التنبيه في لوحة صاحب المتجر."""
+    tenant = request.user.tenant
+    if tenant is None:
+        return Response({"state": "ok"})
+    state = tenant.subscription_state()
+    days_left = None
+    if tenant.sub_expires_at:
+        from django.utils import timezone
+        days_left = (tenant.sub_expires_at - timezone.localdate()).days
+    return Response({
+        "state": state,
+        "expires_at": tenant.sub_expires_at.strftime("%Y-%m-%d") if tenant.sub_expires_at else None,
+        "days_left": days_left,
+        "grace_days": tenant.sub_grace_days,
+        "plan_label": tenant.get_sub_plan_display(),
+    })

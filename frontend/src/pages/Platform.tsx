@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import Tickets from "../components/Tickets";
+import CardsEditor from "../components/HomeCards";
 
 interface Tenant {
   id: number; name: string; subdomain: string; status: string;
@@ -9,6 +10,7 @@ interface Tenant {
   sub_plan: string; sub_plan_label: string; sub_monthly_price: string;
   sub_yearly_price: string; sub_expires_at: string | null;
   sub_active: boolean; sub_days_left: number | null;
+  sub_grace_days?: number; sub_enforce?: boolean; sub_state?: string;
 }
 interface Stats { tenants: number; active: number; dealers: number }
 interface LibGame {
@@ -20,7 +22,15 @@ interface LibProduct {
   suggested_price: string; kupur: string;
 }
 
-type Tab = "tenants" | "library" | "invoices" | "messages" | "announce";
+/** أربع حالات لا حالتان: «فعّال/غير فعّال» كان يخفي مهلة السماح. */
+const SUB_TONE: Record<string, { bg: string; fg: string; label: string }> = {
+  ok: { bg: "#e7f6ec", fg: "#14532d", label: "الاشتراك سارٍ" },
+  warn: { bg: "#fef3c7", fg: "#78350f", label: "يقارب الانتهاء" },
+  grace: { bg: "#ffedd5", fg: "#7c2d12", label: "انتهى — في مهلة السماح" },
+  blocked: { bg: "#fee2e2", fg: "#7f1d1d", label: "متوقّف — الشراء ممنوع" },
+};
+
+type Tab = "tenants" | "library" | "invoices" | "messages" | "announce" | "cards";
 
 export default function Platform() {
   const { user, logout } = useAuth();
@@ -45,6 +55,7 @@ export default function Platform() {
         <button onClick={() => setTab("invoices")} style={{ ...tabBtn, ...(tab === "invoices" ? tabActive : {}) }}>🧾 الفواتير</button>
         <button onClick={() => setTab("messages")} style={{ ...tabBtn, ...(tab === "messages" ? tabActive : {}) }}>💬 الرسائل</button>
         <button onClick={() => setTab("announce")} style={{ ...tabBtn, ...(tab === "announce" ? tabActive : {}) }}>📢 الإعلان العام</button>
+        <button onClick={() => setTab("cards")} style={{ ...tabBtn, ...(tab === "cards" ? tabActive : {}) }}>🗂️ بطاقات المتاجر</button>
       </div>
 
       <div style={{ maxWidth: 1150, margin: "0 auto", padding: 24 }}>
@@ -52,6 +63,14 @@ export default function Platform() {
         {tab === "library" && <LibraryTab />}
         {tab === "invoices" && <BillingTab />}
         {tab === "announce" && <AnnounceTab />}
+        {tab === "cards" && (
+          <div style={{ background: "#fff", color: "var(--text)", borderRadius: 12, padding: 20 }}>
+            <CardsEditor
+              audienceLabel="أصحاب المتاجر"
+              hint="تظهر في الصفحة الرئيسية لكل صاحب متجر فور دخوله — إعلان ميزة، تنبيه صيانة، أو ما تشاء."
+            />
+          </div>
+        )}
         {tab === "messages" && (
           <div style={{ background: "#fff", borderRadius: 12, padding: 20 }}>
             <Tickets canCreate={false} title="رسائل المتاجر" />
@@ -398,10 +417,19 @@ function SubscriptionModal({ tenant, onClose, onDone }: { tenant: Tenant; onClos
   const [yearly, setYearly] = useState(tenant.sub_yearly_price);
   const [t, setT] = useState(tenant);
   const [busy, setBusy] = useState("");
+  const [grace, setGrace] = useState(String(tenant.sub_grace_days ?? 3));
+  const [enforce, setEnforce] = useState(tenant.sub_enforce !== false);
+  const [expires, setExpires] = useState(tenant.sub_expires_at || "");
 
   async function call(body: any, tag: string) {
     setBusy(tag);
-    try { const r = await api.post(`/platform/tenants/${tenant.id}/subscription/`, body); setT(r.data); }
+    try {
+      const r = await api.post(`/platform/tenants/${tenant.id}/subscription/`, body);
+      setT(r.data);
+      setGrace(String(r.data.sub_grace_days ?? 3));
+      setEnforce(r.data.sub_enforce !== false);
+      setExpires(r.data.sub_expires_at || "");
+    }
     finally { setBusy(""); }
   }
 
@@ -412,10 +440,24 @@ function SubscriptionModal({ tenant, onClose, onDone }: { tenant: Tenant; onClos
           اشتراك: {tenant.name}
         </div>
         <div style={{ padding: 20 }}>
-          <div style={{ background: t.sub_active ? "#e7f6ec" : "#f1f5f9", borderRadius: 8, padding: "12px 14px", marginBottom: 16, fontSize: 14 }}>
-            {t.sub_active
-              ? <>الخطة الحالية: <b>{t.sub_plan_label}</b> · تنتهي في <b>{t.sub_expires_at}</b> (متبقٍّ {t.sub_days_left} يوم)</>
-              : <span style={{ color: "#64748b" }}>لا يوجد اشتراك فعّال حالياً</span>}
+          <div style={{
+            background: SUB_TONE[t.sub_state || "ok"].bg, color: SUB_TONE[t.sub_state || "ok"].fg,
+            borderRadius: 8, padding: "12px 14px", marginBottom: 16, fontSize: 14, lineHeight: 1.9,
+          }}>
+            <b>{SUB_TONE[t.sub_state || "ok"].label}</b>
+            {t.sub_expires_at
+              ? <> · {t.sub_plan_label} · تنتهي في <b>{t.sub_expires_at}</b>
+                  {typeof t.sub_days_left === "number" && (
+                    t.sub_days_left >= 0
+                      ? <> (متبقٍّ {t.sub_days_left} يوم)</>
+                      : <> (مضى {-t.sub_days_left} يوم على الانتهاء)</>
+                  )}</>
+              : <> · لم يُفعّل اشتراك بعد</>}
+            {!t.sub_enforce && (
+              <div style={{ fontSize: 12.5, marginTop: 4 }}>
+                ⚠ مُعفَى من المنع — لا يتوقّف شراؤه مهما انتهى
+              </div>
+            )}
           </div>
 
           <div style={{ fontWeight: 700, marginBottom: 8 }}>أسعار هذا المتجر</div>
@@ -440,7 +482,37 @@ function SubscriptionModal({ tenant, onClose, onDone }: { tenant: Tenant; onClos
               سنوي (+365 يوم)
             </button>
           </div>
-          <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+          <div style={{ fontWeight: 700, margin: "18px 0 8px" }}>سياسة الانتهاء</div>
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+            <F label="أيام السماح">
+              <input style={inp} type="number" min="0" max="90" value={grace}
+                onChange={(e) => setGrace(e.target.value)} />
+            </F>
+            <F label="تاريخ الانتهاء (ضبط يدويّ)">
+              <input style={inp} type="date" value={expires}
+                onChange={(e) => setExpires(e.target.value)} />
+            </F>
+          </div>
+          <label style={{ display: "flex", gap: 8, alignItems: "center", margin: "10px 2px", fontSize: 13, cursor: "pointer" }}>
+            <input type="checkbox" checked={!enforce} onChange={(e) => setEnforce(!e.target.checked)} />
+            أعفِ هذا المتجر من المنع نهائياً
+          </label>
+          <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.9, marginBottom: 10 }}>
+            بعد الانتهاء يبقى كل شيء يعمل طوال مهلة السماح، ثم
+            <b> يتوقّف الشراء وحده</b> — وتبقى اللوحة والتقارير والمحافظ والدخول.
+          </div>
+          <button className="btn" style={{ width: "100%", height: 36, background: "#475569", color: "#fff" }}
+            disabled={busy === "policy"}
+            onClick={async () => {
+              await call({ op: "policy", grace_days: grace, enforce }, "policy");
+              if (expires !== (t.sub_expires_at || "")) {
+                await call({ op: "expires", expires_at: expires }, "policy");
+              }
+            }}>
+            {busy === "policy" ? "..." : "حفظ السياسة"}
+          </button>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
             <button className="btn" style={{ flex: 1, height: 38, background: "#7f1d1d", color: "#fecaca" }} disabled={busy === "cancel"}
               onClick={() => call({ op: "cancel" }, "cancel")}>إلغاء الاشتراك</button>
             <button className="btn" style={{ flex: 1, height: 38, background: "#8a999e" }} onClick={onDone}>تم</button>

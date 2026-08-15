@@ -6,6 +6,13 @@ from decimal import Decimal
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 
+# كم يوماً قبل انتهاء الاشتراك يبدأ التنبيه
+SUB_WARN_DAYS = 7
+
+# محاولات الدخول الفاشلة قبل قفل الحساب. ثلاثٌ بقرار المالك (2026-08-16):
+# تكفي لخطأٍ بشريّ في الكتابة، ولا تكفي لتخمينٍ آليّ.
+LOGIN_ATTEMPTS_BEFORE_LOCK = 3
+
 
 # ─────────────────────────── المستأجرون (Platform) ───────────────────────────
 class Tenant(models.Model):
@@ -56,6 +63,12 @@ class Tenant(models.Model):
     sub_plan = models.CharField(max_length=8, choices=SubPlan.choices, default=SubPlan.NONE)
     sub_started_at = models.DateField(null=True, blank=True)
     sub_expires_at = models.DateField(null=True, blank=True)
+    # أيام السماح بعد الانتهاء: يبقى فيها كل شيء يعمل والتنبيه أحمر. صفرٌ يعني
+    # المنع يوم الانتهاء نفسه. يضبطها مالك المنصّة لكل متجر على حدة.
+    sub_grace_days = models.PositiveSmallIntegerField(default=3)
+    # مفتاح إعفاء: متجرٌ لا يُمنع مهما انتهى اشتراكه (شريك · تجربة ممتدّة ·
+    # متجرك أنت). بدونه كان الإعفاء يتطلّب تمديداً وهمياً للتاريخ.
+    sub_enforce = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -63,6 +76,27 @@ class Tenant(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.subdomain})"
+
+    # ————— حالة الاشتراك: مرجعٌ واحد يقرأ منه الجميع —————
+
+    def subscription_state(self, today=None) -> str:
+        """`ok` · `warn` (قارب) · `grace` (انتهى وفي السماح) · `blocked`."""
+        from django.utils import timezone
+
+        if not self.sub_enforce:
+            return "ok"
+        if self.sub_expires_at is None:
+            # لم يُفعَّل اشتراك قطّ — متجرٌ جديد يُجرَّب، لا متجرٌ متخلّف عن الدفع
+            return "ok"
+        today = today or timezone.localdate()
+        left = (self.sub_expires_at - today).days
+        if left >= 0:
+            return "warn" if left <= SUB_WARN_DAYS else "ok"
+        return "grace" if -left <= self.sub_grace_days else "blocked"
+
+    @property
+    def purchases_blocked(self) -> bool:
+        return self.subscription_state() == "blocked"
 
 
 # ─────────────────────────── المستخدمون والأدوار ───────────────────────────
@@ -156,6 +190,19 @@ class User(AbstractBaseUser, PermissionsMixin):
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
     modules = models.JSONField(default=dict, blank=True)  # تفعيل الموديولات (النقاط الملوّنة)
     failed_login_count = models.PositiveIntegerField(default=0)
+    # لحظة القفل بعد استنفاد المحاولات. كان العدّاد يُعدّ ولا يُقرأ أبداً، أي
+    # أن تخمين كلمات السرّ آلياً كان مفتوحاً بلا حدّ على حساباتٍ تملك محافظ.
+    locked_at = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def is_locked(self) -> bool:
+        return self.locked_at is not None
+
+    def unlock(self) -> None:
+        """يفتح القفل ويصفّر العدّاد — يصاحب دائماً كلمةَ سرّ جديدة."""
+        self.locked_at = None
+        self.failed_login_count = 0
+        self.save(update_fields=["locked_at", "failed_login_count"])
 
     is_staff = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -317,3 +364,55 @@ class Invoice(models.Model):
 
     def __str__(self):
         return f"فاتورة {self.tenant.name} — {self.amount}"
+
+
+# ─────────────────────────── بطاقات اللوحة الرئيسية ───────────────────────────
+class HomeCard(models.Model):
+    """
+    بطاقة تظهر في الصفحة الرئيسية لمن هم **تحتك** في السلسلة.
+
+    مالك المنصّة يكتب بطاقات يراها أصحاب المتاجر، وصاحب المتجر يكتب بطاقات
+    يراها وكلاؤه. نموذج واحد لأن السلوك واحد؛ ما يتغيّر هو من يكتب ومن يقرأ.
+
+    الألوان تُحفظ على البطاقة نفسها لا في سمة عامّة: البطاقة إعلانٌ يُقصد به
+    أن يُلفت، وتنبيهٌ أحمر وترحيبٌ هادئ لا يجمعهما لون واحد.
+    """
+
+    class Audience(models.TextChoices):
+        # يكتبها مالك المنصّة ← يراها أصحاب المتاجر (tenant فارغ = للجميع)
+        TENANTS = "tenants", "أصحاب المتاجر"
+        # يكتبها صاحب المتجر ← يراها وكلاؤه
+        DEALERS = "dealers", "الوكلاء"
+
+    audience = models.CharField(max_length=8, choices=Audience.choices)
+    # كاتب البطاقة: فارغ = مالك المنصّة. ولجمهور `tenants` يجوز تحديد متجر
+    # بعينه فتصله وحده — إعلانٌ خاصّ لا عامّ.
+    tenant = models.ForeignKey(
+        Tenant, null=True, blank=True, on_delete=models.CASCADE, related_name="home_cards"
+    )
+    target_tenant = models.ForeignKey(
+        Tenant, null=True, blank=True, on_delete=models.CASCADE, related_name="targeted_cards"
+    )
+
+    title = models.CharField(max_length=120)
+    body = models.TextField(blank=True, default="")
+    icon = models.CharField(max_length=24, blank=True, default="bell")
+
+    bg_color = models.CharField(max_length=24, default="#0f766e")
+    bg_color2 = models.CharField(max_length=24, blank=True, default="")  # تدرّج اختياري
+    text_color = models.CharField(max_length=24, default="#ffffff")
+
+    link_url = models.CharField(max_length=300, blank=True, default="")
+    link_label = models.CharField(max_length=60, blank=True, default="")
+
+    sort_order = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "home_cards"
+        ordering = ["sort_order", "id"]
+
+    def __str__(self):
+        return f"بطاقة {self.get_audience_display()}: {self.title}"

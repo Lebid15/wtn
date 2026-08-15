@@ -44,6 +44,8 @@ urlpatterns = [
     path("api/store/wallet/", order_views.store_wallet_view, name="store-wallet"),
     path("api/store/change-password/", order_views.store_change_password_view, name="store-change-password"),
     path("api/store/api-token/", client_store_views.my_api_token_view, name="store-api-token"),
+    path("api/store/packages/", order_views.store_packages_view, name="store-packages"),
+    path("api/subscription/", order_views.subscription_state_view, name="subscription-state"),
     # الواجهة الخارجية: مسارات ZDK حرفاً — خارج /api/ لأن العملاء مكتوبون لها هكذا
     path("client/api/", include("clientapi.urls")),
     path("api/", include("core.urls")),

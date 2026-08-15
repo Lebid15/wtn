@@ -21,6 +21,18 @@ export default function SmsSettings() {
   return (
     <div style={{ padding: 16 }}>
       <h2 style={{ fontSize: 20, color: "var(--primary-dark)", marginBottom: 14 }}>إعدادات SMS (Sms Servisleri)</h2>
+
+      {/* الإعدادات تُحفظ ولا إرسال بعد — قولها صراحةً أصدق من صفحةٍ
+          توهم صاحبها أن رسائله تصل. تُحذف هذه اللافتة يوم يُبنى الإرسال. */}
+      <div style={{
+        background: "#fef3c7", border: "1px solid #fcd34d", color: "#78350f",
+        borderRadius: 10, padding: "12px 15px", marginBottom: 16,
+        fontSize: 13.5, lineHeight: 1.9, fontWeight: 600,
+      }}>
+        <b>خدمة الرسائل غير مفعّلة بعد.</b> ما تضبطه هنا يُحفظ وينتظر،
+        <b> ولا تُرسل رسائل SMS فعلياً حتى الآن</b>. لتنبيه وكلائك اليوم
+        استعمل <b>واتساب</b> — وهو يعمل.
+      </div>
       <div style={panel}>
         <div style={panelHead}>مزوّد خدمة الرسائل</div>
         <div style={{ padding: 20 }}>

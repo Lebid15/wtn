@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation
 
 import pyotp
 from django.db import models
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -10,9 +11,17 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from . import currency, services
-from .models import Invoice, User, Wallet, WalletTransaction
+from .models import (
+    LOGIN_ATTEMPTS_BEFORE_LOCK, Invoice, User, Wallet, WalletTransaction,
+)
 from .serializers import (
     LoginSerializer, SiteSettingsSerializer, SmsSettingsSerializer, UserSerializer,
+)
+
+# رسالة واحدة للقفل — لا تكشف سبباً ولا تلوم، وتقول لمن يُراجَع
+LOCKED_MESSAGE = (
+    "قُفل الحساب بعد محاولات دخول فاشلة. "
+    "راجع صاحب المتجر ليمنحك كلمة سرّ جديدة."
 )
 
 
@@ -36,11 +45,26 @@ def login_view(request):
             {"detail": "بيانات الدخول غير صحيحة"}, status=status.HTTP_401_UNAUTHORIZED
         )
 
+    # القفل يُفحص **قبل** كلمة السرّ: بعده كانت المحاولة تُختبَر فعلياً على
+    # حسابٍ مقفل، فيبقى التخمين ممكناً وإن لم يُفتح الباب.
+    if user.is_locked:
+        return Response({"detail": LOCKED_MESSAGE}, status=status.HTTP_403_FORBIDDEN)
+
     if not user.check_password(data["password"]):
         user.failed_login_count += 1
-        user.save(update_fields=["failed_login_count"])
+        fields = ["failed_login_count"]
+        if user.failed_login_count >= LOGIN_ATTEMPTS_BEFORE_LOCK:
+            user.locked_at = timezone.now()
+            fields.append("locked_at")
+        user.save(update_fields=fields)
+        if user.is_locked:
+            return Response({"detail": LOCKED_MESSAGE}, status=status.HTTP_403_FORBIDDEN)
+        left = LOGIN_ATTEMPTS_BEFORE_LOCK - user.failed_login_count
         return Response(
-            {"detail": "بيانات الدخول غير صحيحة"}, status=status.HTTP_401_UNAUTHORIZED
+            # لا نقول أيّ الحقلين خطأ — لكن نقول كم بقي، وإلّا فوجئ صاحب الحساب
+            # بالقفل بلا إنذار وهو يظنّ أنه يخطئ الكتابة.
+            {"detail": f"بيانات الدخول غير صحيحة — تبقّت {left} محاولة قبل قفل الحساب"},
+            status=status.HTTP_401_UNAUTHORIZED,
         )
 
     if user.status != User.Status.ACTIVE:
@@ -362,6 +386,9 @@ def _dealer_settings_row(u):
         "auto_debt_collection": u.auto_debt_collection,
         "internal_supply_allowed": u.internal_supply_allowed,
         "api_access_allowed": u.api_access_allowed,
+        "is_locked": u.is_locked,
+        "locked_at": u.locked_at.strftime("%Y-%m-%d %H:%M") if u.locked_at else "",
+        "failed_login_count": u.failed_login_count,
         # مرجع العملات
         "base_currency": currency.base_currency(tenant),
         "available_currencies": sorted(
@@ -521,6 +548,12 @@ def dealer_settings_view(request, dealer_id):
             return Response({"detail": "كلمة السر قصيرة (5 أحرف على الأقل)"}, status=400)
         u.set_password(new_password)
         fields.append("password")
+        # كلمة سرّ جديدة تفتح القفل دائماً — وهو المخرج الوحيد منه عمداً:
+        # زرُّ فتحٍ بلا تبديل كان يعيد الحساب بكلمة سرٍّ ثبت أن أحدهم يخمّنها.
+        if u.is_locked or u.failed_login_count:
+            u.locked_at = None
+            u.failed_login_count = 0
+            fields += ["locked_at", "failed_login_count"]
 
     if fields:
         u.save(update_fields=fields)

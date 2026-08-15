@@ -91,6 +91,14 @@ def create_order(dealer: User, product: Product, *, player_id="", customer_phone
     """ينشئ طلباً: يحسب السعر، يخصم من محفظة الوكيل، ويسجّل الطلب (قيد الانتظار)."""
     if product.tenant_id != dealer.tenant_id:
         raise OrderError("المنتج والوكيل من مستأجرين مختلفين")
+    # بوّابة الاشتراك هنا وحدها: كل شراء يمرّ من `create_order` — متجرُ الوكيل
+    # ولوحةُ الأدمن والواجهةُ الخارجية والتوجيهُ الداخلي. حراستُها في كل مدخل
+    # على حدة كانت تترك باباً منسيّاً.
+    if dealer.tenant is not None and dealer.tenant.purchases_blocked:
+        raise OrderError(
+            "انتهى اشتراك المتجر ومهلة السماح — الشراء متوقّف حتى التجديد. "
+            "القراءة والتقارير والمحافظ تعمل كما هي."
+        )
     if product.status != Product.Status.ACTIVE:
         raise OrderError("المنتج غير متاح للبيع")
 

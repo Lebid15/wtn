@@ -1,7 +1,9 @@
 """اختبارات القلب."""
+from datetime import timedelta
 from decimal import Decimal
 
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from catalog.models import Game, Product
@@ -9,7 +11,6 @@ from orders.models import Order
 from providers.models import Provider
 
 from .models import Tenant, User, Wallet
-
 
 class LoginTest(TestCase):
     """حارس ضد تكرار عطل: حذف `_tokens_for` كسر تسجيل الدخول بخطأ 500."""
@@ -316,3 +317,286 @@ class DealerPasswordTest(APITestCase):
         )
         self.assertEqual(r.status_code, 400)
         self.assertEqual(self._login("5553333333", "old12345").status_code, 200)
+
+
+class LoginLockTest(APITestCase):
+    """
+    ثلاث محاولات ثم قفل. المخرج الوحيد كلمةُ سرٍّ جديدة من فوقك — لأن القديمة
+    ثبت أن أحدهم يخمّنها، ففتحُ القفل عليها إعادةٌ للباب المفتوح.
+    """
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(subdomain="t1", name="متجر")
+        self.admin = User.objects.create(
+            login_id="admin1", name="مدير", tenant=self.tenant,
+            role=User.Role.TENANT_ADMIN, is_staff=True,
+        )
+        self.admin.set_password("adminpass")
+        self.admin.save()
+        self.dealer = User.objects.create(
+            login_id="d1", name="وكيل", tenant=self.tenant, role=User.Role.BAYI, dealer_no=1,
+        )
+        self.dealer.set_password("right12345")
+        self.dealer.save()
+        Wallet.objects.create(tenant=self.tenant, user=self.dealer)
+
+    def _login(self, pw, who="d1"):
+        return self.client.post("/api/auth/login/", {"login_id": who, "password": pw}, format="json")
+
+    def test_third_failure_locks_the_account(self):
+        self.assertEqual(self._login("wrong1").status_code, 401)
+        self.assertEqual(self._login("wrong2").status_code, 401)
+        third = self._login("wrong3")
+        self.assertEqual(third.status_code, 403)
+        self.assertIn("قُفل الحساب", third.json()["detail"])
+        self.dealer.refresh_from_db()
+        self.assertTrue(self.dealer.is_locked)
+
+    def test_the_right_password_no_longer_works_once_locked(self):
+        """جوهر الأمر: القفل يسبق فحص كلمة السرّ، فلا يُختبَر التخمين أصلاً."""
+        for i in range(3):
+            self._login(f"wrong{i}")
+        r = self._login("right12345")
+        self.assertEqual(r.status_code, 403)
+
+    def test_countdown_warns_before_the_lock(self):
+        self.assertIn("تبقّت 2", self._login("x").json()["detail"])
+        self.assertIn("تبقّت 1", self._login("x").json()["detail"])
+
+    def test_a_success_resets_the_counter(self):
+        self._login("wrong1")
+        self._login("wrong2")
+        self.assertEqual(self._login("right12345").status_code, 200)
+        self.dealer.refresh_from_db()
+        self.assertEqual(self.dealer.failed_login_count, 0)
+        # وبعدها تبدأ العدّة من جديد لا من اثنين
+        self.assertEqual(self._login("wrong1").status_code, 401)
+        self.assertEqual(self._login("wrong2").status_code, 401)
+        self.assertEqual(self._login("right12345").status_code, 200)
+
+    def test_owner_unlocks_by_setting_a_new_password(self):
+        for i in range(3):
+            self._login(f"wrong{i}")
+        self.client.force_authenticate(self.admin)
+        r = self.client.post(
+            f"/api/dealers/{self.dealer.id}/settings/",
+            {"new_password": "fresh12345"}, format="json",
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.json()["is_locked"])
+        self.client.force_authenticate(None)
+        self.assertEqual(self._login("fresh12345").status_code, 200)
+
+    def test_saving_settings_without_a_password_keeps_it_locked(self):
+        """القفل لا يُفتح بالمرور على النافذة — كلمة سرّ جديدة أو لا شيء."""
+        for i in range(3):
+            self._login(f"wrong{i}")
+        self.client.force_authenticate(self.admin)
+        self.client.post(
+            f"/api/dealers/{self.dealer.id}/settings/", {"status": "active"}, format="json",
+        )
+        self.dealer.refresh_from_db()
+        self.assertTrue(self.dealer.is_locked)
+
+    def test_command_unlocks_the_platform_owner(self):
+        """لا أحد فوق مالك المنصّة — فمخرجه سطر الأوامر."""
+        from django.core.management import call_command
+        from io import StringIO
+
+        owner = User.objects.create(login_id="9990000000", name="مالك", role=User.Role.PLATFORM_OWNER)
+        owner.set_password("old12345")
+        owner.save()
+        for i in range(3):
+            self._login(f"wrong{i}", who="9990000000")
+        owner.refresh_from_db()
+        self.assertTrue(owner.is_locked)
+
+        call_command("unlock_user", "9990000000", "--password", "new12345", stdout=StringIO())
+        self.assertEqual(self._login("new12345", who="9990000000").status_code, 200)
+
+
+class SubscriptionGateTest(APITestCase):
+    """مهلة سماح ثم منع الشراء وحده — القراءة والمحافظ تبقى."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(subdomain="t1", name="متجر", base_currency="USD")
+        self.game = Game.objects.create(tenant=self.tenant, name="PUBG")
+        self.product = Product.objects.create(
+            tenant=self.tenant, game=self.game, name="60 UC",
+            cost_price=Decimal("6"), recommended_price=Decimal("10"),
+        )
+        self.dealer = User.objects.create(
+            login_id="d1", name="وكيل", tenant=self.tenant, role=User.Role.BAYI, dealer_no=1,
+        )
+        Wallet.objects.create(tenant=self.tenant, user=self.dealer, balance=Decimal("100"))
+
+    def _set(self, days_ago, grace=3, enforce=True):
+        self.tenant.sub_expires_at = timezone.localdate() - timedelta(days=days_ago)
+        self.tenant.sub_grace_days = grace
+        self.tenant.sub_enforce = enforce
+        self.tenant.save()
+        self.dealer.refresh_from_db()
+
+    def _buy(self):
+        from orders import services
+        return services.create_order(self.dealer, self.product)
+
+    def test_active_subscription_buys_fine(self):
+        self._set(-30)
+        self.assertEqual(self.tenant.subscription_state(), "ok")
+        self.assertIsNotNone(self._buy())
+
+    def test_warns_when_it_nears_the_end(self):
+        self._set(-3)
+        self.assertEqual(self.tenant.subscription_state(), "warn")
+        self.assertIsNotNone(self._buy())   # تنبيهٌ لا منع
+
+    def test_grace_period_still_buys(self):
+        self._set(2, grace=3)
+        self.assertEqual(self.tenant.subscription_state(), "grace")
+        self.assertIsNotNone(self._buy())
+
+    def test_after_grace_the_purchase_is_refused_and_nothing_is_charged(self):
+        from orders import services
+
+        self._set(5, grace=3)
+        self.assertEqual(self.tenant.subscription_state(), "blocked")
+        with self.assertRaises(services.OrderError) as cm:
+            self._buy()
+        self.assertIn("انتهى اشتراك المتجر", str(cm.exception))
+        self.assertEqual(Order.objects.count(), 0)
+        self.assertEqual(Wallet.objects.get(user=self.dealer).balance, Decimal("100"))
+
+    def test_exempt_tenant_is_never_blocked(self):
+        self._set(500, grace=0, enforce=False)
+        self.assertEqual(self.tenant.subscription_state(), "ok")
+        self.assertIsNotNone(self._buy())
+
+    def test_a_tenant_that_never_subscribed_is_not_punished(self):
+        """متجرٌ جديد يُجرَّب، لا متجرٌ متخلّف عن الدفع."""
+        self.tenant.sub_expires_at = None
+        self.tenant.save()
+        self.assertEqual(self.tenant.subscription_state(), "ok")
+        self.assertIsNotNone(self._buy())
+
+    def test_zero_grace_blocks_the_day_after(self):
+        self._set(1, grace=0)
+        self.assertEqual(self.tenant.subscription_state(), "blocked")
+
+
+class HomeCardsTest(APITestCase):
+    """لا يكتب أحدٌ إلا لمن تحته، ولا يقرأ أحدٌ إلا ما كُتب له."""
+
+    def setUp(self):
+        self.t1 = Tenant.objects.create(subdomain="t1", name="متجر ١")
+        self.t2 = Tenant.objects.create(subdomain="t2", name="متجر ٢")
+        self.owner = User.objects.create(login_id="p1", name="مالك", role=User.Role.PLATFORM_OWNER)
+        self.admin1 = User.objects.create(
+            login_id="a1", name="صاحب ١", tenant=self.t1, role=User.Role.TENANT_ADMIN)
+        self.admin2 = User.objects.create(
+            login_id="a2", name="صاحب ٢", tenant=self.t2, role=User.Role.TENANT_ADMIN)
+        self.dealer1 = User.objects.create(
+            login_id="d1", name="وكيل ١", tenant=self.t1, role=User.Role.BAYI, dealer_no=1)
+        self.dealer2 = User.objects.create(
+            login_id="d2", name="وكيل ٢", tenant=self.t2, role=User.Role.BAYI, dealer_no=1)
+
+    def _post(self, user, body):
+        self.client.force_authenticate(user)
+        return self.client.post("/api/cards/", body, format="json")
+
+    def _mine(self, user):
+        self.client.force_authenticate(user)
+        return self.client.get("/api/my-cards/").json()["results"]
+
+    def test_platform_card_reaches_every_store_owner(self):
+        self._post(self.owner, {"title": "صيانة الجمعة"})
+        self.assertEqual([c["title"] for c in self._mine(self.admin1)], ["صيانة الجمعة"])
+        self.assertEqual([c["title"] for c in self._mine(self.admin2)], ["صيانة الجمعة"])
+
+    def test_platform_card_can_target_one_store(self):
+        self._post(self.owner, {"title": "لك وحدك", "target_tenant": self.t1.id})
+        self.assertEqual(len(self._mine(self.admin1)), 1)
+        self.assertEqual(self._mine(self.admin2), [])
+
+    def test_store_card_reaches_only_its_own_dealers(self):
+        self._post(self.admin1, {"title": "أسعار جديدة"})
+        self.assertEqual([c["title"] for c in self._mine(self.dealer1)], ["أسعار جديدة"])
+        self.assertEqual(self._mine(self.dealer2), [])
+
+    def test_platform_cards_do_not_leak_to_dealers(self):
+        self._post(self.owner, {"title": "للمتاجر"})
+        self.assertEqual(self._mine(self.dealer1), [])
+
+    def test_a_dealer_cannot_write_cards(self):
+        self.assertEqual(self._post(self.dealer1, {"title": "أنا"}).status_code, 403)
+
+    def test_a_store_cannot_touch_another_stores_card(self):
+        card_id = self._post(self.admin1, {"title": "لي"}).json()["id"]
+        self.client.force_authenticate(self.admin2)
+        self.assertEqual(self.client.patch(f"/api/cards/{card_id}/", {"title": "لي أنا"},
+                                           format="json").status_code, 404)
+        self.assertEqual(self.client.delete(f"/api/cards/{card_id}/").status_code, 404)
+
+    def test_hidden_cards_are_not_delivered(self):
+        card_id = self._post(self.admin1, {"title": "مخفيّة"}).json()["id"]
+        self.client.patch(f"/api/cards/{card_id}/", {"active": False}, format="json")
+        self.assertEqual(self._mine(self.dealer1), [])
+
+    def test_title_is_required(self):
+        self.assertEqual(self._post(self.admin1, {"body": "بلا عنوان"}).status_code, 400)
+
+    def test_empty_colors_fall_back_instead_of_breaking_the_card(self):
+        r = self._post(self.admin1, {"title": "بلا لون", "bg_color": "", "text_color": ""})
+        self.assertTrue(r.json()["bg_color"])
+        self.assertTrue(r.json()["text_color"])
+
+
+class StorePackagesTest(APITestCase):
+    """قائمة أسعار الوكيل — بسعره هو، وبلا أرقام مزوّدي المتجر."""
+
+    def setUp(self):
+        from catalog.models import PriceGroup, ProductPrice
+
+        self.tenant = Tenant.objects.create(subdomain="t1", name="متجر", base_currency="USD")
+        self.group = PriceGroup.objects.create(tenant=self.tenant, name="عادية")
+        self.game = Game.objects.create(tenant=self.tenant, name="PUBG", require_player_id=True)
+        self.product = Product.objects.create(
+            tenant=self.tenant, game=self.game, name="60 UC",
+            cost_price=Decimal("6"), recommended_price=Decimal("12"),
+            provider_package_id="SECRET-9",
+        )
+        ProductPrice.objects.create(tenant=self.tenant, product=self.product,
+                                    price_group=self.group, price=Decimal("8"))
+        self.dealer = User.objects.create(
+            login_id="d1", name="وكيل", tenant=self.tenant,
+            role=User.Role.BAYI, price_group=self.group, dealer_no=1,
+        )
+        Wallet.objects.create(tenant=self.tenant, user=self.dealer)
+
+    def test_rows_carry_our_product_id_and_his_own_price(self):
+        self.client.force_authenticate(self.dealer)
+        row = self.client.get("/api/store/packages/").json()["results"][0]
+        self.assertEqual(row["id"], self.product.id)        # الرقم الذي يضعه في الـ API
+        self.assertEqual(row["buy_price"], "8.00")          # سعر مجموعته لا سعر التوصية
+        self.assertEqual(row["recommended_price"], "12.00")
+        self.assertTrue(row["require_player_id"])
+
+    def test_the_suppliers_package_id_is_never_exposed(self):
+        """رقم الباقة لدى مزوّد المتجر سرٌّ تجاري — كشفُه يدلّ الوكلاء على مصادره."""
+        self.client.force_authenticate(self.dealer)
+        self.assertNotIn("SECRET-9", self.client.get("/api/store/packages/").content.decode())
+
+    def test_other_tenants_are_not_listed(self):
+        other = Tenant.objects.create(subdomain="t2", name="آخر")
+        g = Game.objects.create(tenant=other, name="لعبة")
+        Product.objects.create(tenant=other, game=g, name="سرّي",
+                               cost_price=Decimal("1"), recommended_price=Decimal("2"))
+        self.client.force_authenticate(self.dealer)
+        names = [r["name"] for r in self.client.get("/api/store/packages/").json()["results"]]
+        self.assertNotIn("سرّي", names)
+
+    def test_passive_products_are_hidden(self):
+        self.product.status = Product.Status.PASSIVE
+        self.product.save(update_fields=["status"])
+        self.client.force_authenticate(self.dealer)
+        self.assertEqual(self.client.get("/api/store/packages/").json()["results"], [])
