@@ -136,3 +136,155 @@ class InternalSupplyPermissionTest(TestCase):
         res = self.adapter.get_balance({"dealer_login": "nope"}, self._provider("nope"))
         self.assertFalse(res.ok)
         self.assertIn("غير موجود", res.note)
+
+
+class InternalRoundTripTest(TestCase):
+    """
+    الدورة الكاملة كما جرت حيّاً: دكانٌ يطلب من إسلام ← إسلام يوجّه إلى علايا
+    ← علايا تنفّذ **يدوياً بعد حين**. المطلوب أن يصل الخبر إلى إسلام ودكانه.
+    """
+
+    def setUp(self):
+        from catalog.models import PriceGroup, ProductPrice
+
+        self.alaya = Tenant.objects.create(subdomain="alaya", name="علايا", base_currency="USD")
+        self.islam = Tenant.objects.create(subdomain="islam", name="إسلام", base_currency="USD")
+
+        # علايا تبيع حسابَ إسلام الباقةَ بـ 32.00
+        a_group = PriceGroup.objects.create(tenant=self.alaya, name="عادية")
+        a_game = Game.objects.create(tenant=self.alaya, name="PUBG")
+        self.a_product = Product.objects.create(
+            tenant=self.alaya, game=a_game, name="60 UC",
+            cost_price=Decimal("28"), recommended_price=Decimal("35"),
+        )
+        ProductPrice.objects.create(tenant=self.alaya, product=self.a_product,
+                                    price_group=a_group, price=Decimal("32"))
+        self.at_alaya = User.objects.create(
+            login_id="islam_at_alaya", name="متجر إسلام", tenant=self.alaya,
+            role=User.Role.BAYI, price_group=a_group, internal_supply_allowed=True, dealer_no=1,
+        )
+        Wallet.objects.create(tenant=self.alaya, user=self.at_alaya,
+                              balance=Decimal("1000"), credit_limit=Decimal("-5000"))
+
+        # إسلام: مزوّد داخلي نحو علايا + منتج بتكلفة مقدَّرة 0.85 وسعر بيع 1.00
+        self.provider = Provider.objects.create(
+            tenant=self.islam, name="علايا", type=Provider.Type.SAME_SYSTEM,
+            config={"dealer_login": "islam_at_alaya"}, loss_guard=False,
+        )
+        i_group = PriceGroup.objects.create(tenant=self.islam, name="عادية")
+        i_game = Game.objects.create(tenant=self.islam, name="PUBG")
+        self.i_product = Product.objects.create(
+            tenant=self.islam, game=i_game, name="60 UC",
+            cost_price=Decimal("0.85"), recommended_price=Decimal("2"),
+            execution_type=Product.Execution.AUTO,
+            provider=self.provider, provider_package_id=str(self.a_product.id),
+        )
+        ProductPrice.objects.create(tenant=self.islam, product=self.i_product,
+                                    price_group=i_group, price=Decimal("1"))
+        self.shop = User.objects.create(
+            login_id="tabe3", name="تابع لإسلام", tenant=self.islam,
+            role=User.Role.BAYI, price_group=i_group, dealer_no=1,
+        )
+        Wallet.objects.create(tenant=self.islam, user=self.shop, balance=Decimal("1000"))
+
+    def _place(self):
+        from orders import services
+
+        order = services.create_order(self.shop, self.i_product, player_id="5566")
+        services.dispatch_order(order)
+        order.refresh_from_db()
+        return order
+
+    def test_supplier_manual_approval_reaches_us(self):
+        """**العطل المبلَّغ:** علايا توافق يدوياً ويبقى الطلب عندنا قيد التنفيذ."""
+        from orders import services
+
+        order = self._place()
+        self.assertEqual(order.status, Order.Status.PROCESSING)
+
+        sup = Order.objects.get(tenant=self.alaya)
+        services.execute_order(sup, pin="PIN-777")     # موافقة يدوية عند علايا
+
+        services.sync_pending(self.islam)              # حلقة المراقبة عند إسلام
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.SUCCESS)
+        self.assertEqual(order.pin_result, "PIN-777")
+
+    def test_cost_is_the_real_one_at_once_not_the_typed_guess(self):
+        """
+        تكلفتنا 32.00 (ما خُصم من محفظتنا لدى علايا) لا 0.85 المكتوبة على
+        المنتج — ولا تنتظر النجاح، فالمال خرج لحظة الإنشاء.
+        """
+        order = self._place()
+        self.assertEqual(order.cost_price, Decimal("32.00"))
+        self.assertEqual(order.profit, Decimal("1.00") - Decimal("32.00"))
+        # وخُصم فعلاً من محفظتنا هناك
+        self.assertEqual(Wallet.objects.get(user=self.at_alaya).balance, Decimal("968.00"))
+
+    def test_cost_is_not_divided_by_the_lira_rate(self):
+        """
+        المزوّد الداخلي يسلّم الرقم بعملة دفترنا. تمريره على محوّل الليرة كان
+        يقسمه على ~41 فيظهر الطلب رابحاً وهو خاسر.
+        """
+        self.islam.exchange_rates = {"TRY": "41.5"}
+        self.islam.save(update_fields=["exchange_rates"])
+        self.assertEqual(self._place().cost_price, Decimal("32.00"))
+
+    def test_cost_crosses_a_currency_border_correctly(self):
+        """دفتر علايا بالليرة ودفترنا بالدولار: 1$ = 41.5 ل.ت ⇒ 32 ل.ت = 0.77$."""
+        self.alaya.base_currency = "TRY"
+        self.alaya.save(update_fields=["base_currency"])
+        self.islam.exchange_rates = {"TRY": "41.5"}
+        self.islam.save(update_fields=["exchange_rates"])
+        self.assertEqual(self._place().cost_price, Decimal("0.77"))
+
+    def test_loss_guard_blocks_before_the_first_order(self):
+        """
+        نبيع بـ 1.00 ونشتري بـ 32.00 — خسارة. الحماية تمنع **قبل** أوّل طلب:
+        السعر في قاعدتنا فلا داعي لخسارة طلبٍ كي نتعلّمه.
+        """
+        self.provider.loss_guard = True
+        self.provider.save(update_fields=["loss_guard"])
+
+        order = self._place()
+
+        self.assertEqual(order.status, Order.Status.STUCK)
+        self.assertIn("حماية الخسارة", order.api_response)
+        self.assertEqual(Order.objects.filter(tenant=self.alaya).count(), 0)
+        self.assertEqual(Wallet.objects.get(user=self.at_alaya).balance, Decimal("1000"))
+
+    def test_loss_guard_lets_a_profitable_order_through(self):
+        from catalog.models import ProductPrice
+
+        ProductPrice.objects.filter(product=self.i_product).update(price=Decimal("40"))
+        self.provider.loss_guard = True
+        self.provider.save(update_fields=["loss_guard"])
+        self.assertEqual(self._place().status, Order.Status.PROCESSING)
+
+    def test_supplier_cancellation_refunds_our_dealer(self):
+        """علايا تلغي ⇒ المال عاد إلينا هناك، فيعود إلى وكيلنا هنا تلقائياً."""
+        from orders import services
+
+        order = self._place()
+        before = Wallet.objects.get(user=self.shop).balance
+
+        services.cancel_order(Order.objects.get(tenant=self.alaya))
+        services.sync_pending(self.islam)
+
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.CANCELLED)
+        self.assertEqual(Wallet.objects.get(user=self.shop).balance, before + Decimal("1.00"))
+
+    def test_supplier_stuck_keeps_us_waiting_not_refunded(self):
+        """العالق لدى علايا مالُه محجوز هناك — فلا نسترجع لوكيلنا مالاً لم يعد."""
+        from orders import services
+
+        order = self._place()
+        Order.objects.filter(tenant=self.alaya).update(status=Order.Status.STUCK)
+        before = Wallet.objects.get(user=self.shop).balance
+
+        services.sync_pending(self.islam)
+
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PROCESSING)
+        self.assertEqual(Wallet.objects.get(user=self.shop).balance, before)

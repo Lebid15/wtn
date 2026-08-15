@@ -261,9 +261,11 @@ def _apply_real_cost(order: Order, result, provider) -> list:
     """
     if result.cost is None or result.cost < 0:
         return []
-    # المزوّد يسعّر بالليرة والدفتر بعملة المتجر — التحويل هنا، عند حدود
-    # النظام. بدونه تدخل ليرةٌ إلى حقل دولاري فيظهر الطلب خاسراً بأربعين ضعفاً.
-    cost = currency.from_provider(order.tenant, result.cost)
+    # المزوّد الخارجي يسعّر بالليرة والدفتر بعملة المتجر — التحويل هنا، عند
+    # حدود النظام. بدونه تدخل ليرةٌ إلى حقل دولاري فيظهر الطلب خاسراً بأربعين
+    # ضعفاً. أمّا المزوّد الداخلي فقد حوّل بنفسه (المتجران في قاعدتنا ويعرف
+    # عملتيهما)، وتمريره على محوّل الليرة كان يقسمه على ~41 فيعكس الخطأ.
+    cost = result.cost if result.cost_is_base else currency.from_provider(order.tenant, result.cost)
     if cost is None:
         return []
     order.cost_price = cost
@@ -308,7 +310,15 @@ def _send_to(order: Order, provider, trail: list, depth: int = 0) -> bool:
     # كتالوج المزوّد. إن تجاوز سعر بيعنا، فالطلب خاسر قبل أن يُرسَل —
     # نتخطّى هذا المزوّد بدل إنفاق المال. يُعطَّل بإطفاء loss_guard عليه.
     if provider.loss_guard:
-        known = _link_price(order.product_id, provider.id)
+        # سعرٌ حيّ إن استطاع المحوّل (الداخلي يعرفه من قاعدتنا بلا كلفة)،
+        # وإلّا السعر المُتعلَّم من طلب سابق. الحيّ أصدق: المتعلَّم قد يكون
+        # قديماً، والأهمّ أنه لا يوجد أصلاً قبل أوّل طلب.
+        try:
+            known = adapter.quote(order, provider.config or {}, provider=provider)
+        except Exception:
+            known = None
+        if known is None:
+            known = _link_price(order.product_id, provider.id)
         if known is None:
             # لا سعر مرجعي بعد (ربط يدوي مثلاً) — نمرّر ونتعلّم التكلفة من
             # ردّ المزوّد، فتحمي الطلبَ التالي.

@@ -17,6 +17,47 @@ from decimal import Decimal
 
 from .base import BalanceResult, BaseAdapter, ExecutionResult, PackageList
 
+# مرجع الطلب لدى المورّد: "tenant:<subdomain>:<رقم الفيش>" — منه تعرف حلقة
+# المراقبة أيّ طلبٍ تسأل عنه في أيّ متجر.
+REF_PREFIX = "tenant:"
+
+
+def _to_our_base(buyer_tenant, supplier_tenant, amount):
+    """
+    من عملة دفتر المورّد إلى عملة دفترنا. None = لا سعر صرف مضبوط.
+
+    المتجران قد يمسكان دفترين بعملتين مختلفتين، وكل رقم يعبر بيننا يجب أن
+    يُحوَّل عند الحدّ — وإلّا دخل دفترَنا رقمٌ بعملة غيرنا.
+    """
+    from core import currency
+
+    if amount is None:
+        return None
+    src = currency.base_currency(supplier_tenant)
+    if src == currency.base_currency(buyer_tenant):
+        return amount
+    rate = currency.rate_of(buyer_tenant, src)
+    if rate <= 0:
+        return None
+    return (Decimal(str(amount)) / rate).quantize(currency.CENT)
+
+
+def _supplier_product(order, dealer, provider):
+    """
+    منتج المورّد المرتبط بهذه الباقة — أو None إن كان الربط ناقصاً/خاطئاً.
+
+    `provider` صريحٌ لا `order.provider`: السلسلة قد تُجرّب البديل الأوّل أو
+    الثاني، ولكلٍّ رقمُ ربطه. قراءةُ ربط الرئيسي كانت تسأل عن منتجٍ آخر.
+    """
+    from catalog.models import Product
+
+    try:
+        package_id, _extra = BaseAdapter.link_for(order, provider)
+        pid = int(package_id)
+    except (TypeError, ValueError):
+        return None
+    return Product.objects.filter(pk=pid, tenant=dealer.tenant).select_related("game").first()
+
 
 def _resolve_dealer(config: dict, buyer_tenant_id=None):
     """يعيد (الوكيل، سبب الرفض). الوكيل None ⇒ الرفض مشروح بالعربية."""
@@ -81,25 +122,81 @@ class InternalTenantAdapter(BaseAdapter):
             return PackageList(ok=False, note=f"لا منتجات نشطة لدى {dealer.tenant.name}")
         return PackageList(ok=True, packages=packages)
 
+    def quote(self, order, config: dict, provider=None):
+        """
+        ما سيكلّفنا هذا الطلب لدى المورّد **الآن**، بعملة دفترنا.
+
+        سعرٌ يقينيّ بلا نداء شبكة — الرقم في قاعدتنا. به تعمل حماية الخسارة
+        **قبل** أوّل طلب لا بعده، فلا يُشترى بخسارةٍ مرّةً كي نتعلّم.
+        """
+        from orders import services
+
+        dealer, why = _resolve_dealer(config, order.tenant_id)
+        if dealer is None:
+            return None
+        sp = _supplier_product(order, dealer, provider)
+        if sp is None:
+            return None
+        # ما ندفعه نحن = سعر شرائنا كوكيل هناك (سعر مجموعتنا لدى المورّد)
+        return _to_our_base(order.tenant, dealer.tenant, services.resolve_sell_price(dealer, sp))
+
+    def fetch_status(self, order, config: dict, provider=None) -> ExecutionResult:
+        """
+        حالة طلبنا لدى المورّد — قراءة من قاعدتنا، بلا شبكة.
+
+        بدونها كان الطلب يتجمّد عندنا «قيد التنفيذ» إلى الأبد: المورّد ينفّذه
+        يدوياً بعد دقائق، ولا شيء يحمل خبره إلينا. المحوّل الأساسي يردّ
+        `unsupported` فتتركه حلقة المراقبة كما هو — صمتٌ لا عطلٌ ظاهر.
+        """
+        from orders.models import Order
+
+        ref = (order.provider_ref or "").strip()
+        if not ref.startswith(REF_PREFIX):
+            return ExecutionResult(status="unsupported", note="لا مرجع لهذا الطلب لدى المورّد")
+        try:
+            _, subdomain, receipt = ref.split(":", 2)
+        except ValueError:
+            return ExecutionResult(status="unsupported", note=f"مرجع غير مفهوم: {ref}")
+
+        sup = Order.objects.filter(
+            tenant__subdomain=subdomain, receipt_no=receipt,
+        ).select_related("tenant").first()
+        if sup is None:
+            return ExecutionResult(status="unsupported", note="طلبنا لدى المورّد غير موجود")
+
+        note = (sup.provider_note or sup.api_response or "").strip()
+        if sup.status == Order.Status.SUCCESS:
+            return ExecutionResult(
+                status="success", pin=sup.pin_result, external_ref=ref,
+                note=note or f"نُفّذ لدى متجر {sup.tenant.name}",
+            )
+        if sup.status == Order.Status.CANCELLED:
+            # المورّد يردّ المبلغ إلى محفظتنا لديه عند الإلغاء، فلا معنى لحجز
+            # مال وكيلنا — وحلقة المراقبة تلغي وتسترجع.
+            return ExecutionResult(
+                status="failed", external_ref=ref,
+                note=note or f"ألغاه متجر {sup.tenant.name}",
+            )
+        # العالق لدى المورّد ينتظر تدخّل صاحبه ومالُه محجوز هناك — انتظارٌ لا
+        # رفض. قولُه فشلاً كان يسترجع لوكيلنا مالاً لم يُستَرجع لنا بعد.
+        return ExecutionResult(
+            status="processing", external_ref=ref,
+            note=note or f"قيد التنفيذ لدى متجر {sup.tenant.name}",
+        )
+
     def place_order(self, order, config: dict, provider=None, depth: int = 0) -> ExecutionResult:
-        from catalog.models import Product
         from orders import services
 
         dealer, why = _resolve_dealer(config, order.tenant_id)
         if dealer is None:
             return ExecutionResult(status="failed", note=why)
 
-        try:
-            package_id, _extra = self.link_for(order, provider)
-            supplier_product_id = int(package_id)
-        except (TypeError, ValueError):
+        sp = _supplier_product(order, dealer, provider)
+        if sp is None:
             return ExecutionResult(
                 status="failed",
-                note="provider_package_id يجب أن يكون رقم منتج لدى المتجر المورّد",
+                note="رقم الربط يجب أن يكون رقم منتجٍ قائمٍ لدى المتجر المورّد",
             )
-        sp = Product.objects.filter(pk=supplier_product_id, tenant=dealer.tenant).select_related("game").first()
-        if sp is None:
-            return ExecutionResult(status="failed", note=f"المنتج {supplier_product_id} غير موجود لدى المورّد")
 
         # أنشئ الطلب لدى المورّد (يخصم محفظتنا هناك بسعرنا لديه)
         try:
@@ -114,16 +211,23 @@ class InternalTenantAdapter(BaseAdapter):
         services.dispatch_order(sup_order, depth=depth + 1)
         sup_order.refresh_from_db()
 
-        ref = f"tenant:{dealer.tenant.subdomain}:{sup_order.receipt_no}"
+        ref = f"{REF_PREFIX}{dealer.tenant.subdomain}:{sup_order.receipt_no}"
+        # تكلفتنا = **`buyer_price`** لا `sell_price`: الأوّل ما خُصم من محفظتنا
+        # هناك، والثاني ما قبضه المتجر المورّد — ويفترقان إن كان حسابنا لديه
+        # تحت وكيل كبير، فيدخل دفترَنا رقمٌ ليس ما دفعناه.
+        cost = _to_our_base(order.tenant, dealer.tenant, sup_order.buyer_price)
         if sup_order.status == "success":
             return ExecutionResult(
                 status="success", pin=sup_order.pin_result,
-                cost=sup_order.sell_price, external_ref=ref,
+                cost=cost, cost_is_base=True, external_ref=ref,
                 note=f"نُفّذ عبر متجر {dealer.tenant.name}",
             )
         if sup_order.status in ("pending", "processing"):
+            # التكلفة تُعتمد **الآن** لا عند النجاح: المال خُصم من محفظتنا لدى
+            # المورّد لحظة الإنشاء. تركُها للاحق كان يُبقي في دفترنا تكلفةً
+            # مقدَّرةً وربحاً موهوماً طوال انتظار التنفيذ اليدوي.
             return ExecutionResult(
-                status="processing", external_ref=ref,
+                status="processing", cost=cost, cost_is_base=True, external_ref=ref,
                 note=f"قيد التنفيذ لدى متجر {dealer.tenant.name}",
             )
         return ExecutionResult(
