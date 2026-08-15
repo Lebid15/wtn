@@ -17,6 +17,7 @@ from .models import ApiToken, generate_token
 
 def _row(token: ApiToken) -> dict:
     return {
+        "allowed": True,
         "token": token.token,
         "created_at": token.created_at.strftime("%Y-%m-%d %H:%M"),
         "last_used_at": token.last_used_at.strftime("%Y-%m-%d %H:%M") if token.last_used_at else "",
@@ -31,6 +32,14 @@ def my_api_token_view(request):
     user = request.user
     if user.role not in (User.Role.BAYI, User.Role.ANA_BAYI):
         return Response({"detail": "هذه الصفحة للوكلاء"}, status=403)
+
+    # غير مأذون ⇒ **لا يُولَّد توكن أصلاً**. و200 لا 403 كي تعرض اللوحة شرحاً
+    # هادئاً («راجع المتجر») بدل صفحة خطأ حمراء على أمرٍ ليس عطلاً.
+    if not user.api_access_allowed:
+        return Response({
+            "allowed": False,
+            "detail": "الربط الخارجي غير مفعّل لحسابك — اطلب من صاحب المتجر تفعيله.",
+        })
 
     token, _ = ApiToken.objects.get_or_create(user=user)
     if request.method == "POST":

@@ -10,6 +10,8 @@ from rest_framework.response import Response
 TOKEN_REQUIRED = (120, "Api Token is required!")
 TOKEN_INVALID = (121, "Invalid api token")
 ACCOUNT_DISABLED = (122, "Account is disabled")
+# مستقلّ عن 122 عمداً: «موقوف» يعالجه الوكيل، و«غير مأذون» يعالجه صاحب المتجر
+API_NOT_ENABLED = (123, "API access is not enabled for this account")
 
 INSUFFICIENT_BALANCE = (100, "Insufficient balance")
 PRODUCT_NOT_FOUND = (105, "Product not found")

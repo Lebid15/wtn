@@ -39,6 +39,7 @@ class ClientApiTest(APITestCase):
         self.dealer = User.objects.create(
             login_id="d1", name="وكيل", tenant=self.tenant,
             role=User.Role.BAYI, price_group=self.group, dealer_no=1,
+            api_access_allowed=True,
         )
         self.wallet = Wallet.objects.create(
             tenant=self.tenant, user=self.dealer, balance=Decimal("100"),
@@ -80,6 +81,42 @@ class ClientApiTest(APITestCase):
         self.tenant.status = Tenant.Status.SUSPENDED
         self.tenant.save(update_fields=["status"])
         self.assertEqual(self.get("/client/api/profile").json()["code"], 122)
+
+    def test_dealer_without_permission_returns_123(self):
+        """مغلق افتراضياً: مفتاحٌ صحيح لا يكفي — يلزم إذن صاحب المتجر."""
+        self.dealer.api_access_allowed = False
+        self.dealer.save(update_fields=["api_access_allowed"])
+        body = self.get("/client/api/profile").json()
+        self.assertEqual(body["code"], 123)
+        self.assertNotEqual(body["code"], 122)  # ليس إيقافاً — تشخيصان مختلفان
+
+    def test_revoking_permission_stops_a_live_link_at_once(self):
+        """
+        السحب يوقف الربط فوراً لا عند توليد مفتاح جديد — وإلّا بقي ربطٌ سُحب
+        إذنه يشتري إلى الأبد، لأن أحداً لن يولّد مفتاحاً بعد السحب.
+        """
+        self.assertEqual(self.get("/client/api/profile").status_code, 200)
+        self.dealer.api_access_allowed = False
+        self.dealer.save(update_fields=["api_access_allowed"])
+        self.assertEqual(self.get("/client/api/profile").json()["code"], 123)
+
+    def test_permission_blocks_orders_too_not_just_reads(self):
+        self.dealer.api_access_allowed = False
+        self.dealer.save(update_fields=["api_access_allowed"])
+        r = self.get(self.order_url(), qty="1", order_uuid=str(uuid4()))
+        self.assertEqual(r.json()["code"], 123)
+        self.assertEqual(Order.objects.count(), 0)
+        self.assertEqual(Wallet.objects.get(pk=self.wallet.pk).balance, Decimal("100"))
+
+    def test_restoring_permission_keeps_the_same_key(self):
+        """إعادة الإذن تُحيي المفتاح نفسه — فلا يُعاد ضبط الجهة الخارجية."""
+        before = self.token.token
+        self.dealer.api_access_allowed = False
+        self.dealer.save(update_fields=["api_access_allowed"])
+        self.dealer.api_access_allowed = True
+        self.dealer.save(update_fields=["api_access_allowed"])
+        self.assertEqual(self.get("/client/api/profile").status_code, 200)
+        self.assertEqual(ApiToken.objects.get(user=self.dealer).token, before)
 
     # ————————————————— الرصيد والكتالوج —————————————————
 
@@ -144,6 +181,7 @@ class ClientApiTest(APITestCase):
         other = User.objects.create(
             login_id="d2", name="وكيل ٢", tenant=self.tenant,
             role=User.Role.BAYI, price_group=self.group, dealer_no=2,
+            api_access_allowed=True,
         )
         Wallet.objects.create(tenant=self.tenant, user=other, balance=Decimal("100"))
         other_token = ApiToken.objects.create(user=other)
@@ -286,6 +324,7 @@ class ClientApiTest(APITestCase):
         other = User.objects.create(
             login_id="d9", name="غريب", tenant=self.tenant,
             role=User.Role.BAYI, price_group=self.group, dealer_no=9,
+            api_access_allowed=True,
         )
         Wallet.objects.create(tenant=self.tenant, user=other, balance=Decimal("100"))
         other_token = ApiToken.objects.create(user=other)
@@ -306,10 +345,22 @@ class StoreApiTokenPageTest(APITestCase):
         self.tenant = Tenant.objects.create(subdomain="t1", name="متجر")
         self.dealer = User.objects.create(
             login_id="d1", name="وكيل", tenant=self.tenant, role=User.Role.BAYI,
+            api_access_allowed=True,
         )
         self.dealer.set_password("pw12345")
         self.dealer.save()
         Wallet.objects.create(tenant=self.tenant, user=self.dealer)
+
+    def test_unpermitted_dealer_sees_an_explanation_not_a_key(self):
+        """مغلق ⇒ لا يُولَّد مفتاح أصلاً، والردّ 200 بشرح لا 403 بخطأ."""
+        self.dealer.api_access_allowed = False
+        self.dealer.save(update_fields=["api_access_allowed"])
+        self.client.force_authenticate(self.dealer)
+        r = self.client.get("/api/store/api-token/")
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.json()["allowed"])
+        self.assertNotIn("token", r.json())
+        self.assertEqual(ApiToken.objects.count(), 0)
 
     def test_first_visit_creates_a_token(self):
         self.client.force_authenticate(self.dealer)

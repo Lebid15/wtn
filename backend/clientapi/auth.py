@@ -49,6 +49,12 @@ class ApiTokenAuthentication(authentication.BaseAuthentication):
             request.api_auth_error = errors.ACCOUNT_DISABLED
             return None
 
+        # الإذن يُفحص عند **كل نداء** لا عند التوليد: سحبُه من صاحب المتجر يجب
+        # أن يوقف ربطاً قائماً فوراً، لا أن ينتظر توليد توكن جديد لن يقع أبداً.
+        if not user.api_access_allowed:
+            request.api_auth_error = errors.API_NOT_ENABLED
+            return None
+
         # F() لا `row.calls + 1`: النداءات متوازية، والقراءة‑ثم‑الكتابة تضيّع العدّ
         now = timezone.now()
         fields = {"calls": F("calls") + 1}

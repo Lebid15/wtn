@@ -3,6 +3,8 @@ import { api } from "../api";
 import Icon from "./Icon";
 
 interface TokenRow {
+  allowed: boolean;
+  detail?: string;
   token: string;
   created_at: string;
   last_used_at: string;
@@ -51,6 +53,24 @@ export default function ApiDocs() {
 
   if (!row) {
     return <div style={{ padding: 20, color: "var(--muted)" }}>{msg?.text || "جارٍ التحميل..."}</div>;
+  }
+
+  // مغلق افتراضياً بقرار صاحب المتجر — شرحٌ هادئ لا صفحة خطأ، فالأمر ليس عطلاً
+  if (!row.allowed) {
+    return (
+      <div style={box}>
+        <div style={h}><Icon name="api" size={18} />الربط الخارجي (API)</div>
+        <p style={p}>
+          {row.detail || "الربط الخارجي غير مفعّل لحسابك."}
+        </p>
+        <div style={note}>
+          الربط الخارجي يتيح لجهةٍ خارج المنصّة أن ترسل طلباتها إلى حسابك برمجياً
+          — تُخصم من محفظتك وتُنفَّذ كأنك طلبتها من لوحتك. وهو مغلق افتراضياً؛
+          <b> راسل صاحب المتجر من تبويب «الدعم»</b> ليفتحه لك. وحين يفتحه يظهر لك
+          هنا مفتاحُ ربطٍ وروابطُ الخدمة وتوثيقٌ كامل تسلّمه لمبرمجهم.
+        </div>
+      </div>
+    );
   }
 
   return (

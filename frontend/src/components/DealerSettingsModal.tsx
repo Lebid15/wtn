@@ -11,6 +11,7 @@ interface Settings {
   country: string; province: string;
   id_image: string; shop_image: string; auto_debt_collection: boolean;
   internal_supply_allowed: boolean;
+  api_access_allowed: boolean;
   base_currency: string; available_currencies: string[];
   // انتقلا إلى هنا بعد حذف صفحة «أسعار الوكلاء»
   oyun_load_limit: string; price_group: number | null;
@@ -104,6 +105,7 @@ export default function DealerSettingsModal({
         shop_image: f.shop_image,
         auto_debt_collection: f.auto_debt_collection,
         internal_supply_allowed: f.internal_supply_allowed,
+        api_access_allowed: f.api_access_allowed,
         ...(pw ? { new_password: pw } : {}),
       });
       setF(r.data); setPw(""); setPw2("");
@@ -243,6 +245,28 @@ export default function DealerSettingsModal({
                   <div style={{ ...hint, marginTop: 10 }}>
                     مجموعة الأسعار تحدّد بكم يشتري هذا الوكيل — أسعارها تُحرَّر من
                     «الألعاب ← مجموعات الأسعار». وحدّ التحميل سقف ما يشحنه من ألعاب.
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, color: "var(--primary-dark)", marginBottom: 10 }}>
+                    الربط الخارجي (API)
+                  </div>
+                  <label style={{ display: "flex", gap: 9, alignItems: "flex-start", cursor: "pointer" }}>
+                    <input type="checkbox" checked={f.api_access_allowed} style={{ marginTop: 3 }}
+                      onChange={(e) => set("api_access_allowed", e.target.checked)} />
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>
+                      مسموح له بالربط الخارجي — يستقبل الطلبات برمجياً من جهة خارج المنصّة
+                    </span>
+                  </label>
+                  <div style={{ ...hint, marginTop: 10 }}>
+                    عندها يظهر له مفتاح ربط في <b>إعداداتي ← الربط الخارجي</b>،
+                    فتُرسل جهةٌ خارجية طلباتها إلى محفظته آلياً. لا يمنحه هذا
+                    صلاحيةً جديدة — يستطيع الطلب من لوحته أصلاً — لكنه يجعل إعادة
+                    البيع بالجملة آليةً بلا كلفة، فافتحه لمن تعرف وتثق به.
+                    <br />
+                    سحبُ الإذن يوقف كل ربط قائم <b>فوراً</b>، ويحتفظ بمفتاحه فيعود
+                    كما كان إن أعدته.
                   </div>
                 </div>
 
