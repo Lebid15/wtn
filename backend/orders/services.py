@@ -87,7 +87,7 @@ def resolve_dealer_sell_price(product: Product, raw=None) -> Decimal:
 
 @transaction.atomic
 def create_order(dealer: User, product: Product, *, player_id="", customer_phone="",
-                 dealer_sell_price=None) -> Order:
+                 dealer_sell_price=None, client_uuid=None) -> Order:
     """ينشئ طلباً: يحسب السعر، يخصم من محفظة الوكيل، ويسجّل الطلب (قيد الانتظار)."""
     if product.tenant_id != dealer.tenant_id:
         raise OrderError("المنتج والوكيل من مستأجرين مختلفين")
@@ -142,6 +142,7 @@ def create_order(dealer: User, product: Product, *, player_id="", customer_phone
         dealer_sell_price=retail, dealer_profit=retail - buyer_price,
         status=Order.Status.PENDING,
         balance_before=txn.balance_before, balance_after=txn.balance_after,
+        client_uuid=client_uuid,
     )
     # ربط الحركة بالطلب
     txn.ref_type = "order"

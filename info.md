@@ -241,4 +241,5 @@ cd ../backend && FRONTEND_DIST=../frontend/dist DEBUG=0 \
 | [plan.md](plan.md) | **خطة العمل** — ما أُنجز جلسةً جلسة، وما تبقّى (§17) |
 | [bot/README.md](bot/README.md) | بوت واتساب: التشغيل · الأسرار · احتياطات الحظر |
 | [docs/ROLES.md](docs/ROLES.md) | الأدوار الأربعة |
+| [docs/integrations/OUR_API.md](docs/integrations/OUR_API.md) | **واجهتنا الخارجية** — كي يشتري منّا متجرٌ من خارج المنصّة |
 | [docs/BUILD_LOG.md](docs/BUILD_LOG.md) | سجلّ البناء خطوة بخطوة |

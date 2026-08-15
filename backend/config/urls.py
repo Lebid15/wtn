@@ -20,6 +20,7 @@ from django.contrib import admin
 from django.http import FileResponse, HttpResponse
 from django.urls import include, path, re_path
 
+from clientapi import store_views as client_store_views
 from orders import views as order_views
 
 
@@ -42,6 +43,9 @@ urlpatterns = [
     path("api/store/report/", order_views.store_report_view, name="store-report"),
     path("api/store/wallet/", order_views.store_wallet_view, name="store-wallet"),
     path("api/store/change-password/", order_views.store_change_password_view, name="store-change-password"),
+    path("api/store/api-token/", client_store_views.my_api_token_view, name="store-api-token"),
+    # الواجهة الخارجية: مسارات ZDK حرفاً — خارج /api/ لأن العملاء مكتوبون لها هكذا
+    path("client/api/", include("clientapi.urls")),
     path("api/", include("core.urls")),
     path("api/catalog/", include("catalog.urls")),
     path("api/providers/", include("providers.urls")),
@@ -53,5 +57,5 @@ urlpatterns = [
     path("api/whatsapp/", include("whatsapp.urls")),
     path("api/inventory/", include("inventory.urls")),
     # catch-all: أي مسار غير API/admin/أصول → SPA
-    re_path(r"^(?!api/|admin/|static/|assets/).*$", spa_index, name="spa"),
+    re_path(r"^(?!api/|client/api/|admin/|static/|assets/).*$", spa_index, name="spa"),
 ]

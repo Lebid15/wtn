@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { symbolOf } from "../currency";
 import Icon from "../components/Icon";
 import Tickets from "../components/Tickets";
+import ApiDocs from "../components/ApiDocs";
 import TopUp from "../components/TopUp";
 import { applyThemeConfig } from "../theme";
 
@@ -18,7 +19,7 @@ interface Summary {
   orders: number; profit: string; sell: string; pending: number;
 }
 
-type Tab = "home" | "sell" | "orders" | "reports" | "wallet" | "topup" | "support" | "settings";
+type Tab = "home" | "sell" | "orders" | "reports" | "wallet" | "topup" | "api" | "support" | "settings";
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "home", label: "الرئيسية", icon: "home" },
   { key: "sell", label: "البيع", icon: "cart" },
@@ -26,6 +27,7 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: "reports", label: "تقاريري", icon: "excel" },
   { key: "wallet", label: "محفظتي", icon: "wallet" },
   { key: "topup", label: "إضافة رصيد", icon: "card" },
+  { key: "api", label: "API", icon: "api" },
   { key: "support", label: "الدعم", icon: "chat" },
   { key: "settings", label: "إعداداتي", icon: "settings" },
 ];
@@ -55,7 +57,7 @@ const ROW_BG: Record<string, string> = {
 };
 
 // كل قسم له رابطه الخاص: /store (الرئيسية) · /store/sell · /store/orders ...
-const SECTIONS: Tab[] = ["sell", "orders", "reports", "wallet", "topup", "support", "settings"];
+const SECTIONS: Tab[] = ["sell", "orders", "reports", "wallet", "topup", "api", "support", "settings"];
 function tabFromPath(pathname: string): Tab {
   const seg = pathname.replace(/^\/store\/?/, "").split("/")[0];
   return (SECTIONS as string[]).includes(seg) ? (seg as Tab) : "home";
@@ -136,6 +138,7 @@ export default function Store() {
         {tab === "reports" && <ReportsTab />}
         {tab === "wallet" && <WalletTab onTopUp={() => goTab("topup")} />}
         {tab === "topup" && <TopUp onDone={loadSummary} />}
+        {tab === "api" && <ApiDocs />}
         {tab === "support" && <Tickets title="الدعم / مراسلة الإدارة" />}
         {tab === "settings" && <SettingsTab />}
       </div>

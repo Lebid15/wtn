@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "agent",
     "whatsapp",
     "inventory",
+    "clientapi",
 ]
 
 MIDDLEWARE = [
@@ -150,6 +151,10 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    # حدّ نداءات الواجهة الخارجية (clientapi) — كبحُ حلقةٍ مجنونة عند عميل
+    # خارجي، لا حاجز أمني. الذاكرة المؤقّتة محليّة لكل عامل gunicorn فالحدّ
+    # الفعلي مضاعف؛ الحاجز الحقيقي هو المحفظة والحدّ الائتماني.
+    "DEFAULT_THROTTLE_RATES": {"client_api": "240/min"},
 }
 
 SIMPLE_JWT = {

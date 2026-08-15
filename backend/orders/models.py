@@ -65,12 +65,29 @@ class Order(models.Model):
     balance_before = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
     balance_after = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
 
+    # `order_uuid` الذي يرسله عميل الواجهة الخارجية — **مفتاح منع التكرار**.
+    # الشبكة تنقطع بعد أن نشحن وقبل أن يصله الردّ، فيعيد المحاولة. بدون هذا
+    # المفتاح يُشحن اللاعب مرّتين ويُخصم الوكيل مرّتين. القيد أدناه يجعل التكرار
+    # مستحيلاً في القاعدة نفسها لا في الكود وحده — فلا يفلت من سباق التزامن.
+    # فارغ لطلبات اللوحة والمتجر (لا واجهة خارجية فيها).
+    client_uuid = models.UUIDField(null=True, blank=True, db_index=True)
+
     created_at = models.DateTimeField(auto_now_add=True)   # İşlem Tarihi
     approved_at = models.DateTimeField(null=True, blank=True)  # Onay Tarihi
 
     class Meta:
         db_table = "orders"
         ordering = ["-created_at"]
+        constraints = [
+            # النطاق **الوكيل** لا المتجر: المعرّف يخترعه العميل الخارجي لنفسه،
+            # فلو كان النطاق المتجر لاصطدم وكيلان بمعرّف واحد — والأسوأ أن
+            # الثاني كان سيتلقّى طلب الأوّل جواباً فيرى بيانات ليست له.
+            models.UniqueConstraint(
+                fields=["dealer", "client_uuid"],
+                condition=models.Q(client_uuid__isnull=False),
+                name="uniq_order_client_uuid_per_dealer",
+            ),
+        ]
 
     def __str__(self):
         return f"طلب {self.receipt_no} — {self.product.name} [{self.status}]"
