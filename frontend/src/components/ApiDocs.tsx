@@ -63,47 +63,66 @@ export default function ApiDocs() {
         }}>{msg.text}</div>
       )}
 
-      {/* ——— التوكن ——— */}
+      {/* ——— بيانات الربط: المفتاح والروابط في مكان واحد ——— */}
       <div style={box}>
-        <div style={h}><Icon name="api" size={18} />مفتاح الربط (API Token)</div>
+        <div style={h}><Icon name="api" size={18} />بيانات الربط</div>
         <p style={p}>
-          هذا مفتاحك أنت. من يملكه يشتري من محفظتك بلا كلمة سر — فلا تضعه في صفحة
-          موقع ولا تطبيق جوّال، مكانه خادم الجهة التي تربط معك.
+          هذا كل ما يحتاجه مبرمج الجهة التي تربط معك: المفتاح، والروابط. سلّمه
+          إيّاها كما هي.
         </p>
 
+        <div style={lbl}>مفتاح الربط (api-token)</div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <code style={tokenBox}>{show ? token : masked}</code>
           <button className="btn" style={sm} onClick={() => setShow((s) => !s)}>
             <Icon name="eye" size={14} style={{ marginInlineEnd: 5 }} />{show ? "إخفاء" : "إظهار"}
           </button>
-          <button className="btn g" style={sm} onClick={() => copy(token, "التوكن")}>
+          <button className="btn g" style={sm} onClick={() => copy(token, "المفتاح")}>
             <Icon name="link" size={14} style={{ marginInlineEnd: 5 }} />نسخ
           </button>
         </div>
+        <div style={{ ...note, marginTop: 10 }}>
+          <b>مفتاحك ثابت لا يتغيّر ولا ينتهي.</b> يبقى كما هو ما دام حسابك قائماً،
+          ولا يتبدّل إلا إن ضغطت زرّ التبديل أسفل هذه الصفحة بنفسك. فاضبطه مرّةً
+          عند من يربط معك ولا يحتاج مراجعته بعدها.
+          <br />
+          ومن يملكه يشتري من محفظتك بلا كلمة سر — فلا تضعه في صفحة موقع ولا تطبيق
+          جوّال، مكانه خادم الجهة التي تربط معك.
+        </div>
 
-        <div style={{ display: "flex", gap: 22, flexWrap: "wrap", marginTop: 14, fontSize: 13 }}>
+        <div style={{ ...lbl, marginTop: 18 }}>الروابط — انسخ ما تحتاجه</div>
+        <div style={{ display: "grid", gap: 8 }}>
+          <LinkRow what="عنوان الخدمة (base URL)" url={base} onCopy={copy} />
+          <LinkRow what="الاستعلام عن الرصيد" url={`${base}/client/api/profile`} onCopy={copy} />
+          <LinkRow what="قائمة المنتجات" url={`${base}/client/api/products`} onCopy={copy} />
+          <LinkRow
+            what="إرسال طلب"
+            url={`${base}/client/api/newOrder/{productId}/params?qty=1&order_uuid={UUID}&playerId={ID}`}
+            onCopy={copy}
+          />
+          <LinkRow
+            what="استعلام حالة الطلب"
+            url={`${base}/client/api/check?orders={رقم الطلب}`}
+            onCopy={copy}
+          />
+          <LinkRow
+            what="استعلام بمعرّفك أنت"
+            url={`${base}/client/api/check?orders={UUID}&uuid=1`}
+            onCopy={copy}
+          />
+        </div>
+        <div style={{ ...note, marginTop: 12 }}>
+          ما بين <code style={ic}>{"{ }"}</code> تملؤه أنت. وكل نداء — بلا استثناء —
+          يحمل ترويسة <code style={ic}>api-token</code> بالمفتاح أعلاه؛ المفتاح
+          <b> لا يوضع في الرابط</b> لأن الروابط تُسجَّل في سجلّات الخوادم فيتسرّب.
+        </div>
+
+        <div style={{ display: "flex", gap: 22, flexWrap: "wrap", marginTop: 16, fontSize: 13 }}>
           <span style={{ color: "var(--muted)" }}>أُنشئ: <b style={dir}>{row.created_at}</b></span>
           <span style={{ color: "var(--muted)" }}>
             آخر استعمال: <b style={dir}>{row.last_used_at || "لم يُستعمل بعد"}</b>
           </span>
           <span style={{ color: "var(--muted)" }}>عدد النداءات: <b style={dir}>{row.calls}</b></span>
-        </div>
-
-        <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 14 }}>
-          {confirming ? (
-            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <b style={{ color: "var(--danger)", fontSize: 13 }}>
-                سيتوقّف كل ربط قائم فوراً حتى تعطيهم المفتاح الجديد. متأكّد؟
-              </b>
-              <button className="btn" style={{ ...sm, background: "var(--danger)", color: "#fff" }}
-                disabled={busy} onClick={regenerate}>نعم، ولّد مفتاحاً جديداً</button>
-              <button className="btn" style={sm} onClick={() => setConfirming(false)}>تراجع</button>
-            </div>
-          ) : (
-            <button className="btn" style={sm} onClick={() => setConfirming(true)}>
-              <Icon name="refresh" size={14} style={{ marginInlineEnd: 5 }} />توليد مفتاح جديد (عند التسريب)
-            </button>
-          )}
         </div>
       </div>
 
@@ -114,7 +133,6 @@ export default function ApiDocs() {
           المصادقة بترويسة <code style={ic}>api-token</code> وحدها. لا اسم مستخدم ولا
           كلمة سر. كل الردود JSON.
         </p>
-        <Field label="عنوان الخدمة (base URL)" value={base} onCopy={copy} />
         <Snippet
           label="جرّبه الآن — يعيد رصيدك"
           code={`curl -H "api-token: ${token}" \\\n  ${base}/client/api/profile`}
@@ -123,7 +141,7 @@ export default function ApiDocs() {
         <div style={note}>
           <b>ملاحظة لمن يربط من متجر يعمل ببرمجية ZDK</b> (بركات · أب‑ستور وغيرهما):
           مساراتنا وأسماء حقولنا وترويستنا هي نفسها حرفاً. بدّل عنوان الخدمة
-          والتوكن في إعداداتك — ولا تُعدّل كودك.
+          والمفتاح في إعداداتك — ولا تُعدّل كودك.
         </div>
       </div>
 
@@ -132,7 +150,7 @@ export default function ApiDocs() {
         <div style={h}><Icon name="excel" size={18} />العناوين الأربعة</div>
 
         <Endpoint
-          n="١" title="الرصيد" method="GET" path="/client/api/profile"
+          n="١" title="الرصيد" method="GET" url={`${base}/client/api/profile`} onCopy={copy}
           desc="رصيدك الحالي وحدّك الائتماني وما تستطيع إنفاقه فعلاً."
           res={`{ "status": "OK",
   "data": { "balance": "500.00", "credit_limit": "0.00",
@@ -141,7 +159,7 @@ export default function ApiDocs() {
         />
 
         <Endpoint
-          n="٢" title="قائمة المنتجات" method="GET" path="/client/api/products"
+          n="٢" title="قائمة المنتجات" method="GET" url={`${base}/client/api/products`} onCopy={copy}
           desc="المنتجات المتاحة لك بأسعار شرائك أنت. المعاملات الاختيارية: products_id=1,2 لمنتجات بعينها · base=1 لردّ مختصر."
           res={`{ "status": "OK",
   "data": [ { "id": 12, "name": "60 UC", "price": "8.00",
@@ -151,8 +169,8 @@ export default function ApiDocs() {
         />
 
         <Endpoint
-          n="٣" title="إرسال طلب" method="GET"
-          path="/client/api/newOrder/{productId}/params"
+          n="٣" title="إرسال طلب" method="GET" onCopy={copy}
+          url={`${base}/client/api/newOrder/{productId}/params?qty=1&order_uuid={UUID}`}
           desc="المعاملات: qty=1 (مطلوب) · order_uuid=UUIDv4 (مطلوب) · playerId (إن كان المنتج يطلبه، انظر params في القائمة)."
           res={`{ "status": "accept",
   "data": { "order_id": "26073180840", "order_uuid": "…",
@@ -163,7 +181,7 @@ export default function ApiDocs() {
         />
 
         <Endpoint
-          n="٤" title="استعلام الحالة" method="GET" path="/client/api/check"
+          n="٤" title="استعلام الحالة" method="GET" url={`${base}/client/api/check?orders={ids}`} onCopy={copy}
           desc="orders=رقم أو أرقام مفصولة بفواصل (حتى 50). أضف uuid=1 لتستعلم بمعرّفاتك أنت بدل أرقامنا — وهو ما تحتاجه إن ضاع منك الردّ."
           res={`{ "status": "OK",
   "data": [ { "order_id": "26073180840", "status": "accept",
@@ -267,22 +285,44 @@ export default function ApiDocs() {
           تلقائياً. فالطلب <code style={ic}>wait</code> مالُه محجوز فعلاً.
         </p>
       </div>
+
+      {/* ——— تبديل المفتاح: آخر الصفحة عمداً ——— */}
+      <div style={box}>
+        <div style={h}><Icon name="refresh" size={18} />تبديل المفتاح — عند التسريب وحده</div>
+        <p style={p}>
+          مفتاحك ثابت ولا حاجة إلى تبديله أبداً في المجرى العادي. لا تضغط هنا إلا
+          إن تسرّب المفتاح أو شككت أن أحداً اطّلع عليه.
+        </p>
+        {confirming ? (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <b style={{ color: "var(--danger)", fontSize: 13 }}>
+              المفتاح الحالي يتعطّل فوراً، ويتوقّف كل ربط قائم حتى تعطيهم الجديد. متأكّد؟
+            </b>
+            <button className="btn" style={{ ...sm, background: "var(--danger)", color: "#fff" }}
+              disabled={busy} onClick={regenerate}>نعم، بدّل المفتاح</button>
+            <button className="btn" style={sm} onClick={() => setConfirming(false)}>تراجع</button>
+          </div>
+        ) : (
+          <button className="btn" style={sm} onClick={() => setConfirming(true)}>
+            <Icon name="refresh" size={14} style={{ marginInlineEnd: 5 }} />تبديل المفتاح
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
 /* ————————————————— أجزاء العرض ————————————————— */
 
-function Field({ label, value, onCopy }: {
-  label: string; value: string; onCopy: (v: string, w: string) => void;
+/** سطر رابط: ما هو، ثم الرابط كاملاً بزرّ نسخ. */
+function LinkRow({ what, url, onCopy }: {
+  what: string; url: string; onCopy: (v: string, w: string) => void;
 }) {
   return (
-    <div style={{ margin: "10px 0" }}>
-      <div style={lbl}>{label}</div>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <code style={{ ...tokenBox, flex: 1 }}>{value}</code>
-        <button className="btn" style={sm} onClick={() => onCopy(value, label)}>نسخ</button>
-      </div>
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <span style={{ fontSize: 12.5, fontWeight: 700, minWidth: 150 }}>{what}</span>
+      <code style={tokenBox}>{url}</code>
+      <button className="btn" style={sm} onClick={() => onCopy(url, "الرابط")}>نسخ</button>
     </div>
   );
 }
@@ -301,15 +341,19 @@ function Snippet({ label, code, onCopy }: {
   );
 }
 
-function Endpoint({ n, title, method, path, desc, res }: {
-  n: string; title: string; method: string; path: string; desc: string; res: string;
+function Endpoint({ n, title, method, url, desc, res, onCopy }: {
+  n: string; title: string; method: string; url: string; desc: string; res: string;
+  onCopy: (v: string, w: string) => void;
 }) {
   return (
     <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 14 }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <b style={{ fontSize: 14 }}>{n}. {title}</b>
         <span style={badge}>{method}</span>
-        <code style={{ ...ic, fontSize: 13 }}>{path}</code>
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "8px 0" }}>
+        <code style={tokenBox}>{url}</code>
+        <button className="btn" style={sm} onClick={() => onCopy(url, "الرابط")}>نسخ</button>
       </div>
       <p style={{ ...p, margin: "8px 0" }}>{desc}</p>
       <pre style={pre}>{res}</pre>

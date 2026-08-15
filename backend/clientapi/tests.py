@@ -318,6 +318,17 @@ class StoreApiTokenPageTest(APITestCase):
         self.assertTrue(len(r.json()["token"]) >= 32)
         self.assertEqual(ApiToken.objects.count(), 1)
 
+    def test_token_is_stable_across_visits(self):
+        """
+        المفتاح ثابت: يُسلَّم مرّةً لمن يربط ولا يُراجَع. لو تبدّل بزيارةٍ أو
+        بإعادة دخولٍ لانقطع كل ربط قائم بلا سبب ولا إنذار.
+        """
+        self.client.force_authenticate(self.dealer)
+        first = self.client.get("/api/store/api-token/").json()["token"]
+        for _ in range(5):
+            self.assertEqual(self.client.get("/api/store/api-token/").json()["token"], first)
+        self.assertEqual(ApiToken.objects.count(), 1)
+
     def test_regenerate_replaces_the_token(self):
         self.client.force_authenticate(self.dealer)
         first = self.client.get("/api/store/api-token/").json()["token"]
