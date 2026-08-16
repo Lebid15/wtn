@@ -20,8 +20,12 @@ set -a; . /opt/wtn/deploy/.env; set +a
 
 mkdir -p "$BACKUP_DIR"
 
-# pg_dump من صورة postgres — فلا نثبّت عميلاً على الخادم ولا نتعارض مع نسخته
-docker run --rm postgres:16-alpine \
+# pg_dump من صورة postgres — فلا نثبّت عميلاً على الخادم ولا نتعارض مع نسخته.
+# **نسخة الأداة يجب ألّا تقلّ عن نسخة الخادم**، وإلّا رفضت العمل أصلاً
+# (`server version mismatch`). Neon على 18 اليوم؛ عدّل المتغيّر إن رقّاه.
+PG_IMAGE="${PG_IMAGE:-postgres:18-alpine}"
+
+docker run --rm "$PG_IMAGE" \
 	pg_dump --no-owner --no-privileges --format=plain "$DATABASE_URL" \
 	| gzip -9 > "$OUT.part"
 mv "$OUT.part" "$OUT"     # الاسم النهائي بعد الاكتمال، فلا يبقى ملفٌّ نصفه
