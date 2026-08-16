@@ -88,6 +88,7 @@ cd /opt/wtn && git pull && docker compose -f deploy/docker-compose.yml up -d --b
 |---|---|
 | الشهادة | واحدة شاملة، تحقّقُها عبر DNS بـ `CF_API_TOKEN`، يجدّدها Caddy وحده |
 | الموجّه | يُبنى من [caddy.Dockerfile](caddy.Dockerfile) — الصورة الرسمية بلا وحدة Cloudflare |
+| كتلة المتاجر | في [stores.caddy](stores.caddy) منفصلاً — تُلحق عند الإقلاع **إن وُجد المفتاح** وحده |
 | الوسيط | [backend/core/middleware.py](../backend/core/middleware.py) — يستنتج المتجر من `Host` |
 | السحابة | تبقى **رمادية** (`DNS only`). البرتقالية تحتاج تحقّقاً من خطة Cloudflare للشهادة الشاملة |
 
@@ -98,6 +99,12 @@ cd /opt/wtn && git pull && docker compose -f deploy/docker-compose.yml up -d --b
 **فحصُ أن الشهادة صدرت** بعد أول نشر:
 
 ```bash
+# الموجّه يقول أيَّ الحالين هو فيه عند كل إقلاع:
+docker compose -f deploy/docker-compose.yml logs caddy | grep "wtn:"
 docker compose -f deploy/docker-compose.yml logs caddy | grep -i "certificate obtained"
 curl -sI https://<أي-متجر>.wtn4.com | head -1
 ```
+
+> **وبلا المفتاح لا يسقط شيء:** الموقع الرئيسي يعمل، وعناوين المتاجر وحدها
+> معطّلة. وقد كانت الكتلة داخل `Caddyfile` أوّلاً فأسقطت الموقع كلَّه —
+> Caddy يفحص المفتاح عند تحميل الإعداد لا عند إصدار الشهادة.
