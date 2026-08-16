@@ -10,7 +10,7 @@ const num = (v: string | number) =>
 export default function Providers() {
   const cur = useBaseSymbol();
   const [providers, setProviders] = useState<Provider[]>([]);
-  const [totals, setTotals] = useState<{ real_balance: string; balance: string; debt: string } | null>(null);
+  const [totals, setTotals] = useState<{ real_balance: string; debt: string } | null>(null);
   const [showPassive, setShowPassive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<{ edit?: Provider } | null>(null);
@@ -122,7 +122,6 @@ export default function Providers() {
             <th style={th}>الحالة</th>
             <th style={th}>طلبات معلّقة</th>
             <th style={th}>الرصيد الفعلي</th>
-            <th style={th}>الرصيد</th>
             <th style={th}>الدين</th>
             <th style={th}>إجراءات</th>
           </tr>
@@ -141,10 +140,6 @@ export default function Providers() {
               <td style={{ ...td, color: "var(--muted)" }}>0 طلب · 0.00</td>
               <td style={td}>
                 <Amount value={p.real_balance} base={p.real_balance_base}
-                  curr={p.shown_currency} baseCur={p.base_currency} />
-              </td>
-              <td style={td}>
-                <Amount value={p.balance} base={p.balance_base}
                   curr={p.shown_currency} baseCur={p.base_currency} />
               </td>
               <td style={td}>
@@ -182,7 +177,6 @@ export default function Providers() {
               <td style={{ ...td, textAlign: "right", paddingInlineStart: 12 }} colSpan={4}>المجاميع</td>
               {/* المجموع بعملة الدفتر — الخادم يحوّل كلّ مزوّد بعملته قبل الجمع */}
               <td style={td}>{money(totals.real_balance)}</td>
-              <td style={td}>{money(totals.balance)}</td>
               <td style={td}>{money(totals.debt)}</td>
               <td style={td}></td>
             </tr>
