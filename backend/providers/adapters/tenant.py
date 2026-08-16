@@ -96,7 +96,14 @@ class InternalTenantAdapter(BaseAdapter):
         wallet = getattr(dealer, "wallet", None)
         if wallet is None:
             return BalanceResult(ok=False, note="الحساب لدى المورّد بلا محفظة")
-        bal = wallet.balance
+        # الرصيد محفوظ بعملة دفتر **المورّد** — يُحوَّل إلى دفترنا هنا كما
+        # تُحوَّل التكلفة، وإلّا عُرض رقمٌ بعملة غيرنا بلا ما يدلّ عليه.
+        bal = _to_our_base(getattr(provider, "tenant", None), dealer.tenant, wallet.balance)
+        if bal is None:
+            return BalanceResult(
+                ok=False,
+                note=f"لا سعر صرف لعملة متجر {dealer.tenant.name} — اضبطه في «أسعار الصرف»",
+            )
         return BalanceResult(
             ok=True, balance=bal,
             debt=-bal if bal < Decimal("0") else Decimal("0"),

@@ -7,6 +7,9 @@ from django.db import models
 
 from core.models import Tenant
 
+# البرمجيات الخارجية التي تسعّر بعملتها — يميّزها `config.code` لا النوع وحده
+EXTERNAL_CODES = {"znet", "zdk", "barakat", "apstore"}
+
 
 class Provider(models.Model):
     """مزوّد API لتنفيذ الطلبات (خارجي أو داخلي أو يدوي)."""
@@ -53,3 +56,20 @@ class Provider(models.Model):
 
     def __str__(self):
         return f"{self.name} [{self.type}]"
+
+    @property
+    def prices_in_own_currency(self) -> bool:
+        """
+        هل لهذا المزوّد عملةٌ خاصّة تُحوَّل أرقامه منها؟
+
+        الخارجي وحده (ZNET · ZDK): كتالوجه ورصيده بعملته هو. أمّا:
+        - **بنك الأكواد** و**المنفّذ اليدوي**: لا كتالوج خارجيّاً ولا رصيد لدى
+          أحد — أرقامهما أرقامُنا نحن بعملة دفترنا.
+        - **المتجر الداخلي**: يعبر حدود العملة بنفسه من دفتر المورّد إلى
+          دفترنا (انظر `adapters/tenant.py`)، فما يصل منه بعملتنا أصلاً.
+
+        وبدون هذا التمييز كان الجدول يكتب «₺ 0.00 · ≈ $0.00» تحت بنك أكوادٍ
+        لا علاقة له بالليرة.
+        """
+        code = ((self.config or {}).get("code") or "").lower()
+        return self.type == Provider.Type.CARD_STORE or code in EXTERNAL_CODES

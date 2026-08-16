@@ -354,6 +354,43 @@ class ProviderCurrencyTest(APITestCase):
         self.assertEqual(totals["real_balance"], "5.00")
         self.assertEqual(totals["unconverted"], ["EUR"])
 
+    def test_a_pool_shows_the_ledger_currency_not_a_lira(self):
+        """
+        بنك الأكواد بلا كتالوج خارجيّ ولا رصيد لدى أحد — أرقامه أرقامُنا.
+        وكان الجدول يكتب تحته «₺ 0.00 · ≈ $0.00» بلا معنى.
+        """
+        Provider.objects.create(tenant=self.tenant, name="بنك", type=Provider.Type.POOL)
+        row = self.client.get("/api/providers/").json()[0]
+        self.assertEqual(row["shown_currency"], "USD")
+        self.assertFalse(row["has_own_currency"])
+        self.assertIsNone(row["real_balance_base"])
+
+    def test_a_manual_loader_is_the_same(self):
+        Provider.objects.create(tenant=self.tenant, name="يدوي", type=Provider.Type.LOADER)
+        row = self.client.get("/api/providers/").json()[0]
+        self.assertEqual(row["shown_currency"], "USD")
+        self.assertFalse(row["has_own_currency"])
+
+    def test_an_internal_store_carries_no_currency_of_its_own(self):
+        """يعبر حدود العملة بنفسه من دفتر المورّد — فما يصل منه بعملتنا."""
+        Provider.objects.create(tenant=self.tenant, name="متجر داخلي",
+                                type=Provider.Type.SAME_SYSTEM)
+        row = self.client.get("/api/providers/").json()[0]
+        self.assertEqual(row["shown_currency"], "USD")
+        self.assertFalse(row["has_own_currency"])
+
+    def test_an_external_store_keeps_its_own(self):
+        self._provider("TRY", real_balance=Decimal("100"))
+        row = self.client.get("/api/providers/").json()[0]
+        self.assertEqual(row["shown_currency"], "TRY")
+        self.assertTrue(row["has_own_currency"])
+
+    def test_totals_ignore_the_lira_default_of_a_pool(self):
+        """بنكٌ رصيده 100 بعملة الدفتر لا يُقسم على 41.5."""
+        Provider.objects.create(tenant=self.tenant, name="بنك",
+                                type=Provider.Type.POOL, real_balance=Decimal("100"))
+        self.assertEqual(self.client.get("/api/providers/totals/").json()["real_balance"], "100.00")
+
     def test_old_providers_default_to_lira(self):
         """المُعدّون قبل الحقل يبقون على السلوك السابق فلا تنقلب أسعارهم."""
         p = Provider.objects.create(tenant=self.tenant, name="قديم",

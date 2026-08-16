@@ -50,7 +50,16 @@ def to_base(tenant, amount, source: str):
 
 
 def currency_of(provider) -> str:
-    """عملة هذا المزوّد — والافتراضية لمن أُنشئ قبل وجود الحقل."""
+    """
+    عملة هذا المزوّد — والافتراضية لمن أُنشئ قبل وجود الحقل.
+
+    ومن لا يسعّر بعملته (بنك الأكواد · المنفّذ اليدوي · المتجر الداخلي) فعملته
+    عملةُ الدفتر: أرقامه وصلتنا محوَّلةً أو لم تغادر دفترنا أصلاً.
+    """
+    if provider is None:
+        return PROVIDER_CURRENCY
+    if not getattr(provider, "prices_in_own_currency", True):
+        return base_currency(getattr(provider, "tenant", None))
     return (getattr(provider, "currency", "") or PROVIDER_CURRENCY)
 
 

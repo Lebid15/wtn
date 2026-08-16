@@ -141,15 +141,15 @@ export default function Providers() {
               <td style={{ ...td, color: "var(--muted)" }}>0 طلب · 0.00</td>
               <td style={td}>
                 <Amount value={p.real_balance} base={p.real_balance_base}
-                  curr={p.currency} baseCur={p.base_currency} />
+                  curr={p.shown_currency} baseCur={p.base_currency} />
               </td>
               <td style={td}>
                 <Amount value={p.balance} base={p.balance_base}
-                  curr={p.currency} baseCur={p.base_currency} />
+                  curr={p.shown_currency} baseCur={p.base_currency} />
               </td>
               <td style={td}>
                 <Amount value={p.debt} base={p.debt_base} danger={Number(p.debt) > 0}
-                  curr={p.currency} baseCur={p.base_currency} />
+                  curr={p.shown_currency} baseCur={p.base_currency} />
               </td>
               <td style={td}>
                 <div style={{ display: "flex", gap: 4, justifyContent: "center", alignItems: "center", color: "var(--muted)" }}>

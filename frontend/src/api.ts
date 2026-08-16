@@ -113,7 +113,9 @@ export interface Provider {
   status_label: string;
   // الأرقام بعملة المزوّد، ويرافقها مقابلُها بعملة الدفتر (null = هي نفسها،
   // أو لا سعر صرف مضبوط لها)
-  currency: string;
+  currency: string;          // المحفوظ (يُحرَّر في النافذة)
+  shown_currency: string;    // المعروض — عملةُ الدفتر لمن لا يسعّر بعملته
+  has_own_currency: boolean;
   base_currency: string;
   real_balance: string;
   balance: string;

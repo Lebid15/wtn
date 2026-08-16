@@ -22,6 +22,14 @@ class ProviderSerializer(serializers.ModelSerializer):
     # الدفتر محسوباً هنا لا في المتصفّح — سعر الصرف مرجعٌ واحد على الخادم،
     # وحسابُه في الواجهة يكرّره ويجعله يختلف بين شاشة وأخرى.
     base_currency = serializers.SerializerMethodField()
+    # `currency` هو الحقل المحفوظ (يُكتب من النافذة)، و`shown_currency` هو
+    # المعروض فعلاً: يساوي عملة الدفتر لمن لا يسعّر بعملته — بنكِ الأكواد
+    # والمنفّذ اليدوي والمتجر الداخلي — فلا يُكتب «₺» تحت بنك أكوادٍ محلّي.
+    shown_currency = serializers.SerializerMethodField()
+    # وبها تعرف الواجهة متى تُظهر قائمة اختيار العملة أصلاً
+    has_own_currency = serializers.BooleanField(
+        source="prices_in_own_currency", read_only=True
+    )
     real_balance_base = serializers.SerializerMethodField()
     balance_base = serializers.SerializerMethodField()
     debt_base = serializers.SerializerMethodField()
@@ -30,7 +38,7 @@ class ProviderSerializer(serializers.ModelSerializer):
         model = Provider
         fields = [
             "id", "name", "type", "type_label", "config", "status", "status_label",
-            "currency", "base_currency",
+            "currency", "shown_currency", "base_currency", "has_own_currency",
             "real_balance", "balance", "debt",
             "real_balance_base", "balance_base", "debt_base",
             "loss_guard", "auto_update",
@@ -51,6 +59,11 @@ class ProviderSerializer(serializers.ModelSerializer):
         from core import currency as cur
 
         return cur.base_currency(obj.tenant)
+
+    def get_shown_currency(self, obj) -> str:
+        from core import currency as cur
+
+        return cur.currency_of(obj)
 
     def get_real_balance_base(self, obj):
         return self._base(obj, obj.real_balance)
