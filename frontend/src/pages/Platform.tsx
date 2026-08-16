@@ -11,6 +11,7 @@ interface Tenant {
   sub_yearly_price: string; sub_expires_at: string | null;
   sub_active: boolean; sub_days_left: number | null;
   sub_grace_days?: number; sub_enforce?: boolean; sub_state?: string;
+  domain?: string; orders?: number; users?: number;
 }
 interface Stats { tenants: number; active: number; dealers: number }
 interface LibGame {
@@ -87,6 +88,8 @@ function TenantsTab() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [subFor, setSubFor] = useState<Tenant | null>(null);
+  const [editFor, setEditFor] = useState<Tenant | null>(null);
+  const [delFor, setDelFor] = useState<Tenant | null>(null);
 
   function load() {
     api.get("/platform/tenants/").then((r) => { setTenants(r.data.results); setStats(r.data.stats); });
@@ -122,7 +125,9 @@ function TenantsTab() {
               <tr key={t.id} style={{ borderTop: "1px solid #1e293b" }}>
                 <td style={td}>{t.id}</td>
                 <td style={{ ...td, fontWeight: 700 }}>{t.name}</td>
-                <td style={{ ...td, direction: "ltr", color: "#7dd3fc" }}>{t.subdomain}.example.com</td>
+                <td style={{ ...td, direction: "ltr", color: "#7dd3fc" }}>
+                  {t.domain || t.subdomain}
+                </td>
                 <td style={td}>{t.dealers}</td>
                 <td style={td}>
                   {t.sub_active ? (
@@ -140,6 +145,10 @@ function TenantsTab() {
                 </td>
                 <td style={{ ...td, whiteSpace: "nowrap" }}>
                   <button style={subBtn} onClick={() => setSubFor(t)}>الاشتراك</button>
+                  <button style={{ ...subBtn, background: "#334155" }}
+                    onClick={() => setEditFor(t)}>تعديل</button>
+                  <button style={{ ...subBtn, background: "#7f1d1d" }}
+                    onClick={() => setDelFor(t)}>حذف</button>
                   <button style={t.status === "active" ? suspendBtn : activateBtn} onClick={() => toggle(t)}>
                     {t.status === "active" ? "تعليق" : "تفعيل"}
                   </button>
@@ -150,6 +159,14 @@ function TenantsTab() {
         </table>
       </div>
       {showCreate && <CreateTenant onClose={() => setShowCreate(false)} onDone={() => { setShowCreate(false); load(); }} />}
+      {editFor && (
+        <EditTenant tenant={editFor} onClose={() => setEditFor(null)}
+          onDone={() => { setEditFor(null); load(); }} />
+      )}
+      {delFor && (
+        <DeleteTenant tenant={delFor} onClose={() => setDelFor(null)}
+          onDone={() => { setDelFor(null); load(); }} />
+      )}
       {subFor && <SubscriptionModal tenant={subFor} onClose={() => setSubFor(null)} onDone={() => { setSubFor(null); load(); }} />}
     </>
   );
@@ -604,3 +621,112 @@ const overlay: React.CSSProperties = { position: "fixed", inset: 0, background: 
 const modal: React.CSSProperties = { width: 420, background: "#fff", color: "#0f172a", borderRadius: 10, overflow: "hidden" };
 const inp: React.CSSProperties = { width: "100%", height: 38 };
 const errBox: React.CSSProperties = { background: "#fdecea", border: "1px solid #f5c6c2", color: "#b0463a", fontSize: 13, padding: "9px 12px", borderRadius: 5, marginTop: 10 };
+
+/** تعديل اسم المتجر ونطاقه. النطاق **تسمية واحدة** لا عنوان كامل. */
+function EditTenant({ tenant, onClose, onDone }: {
+  tenant: Tenant; onClose: () => void; onDone: () => void;
+}) {
+  const [name, setName] = useState(tenant.name);
+  const [sub, setSub] = useState(tenant.subdomain);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setErr("");
+    try {
+      await api.patch(`/platform/tenants/${tenant.id}/`, { name, subdomain: sub });
+      onDone();
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || "تعذّر الحفظ");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <form style={{ ...modal, width: 420, color: "#0f172a" }}
+        onClick={(e) => e.stopPropagation()} onSubmit={save}>
+        <div style={{ background: "#0f172a", color: "#e2e8f0", padding: "14px 18px", fontWeight: 700 }}>
+          تعديل المتجر
+        </div>
+        <div style={{ padding: 20 }}>
+          <F label="اسم المتجر">
+            <input style={inp} value={name} onChange={(e) => setName(e.target.value)} required />
+          </F>
+          <F label="النطاق الفرعي">
+            <input style={inp} dir="ltr" value={sub}
+              onChange={(e) => setSub(e.target.value)} required />
+          </F>
+          <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.9, marginTop: 6 }}>
+            تسميةٌ واحدة لا عنوان كامل: اكتب <b>islam</b> لا <b>islam.wtn4.com</b>.
+            حروف إنجليزية صغيرة وأرقام وشرطات فقط.
+          </div>
+          {err && <div style={{ ...errBox, marginTop: 12 }}>{err}</div>}
+          <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+            <button className="btn g" style={{ flex: 1, height: 38 }} disabled={busy}>
+              {busy ? "..." : "حفظ"}
+            </button>
+            <button type="button" className="btn" style={{ flex: 1, height: 38, background: "#8a999e" }}
+              onClick={onClose}>إلغاء</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/**
+ * حذف متجر — يمحو وكلاءه ومحافظهم ودفترهم وطلباتهم وفواتيرهم.
+ * فلا يقع إلا بكتابة اسمه حرفاً: زرٌّ يُضغط بالخطأ، واسمٌ لا يُكتب بالخطأ.
+ */
+function DeleteTenant({ tenant, onClose, onDone }: {
+  tenant: Tenant; onClose: () => void; onDone: () => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function remove() {
+    setBusy(true); setErr("");
+    try {
+      await api.delete(`/platform/tenants/${tenant.id}/`, { data: { confirm: typed } });
+      onDone();
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || "تعذّر الحذف");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={{ ...modal, width: 460, color: "#0f172a" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ background: "#7f1d1d", color: "#fecaca", padding: "14px 18px", fontWeight: 700 }}>
+          حذف «{tenant.name}» — لا رجعة
+        </div>
+        <div style={{ padding: 20 }}>
+          <p style={{ fontSize: 13.5, lineHeight: 1.95, margin: "0 0 12px" }}>
+            سيُمحى المتجر ومعه <b>{tenant.users ?? 0} حساباً</b> و
+            <b> {tenant.orders ?? 0} طلباً</b>، ومحافظُهم ودفترُ حساباتهم وفواتيرهم.
+            <br />
+            <b>لا يمكن التراجع، ولا تُستعاد إلا من نسخة احتياطية.</b>
+          </p>
+          <div style={{ fontSize: 12.5, color: "#64748b", marginBottom: 6 }}>
+            اكتب <b style={{ direction: "ltr", display: "inline-block" }}>{tenant.subdomain}</b> للتأكيد:
+          </div>
+          <input style={inp} dir="ltr" value={typed} onChange={(e) => setTyped(e.target.value)} />
+          {err && <div style={{ ...errBox, marginTop: 12 }}>{err}</div>}
+          <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+            <button className="btn" disabled={busy || typed !== tenant.subdomain}
+              style={{
+                flex: 1, height: 38,
+                background: typed === tenant.subdomain ? "#b91c1c" : "#cbd5e1",
+                color: "#fff",
+              }}
+              onClick={remove}>{busy ? "..." : "احذف نهائياً"}</button>
+            <button className="btn" style={{ flex: 1, height: 38, background: "#8a999e" }}
+              onClick={onClose}>إلغاء</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

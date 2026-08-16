@@ -1,6 +1,8 @@
 """API لوحة المنصّة (SuperAdmin): إدارة المستأجرين + المكتبة العالمية — لمالك المنصّة فقط."""
+import re
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import transaction
 from rest_framework import status as http, viewsets
 from rest_framework.decorators import api_view, permission_classes
@@ -12,6 +14,7 @@ from catalog.serializers import (
     LibraryGameDetailSerializer, LibraryGameSerializer, LibraryProductSerializer,
 )
 from core.models import Invoice, Tenant, User, Wallet
+from orders.models import Order
 from core.views import _invoice_row
 
 
@@ -67,6 +70,12 @@ def _tenant_row(t):
         "sub_enforce": t.sub_enforce,
         # مرجعٌ واحد تقرأ منه اللوحة والخادم: ok · warn · grace · blocked
         "sub_state": t.subscription_state(today),
+        # العنوان يُبنى على الخادم من `PLATFORM_DOMAIN` — كان مكتوباً
+        # `example.com` في الواجهة فظهرت العناوين كلّها خاطئة
+        "domain": f"{t.subdomain}.{settings.PLATFORM_DOMAIN}",
+        # ما سيُفقد بالحذف — يُعرض قبل السؤال لا بعده
+        "orders": Order.objects.filter(tenant=t).count(),
+        "users": User.objects.filter(tenant=t).count(),
     }
 
 
@@ -111,6 +120,72 @@ def tenants_view(request):
             "dealers": User.objects.filter(role=User.Role.BAYI).count(),
         },
     })
+
+
+SUBDOMAIN_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$")
+
+# أسماء لا تصلح متجراً: بعضها مسارٌ عندنا وبعضها عنوانٌ قائم على النطاق نفسه
+RESERVED_SUBDOMAINS = {
+    "www", "api", "admin", "static", "assets", "mail", "ftp",
+    "app", "platform", "store", "client", "cdn", "ns1", "ns2",
+}
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated, IsPlatformOwner])
+def tenant_detail_view(request, tenant_id):
+    """
+    تعديل متجر أو حذفه — لمالك المنصّة وحده.
+
+    **الحذف يمحو كل شيء**: الوكلاء ومحافظهم ودفتر الأستاذ والطلبات والفواتير
+    (`on_delete=CASCADE` على المستأجر). فلا يقع إلا بكتابة اسم المتجر حرفاً —
+    زرٌّ وحده يُضغط بالخطأ، واسمٌ يُكتب لا يُكتب بالخطأ.
+    """
+    try:
+        t = Tenant.objects.get(pk=tenant_id)
+    except Tenant.DoesNotExist:
+        return Response({"detail": "المستأجر غير موجود"}, status=404)
+
+    if request.method == "DELETE":
+        typed = str(request.data.get("confirm") or "").strip()
+        if typed != t.subdomain:
+            return Response(
+                {"detail": f"اكتب «{t.subdomain}» بالضبط لتأكيد الحذف"}, status=400,
+            )
+        name, orders = t.name, Order.objects.filter(tenant=t).count()
+        t.delete()
+        return Response({"detail": f"حُذف «{name}» ومعه {orders} طلباً — لا رجعة"})
+
+    data = request.data
+    fields = []
+
+    if "name" in data:
+        name = str(data["name"] or "").strip()
+        if not name:
+            return Response({"detail": "اسم المتجر مطلوب"}, status=400)
+        t.name = name[:120]
+        fields.append("name")
+
+    if "subdomain" in data:
+        sub = str(data["subdomain"] or "").strip().lower()
+        # نقبل `islam.wtn4.com` ونأخذ منه `islam`: المالك يكتب ما يراه في
+        # اللوحة، وكان حفظُه كما هو يُنتج `islam.wtn4.com.wtn4.com`.
+        sub = sub.split(".")[0]
+        if not SUBDOMAIN_RE.match(sub):
+            return Response(
+                {"detail": "النطاق: حروف إنجليزية صغيرة وأرقام وشرطات فقط، ولا نقاط"},
+                status=400,
+            )
+        if sub in RESERVED_SUBDOMAINS:
+            return Response({"detail": f"«{sub}» اسم محجوز — اختر غيره"}, status=400)
+        if Tenant.objects.filter(subdomain=sub).exclude(pk=t.pk).exists():
+            return Response({"detail": f"«{sub}» مستعمل لمتجر آخر"}, status=400)
+        t.subdomain = sub
+        fields.append("subdomain")
+
+    if fields:
+        t.save(update_fields=fields)
+    return Response(_tenant_row(t))
 
 
 @api_view(["POST"])

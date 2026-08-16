@@ -35,6 +35,10 @@ ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "*").split(",")
 
 # خلف Caddy: العنوان الحقيقي والبروتوكول يصلان في ترويستين. بدون هذا يظنّ
 # Django كل اتصال غير مشفّر، فيعيد التوجيه إلى https إلى ما لا نهاية.
+# نطاق المنصّة — منه يُبنى عنوان كل متجر (`islam.wtn4.com`). كان مكتوباً
+# `example.com` في الواجهة، فظهرت العناوين كلّها خاطئة بلا أن ينبّه أحد.
+PLATFORM_DOMAIN = os.environ.get("PLATFORM_DOMAIN", "wtn4.com")
+
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 

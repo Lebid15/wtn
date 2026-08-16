@@ -11,6 +11,8 @@ router.register("library/products", views.LibraryProductViewSet, basename="libra
 urlpatterns = [
     path("tenants/", views.tenants_view, name="platform-tenants"),
     path("tenants/<int:tenant_id>/subscription/", views.tenant_subscription_view, name="platform-tenant-subscription"),
+    # التعديل والحذف قبل مسار <str:action> وإلا ابتلعهما
+    path("tenants/<int:tenant_id>/", views.tenant_detail_view, name="platform-tenant-detail"),
     path("tenants/<int:tenant_id>/<str:action>/", views.tenant_status_view, name="platform-tenant-status"),
     path("announcement/", views.platform_announcement_view, name="platform-announcement"),
     path("invoices/", views.invoices_view, name="platform-invoices"),
