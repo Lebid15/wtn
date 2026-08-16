@@ -11,3 +11,9 @@ RUN xcaddy build --with github.com/caddy-dns/cloudflare
 
 FROM caddy:2-alpine
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+
+# يركّب الإعداد عند الإقلاع: كتلة المتاجر تُلحق إن وُجد المفتاح وحده.
+# (يُنسخ `chmod`اً صريحاً — صلاحية التنفيذ لا تنجو من Windows إلى Git.)
+COPY caddy-entrypoint.sh /usr/local/bin/caddy-entrypoint.sh
+RUN chmod +x /usr/local/bin/caddy-entrypoint.sh
+CMD ["/usr/local/bin/caddy-entrypoint.sh"]

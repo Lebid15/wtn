@@ -1,0 +1,32 @@
+# عناوين المتاجر (islam.wtn4.com …) — كتلةٌ **تُضاف فقط إن وُجد المفتاح**.
+#
+# تُلحَق بـ Caddyfile عند الإقلاع بواسطة `caddy-entrypoint.sh`، ولا تُلحق إن
+# كان `CF_API_TOKEN` فارغاً. والسبب مدفوعٌ ثمنه: كُتبت هذه الكتلة أوّلاً داخل
+# Caddyfile مباشرةً، فرفض Caddy المفتاحَ الفارغ **عند تحميل الإعداد** لا عند
+# إصدار الشهادة — فسقط الإعداد كلُّه ومعه wtn4.com في حلقة إعادة تشغيل.
+#
+# **شهادة واحدة تكفي المتاجر كلَّها** — والتي لم تُنشأ بعد. ولهذا لا تُفتح
+# Cloudflare عند كل متجر: صفٌّ في القاعدة والعنوان يعمل في نفس اللحظة.
+#
+# والتحقّق عبر DNS لا HTTP: لا تستطيع Let's Encrypt أن تفتح رابطاً على عنوانٍ
+# لم يُخلق بعد، فيكتب Caddy سجلّاً مؤقّتاً بمفتاح Cloudflare ويثبت الملكيّة.
+
+*.wtn4.com {
+	encode zstd gzip
+
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+	}
+
+	reverse_proxy web:8000 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+	}
+}

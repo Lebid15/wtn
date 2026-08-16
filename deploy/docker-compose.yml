@@ -29,6 +29,7 @@ services:
     ports: ["80:80", "443:443"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./stores.caddy:/etc/caddy/stores.caddy:ro   # تُلحق إن وُجد المفتاح
       - caddy_data:/data      # الشهادات — لا تُحذف وإلا أُعيد إصدارها كل مرّة
       - caddy_config:/config
     # المفتاح من `deploy/.env` نفسه — لا ملفٍّ جديد: `env_file` لملفٍّ ناقص

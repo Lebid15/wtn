@@ -27,34 +27,8 @@ wtn4.com, www.wtn4.com, api.wtn4.com {
 	}
 }
 
-# النطاقات الفرعية للمتاجر (islam.wtn4.com …).
+# عناوين المتاجر (`islam.wtn4.com`) في ملفٍّ منفصل: [stores.caddy](stores.caddy).
 #
-# **شهادة واحدة تكفي كل المتاجر — الحاضرة والتي لم تُنشأ بعد.** ولهذا لا
-# تُفتح Cloudflare عند كل متجر جديد: صفٌّ في القاعدة والعنوان يعمل في نفس
-# اللحظة. وسجلّ `*.wtn4.com` موجودٌ هناك من قبلُ.
-#
-# التحقّق عبر DNS لا HTTP: لا تستطيع Let's Encrypt أن تفتح رابطاً على عنوانٍ
-# لم يُخلق بعد، فيكتب Caddy سجلّاً مؤقّتاً بمفتاح Cloudflare ويثبت الملكيّة.
-# والمفتاح `CF_API_TOKEN` في `deploy/.env`.
-#
-# وإن غاب: هذه الكتلة وحدها تفشل في إصدار شهادتها — والموقع الرئيسي فوقها
-# يبقى يعمل بشهادته. أي أن نسيان المفتاح يعطّل الميزة ولا يُسقط الموقع.
-*.wtn4.com {
-	encode zstd gzip
-
-	tls {
-		dns cloudflare {env.CF_API_TOKEN}
-	}
-
-	reverse_proxy web:8000 {
-		header_up X-Forwarded-Proto {scheme}
-		header_up X-Real-IP {remote_host}
-	}
-
-	log {
-		output file /data/access.log {
-			roll_size 20mb
-			roll_keep 5
-		}
-	}
-}
+# يُلحق بهذا الملف عند الإقلاع **إن وُجد `CF_API_TOKEN`** في `deploy/.env`،
+# ويُترك إن غاب. فنسيان المفتاح يعطّل الميزة ولا يُسقط الموقع — وقد أسقطه
+# مرّةً حين كانت الكتلة هنا (انظر رأس `stores.caddy`).
