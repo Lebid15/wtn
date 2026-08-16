@@ -3,6 +3,12 @@ from rest_framework import serializers
 
 from .models import Order
 
+# «عالق» حالةُ متجرٍ لا حالةُ وكيل: معناها أن توجيه صاحب المتجر تعثّر — إعدادٌ
+# خاطئ أو مزوّد ساقط أو تسعير خاسر. والوكيل لا شأن له بذلك ولا حيلة له فيه،
+# فيراها **انتظاراً**: طلبه لم يُحسم بعد، وهذا كل ما يعنيه الأمر بعينه.
+# وتبقى «عالق» ظاهرةً في لوحة صاحب المتجر وحده — فهو من يعالجها.
+DEALER_STATUS = {Order.Status.STUCK: Order.Status.PENDING}
+
 
 class OrderSerializer(serializers.ModelSerializer):
     dealer_name = serializers.CharField(source="dealer.name", read_only=True)
@@ -34,11 +40,18 @@ class StoreOrderSerializer(serializers.ModelSerializer):
     """
     game_name = serializers.CharField(source="game.name", read_only=True)
     product_name = serializers.CharField(source="product.name", read_only=True)
-    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    status = serializers.SerializerMethodField()
+    status_label = serializers.SerializerMethodField()
     paid_price = serializers.DecimalField(
         source="buyer_price", max_digits=12, decimal_places=2, read_only=True
     )
     created_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M", read_only=True)
+
+    def get_status(self, o) -> str:
+        return DEALER_STATUS.get(o.status, o.status)
+
+    def get_status_label(self, o) -> str:
+        return dict(Order.Status.choices)[self.get_status(o)]
 
     class Meta:
         model = Order

@@ -242,7 +242,11 @@ def store_orders_view(request):
     ).select_related("game", "product", "provider").order_by("-created_at")
     status_filter = request.query_params.get("status")
     if status_filter and status_filter != "all":
-        qs = qs.filter(status=status_filter)
+        # الوكيل يرى العالق انتظاراً (انظر DEALER_STATUS)، فليجده مع الانتظار —
+        # وإلّا اختفى طلبه من الفلترين معاً فظنّه ضائعاً.
+        wanted = ([Order.Status.PENDING, Order.Status.STUCK]
+                  if status_filter == Order.Status.PENDING else [status_filter])
+        qs = qs.filter(status__in=wanted)
     search = request.query_params.get("q", "").strip()
     if search:
         qs = qs.filter(receipt_no__icontains=search)
@@ -350,7 +354,9 @@ def store_summary_view(request):
         "orders": agg["count"] or 0,
         "profit": str(show(user, agg["profit"] or 0)),
         "sell": str(show(user, agg["sell"] or 0)),
-        "pending": mine.filter(status=Order.Status.PENDING).count(),
+        "pending": mine.filter(
+            status__in=[Order.Status.PENDING, Order.Status.STUCK]
+        ).count(),
     })
 
 

@@ -301,11 +301,15 @@ def _learn_link_price(product_id: int, provider_id, cost) -> None:
     link.save(update_fields=["extra", "updated_at"])
 
 
-def _send_to(order: Order, provider, trail: list, depth: int = 0) -> bool:
+def _send_to(order: Order, provider, trail: list, depth: int = 0, force: bool = False) -> bool:
     """
     محاولة إرسال واحدة لدى مزوّد بعينه.
     تُعيد True إن حُسمت المحاولة (ناجح أو قيد تنفيذ) فتتوقّف السلسلة،
     وFalse إن فشلت أو تُخُطّيت — ويُسجَّل السبب في `trail`.
+
+    `force` يتخطّى حماية الخسارة. وظيفة الحماية أن **توقف وتنبّه**، لا أن تمنع
+    إلى الأبد: فإن رأى صاحب المتجر الخسارة ثم وجّه الطلب بيده إلى المزوّد نفسه،
+    فتلك إرادته المعلَنة على رقمٍ صار يراه — والنظام لا يعاند صاحبه.
     """
     from providers.adapters.registry import adapter_for
 
@@ -331,7 +335,12 @@ def _send_to(order: Order, provider, trail: list, depth: int = 0) -> bool:
             # لا سعر مرجعي بعد (ربط يدوي مثلاً) — نمرّر ونتعلّم التكلفة من
             # ردّ المزوّد، فتحمي الطلبَ التالي.
             trail.append(f"{provider.name}: حماية الخسارة بلا سعر مرجعي — أول طلب يحدّده")
-        elif known > order.sell_price:
+        elif known > order.sell_price and not force:
+            # نثبّت التكلفة الحقيقية على الطلب وإن لم يُرسَل: بدونها يبقى في
+            # الجدول السعر المقدَّر على المنتج فيقرأ صاحب المتجر «ربح 0.15»
+            # على طلبٍ محجوبٍ لأنه يخسر 31. حجم الخسارة هو سبب الحجب — فليُرَ.
+            order.cost_price = known
+            order.profit = order.sell_price - known
             trail.append(
                 f"{provider.name}: حماية الخسارة — تكلفته {known} > سعر البيع {order.sell_price}"
             )
@@ -397,22 +406,26 @@ def _failover_after_rejection(order: Order, trail: list) -> bool:
     return False
 
 
-def dispatch_to_provider(order: Order, provider, depth: int = 0) -> Order:
+def dispatch_to_provider(order: Order, provider, depth: int = 0, force: bool = True) -> Order:
     """
     توجيه **يدوي** إلى مزوّد يختاره المشغّل — يتخطّى سلسلة المنتج.
     مخرج الطلب العالق أو المُعدّ يدوياً: يُرسَل إلى من يراه المشغّل مناسباً.
+
+    و**يتخطّى حماية الخسارة افتراضياً** (`force`): الحماية أوقفت الطلب وأرَته
+    الخسارة، فإن أعاد صاحب المتجر توجيهه بيده بعد أن رآها فقد قرّر. إبقاء
+    الحجب هنا كان يجعل الطلب العالق بلا مخرج إلا تعديل التسعير.
     """
     if order.status not in (Order.Status.PENDING, Order.Status.STUCK):
         raise OrderError("لا يُوجَّه إلا طلب قيد الانتظار أو عالق")
 
     trail = []
-    if _send_to(order, provider, trail, depth):
+    if _send_to(order, provider, trail, depth, force=force):
         return order
 
     order.status = Order.Status.STUCK
     order.provider = provider
     order.api_response = ("فشل التوجيه اليدوي → " + " | ".join(trail))[:250]
-    order.save(update_fields=["status", "provider", "api_response"])
+    order.save(update_fields=["status", "provider", "api_response", "cost_price", "profit"])
     return order
 
 
@@ -445,7 +458,8 @@ def dispatch_order(order: Order, depth: int = 0) -> Order:
     order.status = Order.Status.STUCK
     order.provider = chain[-1]
     order.api_response = ("فشلت كل التوجيهات → " + " | ".join(trail))[:250]
-    order.save(update_fields=["status", "provider", "api_response"])
+    # cost_price/profit قد يكونا صُحّحا بسعر المزوّد الحقيقي عند الحجب
+    order.save(update_fields=["status", "provider", "api_response", "cost_price", "profit"])
     return order
 
 

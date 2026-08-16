@@ -48,12 +48,14 @@ const profitOf = (sell: string | number, paid: string | number) =>
 
 /**
  * خلفية صفّ الطلب في لوحة الوكيل: انتظار · نجاح · رفض.
- * «قيد التنفيذ» انتظارٌ بعين الوكيل (طلبه لم يُحسم بعد) فيأخذ لونه،
- * و«العالق» لونه ثالث لأنه ليس رفضاً ولا انتظاراً عادياً.
+ *
+ * ولا لون لـ«العالق»: الخادم لا يرسلها إلى الوكيل أصلاً بل يرسلها
+ * «قيد الانتظار» (انظر DEALER_STATUS) — فالتعثّر في توجيه صاحب المتجر شأنه
+ * هو، ولا حيلة للوكيل فيه ولا فائدة من إقلاقه به.
  */
 const ROW_BG: Record<string, string> = {
   pending: "#FAEF77", processing: "#FAEF77",
-  success: "#D8F781", cancelled: "#F5BEAC", stuck: "#F5DCB8",
+  success: "#D8F781", cancelled: "#F5BEAC",
 };
 
 // كل قسم له رابطه الخاص: /store (الرئيسية) · /store/sell · /store/orders ...
@@ -383,7 +385,7 @@ function OrdersTab() {
 
   const STATUS_COLOR: Record<string, string> = {
     success: "var(--ok)", pending: "#e0a800", processing: "#3b82f6",
-    cancelled: "var(--danger)", stuck: "#8a5a00",
+    cancelled: "var(--danger)",
   };
 
   return (

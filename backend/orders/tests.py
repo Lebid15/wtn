@@ -7,12 +7,14 @@
 """
 from decimal import Decimal
 
+from django.test import TestCase
 from rest_framework.test import APITestCase
 
 from catalog.models import (
     AgentPriceGroup, AgentProductPrice, Game, PriceGroup, Product, ProductPrice,
 )
 from core.models import Tenant, User, Wallet
+from providers.models import Provider
 
 from .models import Order
 from .services import cancel_order, create_order, execute_order
@@ -371,3 +373,162 @@ class AgentWalletTransferTest(APITestCase):
                 {"action": "topup", "amount": bad}, format="json",
             )
             self.assertEqual(r.status_code, 400, bad)
+
+
+class LossGuardVisibilityTest(TestCase):
+    """
+    الحجب يُري الخسارة ولا يُخفيها، ويُعصى إن أصرّ صاحب المتجر.
+
+    الحماية وظيفتها أن **توقف وتنبّه** لا أن تمنع إلى الأبد: تُثبت التكلفة
+    الحقيقية على الطلب ليرى صاحبه حجم الخسارة، ثم تُفسح له إن وجّه بيده.
+    """
+
+    def setUp(self):
+        from catalog.models import PriceGroup, ProductPrice
+
+        self.alaya = Tenant.objects.create(subdomain="alaya", name="علايا", base_currency="USD")
+        self.islam = Tenant.objects.create(subdomain="islam", name="إسلام", base_currency="USD")
+
+        a_group = PriceGroup.objects.create(tenant=self.alaya, name="عادية")
+        a_game = Game.objects.create(tenant=self.alaya, name="PUBG")
+        self.a_product = Product.objects.create(
+            tenant=self.alaya, game=a_game, name="60 UC",
+            cost_price=Decimal("28"), recommended_price=Decimal("35"),
+        )
+        ProductPrice.objects.create(tenant=self.alaya, product=self.a_product,
+                                    price_group=a_group, price=Decimal("32"))
+        self.at_alaya = User.objects.create(
+            login_id="islam_at_alaya", name="متجر إسلام", tenant=self.alaya,
+            role=User.Role.BAYI, price_group=a_group, internal_supply_allowed=True, dealer_no=1,
+        )
+        Wallet.objects.create(tenant=self.alaya, user=self.at_alaya,
+                              balance=Decimal("1000"), credit_limit=Decimal("-5000"))
+
+        self.provider = Provider.objects.create(
+            tenant=self.islam, name="علايا", type=Provider.Type.SAME_SYSTEM,
+            config={"dealer_login": "islam_at_alaya"}, loss_guard=True,
+        )
+        i_group = PriceGroup.objects.create(tenant=self.islam, name="عادية")
+        i_game = Game.objects.create(tenant=self.islam, name="PUBG")
+        self.i_product = Product.objects.create(
+            tenant=self.islam, game=i_game, name="60 UC",
+            cost_price=Decimal("0.85"), recommended_price=Decimal("2"),
+            execution_type=Product.Execution.AUTO,
+            provider=self.provider, provider_package_id=str(self.a_product.id),
+        )
+        ProductPrice.objects.create(tenant=self.islam, product=self.i_product,
+                                    price_group=i_group, price=Decimal("1"))
+        self.shop = User.objects.create(
+            login_id="tabe3", name="تابع لإسلام", tenant=self.islam,
+            role=User.Role.BAYI, price_group=i_group, dealer_no=1,
+        )
+        Wallet.objects.create(tenant=self.islam, user=self.shop, balance=Decimal("1000"))
+
+    def _place(self):
+        from orders import services
+        order = services.create_order(self.shop, self.i_product, player_id="5566")
+        services.dispatch_order(order)
+        order.refresh_from_db()
+        return order
+
+    def test_blocked_order_shows_the_real_cost_and_a_negative_profit(self):
+        """
+        كان يبقى السعر المقدَّر (0.85) فيقرأ صاحب المتجر «ربح 0.15» على طلبٍ
+        حُجب لأنه يخسر 31 — والخسارة هي سبب الحجب، فلا معنى لإخفائها.
+        """
+        order = self._place()
+        self.assertEqual(order.status, Order.Status.STUCK)
+        self.assertEqual(order.cost_price, Decimal("32.00"))
+        self.assertEqual(order.profit, Decimal("-31.00"))
+        self.assertIn("حماية الخسارة", order.api_response)
+
+    def test_nothing_was_sent_while_it_was_blocked(self):
+        self._place()
+        self.assertEqual(Order.objects.filter(tenant=self.alaya).count(), 0)
+        self.assertEqual(Wallet.objects.get(user=self.at_alaya).balance, Decimal("1000"))
+
+    def test_manual_dispatch_overrides_the_guard(self):
+        """أصرّ صاحب المتجر بعد أن رأى الخسارة — فالنظام لا يعاند صاحبه."""
+        from orders import services
+
+        order = self._place()
+        services.dispatch_to_provider(order, self.provider)
+        order.refresh_from_db()
+
+        self.assertEqual(order.status, Order.Status.PROCESSING)
+        self.assertEqual(Order.objects.filter(tenant=self.alaya).count(), 1)
+        self.assertEqual(Wallet.objects.get(user=self.at_alaya).balance, Decimal("968.00"))
+        self.assertEqual(order.cost_price, Decimal("32.00"))
+
+    def test_automatic_retry_still_obeys_the_guard(self):
+        """التجاوز للتوجيه اليدوي وحده — لا لإعادة التشغيل التلقائي."""
+        from orders import services
+
+        order = self._place()
+        services.dispatch_order(order)          # المسار التلقائي مرّةً أخرى
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.STUCK)
+        self.assertEqual(Order.objects.filter(tenant=self.alaya).count(), 0)
+
+    def test_a_profitable_order_is_untouched(self):
+        from catalog.models import ProductPrice
+
+        ProductPrice.objects.filter(product=self.i_product).update(price=Decimal("40"))
+        order = self._place()
+        self.assertEqual(order.status, Order.Status.PROCESSING)
+        self.assertEqual(order.cost_price, Decimal("32.00"))
+        self.assertEqual(order.profit, Decimal("8.00"))
+
+
+class DealerNeverSeesStuckTest(APITestCase):
+    """
+    «عالق» حالةُ متجرٍ لا حالةُ وكيل — تعثُّرُ توجيهِ صاحب المتجر شأنه هو،
+    ولا حيلة للوكيل فيه. فيراها انتظاراً، وتبقى ظاهرةً في لوحة المتجر.
+    """
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(subdomain="t1", name="متجر", base_currency="USD")
+        self.game = Game.objects.create(tenant=self.tenant, name="PUBG")
+        self.product = Product.objects.create(
+            tenant=self.tenant, game=self.game, name="60 UC",
+            cost_price=Decimal("6"), recommended_price=Decimal("10"),
+        )
+        self.dealer = User.objects.create(
+            login_id="d1", name="وكيل", tenant=self.tenant, role=User.Role.BAYI, dealer_no=1)
+        Wallet.objects.create(tenant=self.tenant, user=self.dealer, balance=Decimal("100"))
+        self.admin = User.objects.create(
+            login_id="a1", name="مدير", tenant=self.tenant,
+            role=User.Role.TENANT_ADMIN, is_staff=True)
+
+        from orders import services
+        self.order = services.create_order(self.dealer, self.product)
+        Order.objects.filter(pk=self.order.pk).update(status=Order.Status.STUCK)
+
+    def test_dealer_reads_it_as_pending(self):
+        self.client.force_authenticate(self.dealer)
+        row = self.client.get("/api/store/orders/").json()["results"][0]
+        self.assertEqual(row["status"], "pending")
+        self.assertEqual(row["status_label"], "قيد الانتظار")
+
+    def test_the_word_stuck_never_reaches_the_dealer(self):
+        self.client.force_authenticate(self.dealer)
+        body = self.client.get("/api/store/orders/").content.decode()
+        self.assertNotIn("stuck", body)
+        self.assertNotIn("عالق", body)
+
+    def test_the_pending_filter_still_finds_it(self):
+        """وإلّا اختفى طلبه من الفلترين معاً فظنّه ضائعاً."""
+        self.client.force_authenticate(self.dealer)
+        rows = self.client.get("/api/store/orders/", {"status": "pending"}).json()["results"]
+        self.assertEqual(len(rows), 1)
+
+    def test_the_summary_counts_it_as_pending(self):
+        self.client.force_authenticate(self.dealer)
+        self.assertEqual(self.client.get("/api/store/summary/").json()["pending"], 1)
+
+    def test_the_store_owner_still_sees_stuck(self):
+        """هو من يعالجها، فلا تُخفى عنه."""
+        self.client.force_authenticate(self.admin)
+        rows = self.client.get("/api/orders/").json()["results"]
+        self.assertEqual(rows[0]["status"], "stuck")
+        self.assertEqual(rows[0]["status_label"], "عالق")
