@@ -147,7 +147,10 @@ export default function Providers() {
                   curr={p.shown_currency} baseCur={p.base_currency} />
               </td>
               <td style={td}>
-                <div style={{ display: "flex", gap: 4, justifyContent: "center", alignItems: "center", color: "var(--muted)" }}>
+                {/* ثلاثة أزرار عاملة لا غير: أيقونتا «card» و«chart» كانتا
+                    مرسومتين من التصميم المرجعي بلا وظيفة ولا حدث — تبدوان
+                    زرّين وليستا كذلك، فتُخفيان الزرّ الحقيقي بينها. */}
+                <div style={{ display: "flex", gap: 6, justifyContent: "center", alignItems: "center" }}>
                   <button onClick={() => setModal({ edit: p })} title="تعديل المزوّد وإعدادات الاتصال"
                     style={{ background: "transparent", border: 0, color: "var(--primary)", cursor: "pointer" }}>
                     <Icon name="edit" size={15} />
@@ -165,7 +168,6 @@ export default function Providers() {
                     style={{ background: "transparent", border: 0, color: "var(--danger)", cursor: "pointer" }}>
                     <Icon name="trash" size={15} />
                   </button>
-                  <Icon name="card" size={15} /><Icon name="chart" size={15} />
                 </div>
               </td>
             </tr>
