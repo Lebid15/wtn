@@ -4,6 +4,8 @@ from django.urls import path
 from . import alerts, cards, tickets, views
 
 urlpatterns = [
+    # هويّة متجر هذا العنوان — مفتوحةٌ بلا توكن، تقرأها صفحة الدخول
+    path("storefront/", views.storefront_view, name="storefront"),
     path("auth/login/", views.login_view, name="login"),
     path("auth/me/", views.me_view, name="me"),
     path("settings/site/", views.site_settings_view, name="site-settings"),

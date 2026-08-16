@@ -125,13 +125,18 @@ function TenantsTab() {
               <tr key={t.id} style={{ borderTop: "1px solid #1e293b" }}>
                 <td style={td}>{t.id}</td>
                 <td style={{ ...td, fontWeight: 700 }}>{t.name}</td>
-                {/* عنوانٌ **مُزمَع** لا عامل: النطاقات الفرعية لم تُبنَ بعد،
-                    والكود يعرف المتجر من الحساب الذي دخل لا من العنوان. كان
-                    يُعرض أزرق كأنه رابط، فيُضغط فيفشل بخطأ شهادة مبهم. */}
+                {/* صار عنواناً عاملاً (2026-08-16): شهادةٌ شاملة ووسيطٌ يستنتج
+                    المتجر من الرابط. وكان قبلها مُزمَعاً يُعرض رمادياً، لأن
+                    ضغطه يعطي خطأ شهادةٍ مبهماً. */}
                 <td style={{ ...td, direction: "ltr" }}>
-                  <span style={{ color: "#94a3b8" }}>{t.domain || t.subdomain}</span>
+                  <a href={`https://${t.domain || t.subdomain}`} target="_blank" rel="noreferrer"
+                     style={{ color: "#7dd3fc" }}>
+                    {t.domain || t.subdomain}
+                  </a>
                   <div style={{ fontSize: 10.5, color: "#64748b", direction: "rtl", marginTop: 2 }}>
-                    غير مفعّل بعد — الدخول من wtn4.com
+                    {t.status === "suspended"
+                      ? "موقوف — العنوان يعرض صفحة توقّف"
+                      : "عنوان المتجر · و wtn4.com يبقى مفتوحاً"}
                   </div>
                 </td>
                 <td style={td}>{t.dealers}</td>

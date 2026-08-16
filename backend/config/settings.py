@@ -39,6 +39,13 @@ ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "*").split(",")
 # `example.com` في الواجهة، فظهرت العناوين كلّها خاطئة بلا أن ينبّه أحد.
 PLATFORM_DOMAIN = os.environ.get("PLATFORM_DOMAIN", "wtn4.com")
 
+# كل متجرٍ عنوانٌ جديد (`islam.wtn4.com`) — ولا نعود إلى ملفّ البيئة عند كل
+# متجر. النقطة البادئة تعني «هذا النطاق وما تحته»، فتُضاف هنا لا في `.env`:
+# قائمةٌ يدوية تُنسى، والنسيان يظهر بـ 400 لا تقول أن الاسم هو السبب.
+_wildcard = f".{PLATFORM_DOMAIN}"
+if "*" not in ALLOWED_HOSTS and _wildcard not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_wildcard)
+
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
@@ -76,6 +83,9 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # يستنتج المتجر من العنوان قبل أي شيء آخر — قبل WhiteNoise عمداً: عنوانٌ
+    # لا متجر له لا يقدَّم منه ملفّ واحد.
+    "core.middleware.StoreHostMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -154,8 +164,9 @@ AUTH_USER_MODEL = "core.User"
 
 # Django REST Framework + JWT
 REST_FRAMEWORK = {
+    # JWT المعتاد، وفوقه شرطٌ واحد: توكن متجرٍ لا يفتح متجراً آخر (core/auth.py)
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "core.auth.StoreBoundJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",

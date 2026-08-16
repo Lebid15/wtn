@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { api, type Storefront } from "../api";
 import { useAuth, roleHome } from "../auth";
 
 export default function Login() {
@@ -11,6 +12,20 @@ export default function Login() {
   const [needTotp, setNeedTotp] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // هويّة المتجر صاحبِ العنوان — `null` على الباب العام (wtn4.com)
+  const [store, setStore] = useState<Storefront | null>(null);
+
+  // تُقرأ قبل الدخول: الوكيل يجب أن يرى متجره قبل أن يكتب كلمته، لا بعدها
+  useEffect(() => {
+    api.get("/storefront/").then((r) => {
+      const s: Storefront | null = r.data.store;
+      if (!s) return;
+      setStore(s);
+      document.documentElement.setAttribute("data-theme", s.theme || "teal");
+      document.documentElement.setAttribute("data-font", s.font || "cairo");
+      document.title = s.name;
+    }).catch(() => {});
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,9 +46,11 @@ export default function Login() {
   return (
     <div style={wrap}>
       <form onSubmit={submit} style={card}>
-        <div style={logo}>🎮</div>
+        {store?.logo_url
+          ? <img src={store.logo_url} alt={store.name} style={logoImg} />
+          : <div style={logo}>🎮</div>}
         <h1 style={{ fontSize: 22, color: "var(--primary-dark)", marginBottom: 4 }}>
-          لوحة الوكلاء
+          {store?.name || "لوحة الوكلاء"}
         </h1>
         <p style={{ color: "var(--muted)", fontSize: 14, marginBottom: 22 }}>
           نظام شحن الألعاب
@@ -96,6 +113,13 @@ const card: React.CSSProperties = {
   textAlign: "center",
 };
 const logo: React.CSSProperties = { fontSize: 46, marginBottom: 10 };
+// شعار المتجر — بارتفاعٍ ثابت كي لا يقفز شكل البطاقة بين متجرٍ وآخر
+const logoImg: React.CSSProperties = {
+  height: 54,
+  maxWidth: "100%",
+  objectFit: "contain",
+  marginBottom: 10,
+};
 const lbl: React.CSSProperties = {
   display: "block",
   textAlign: "right",

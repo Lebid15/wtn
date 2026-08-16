@@ -12,6 +12,8 @@ TOKEN_INVALID = (121, "Invalid api token")
 ACCOUNT_DISABLED = (122, "Account is disabled")
 # مستقلّ عن 122 عمداً: «موقوف» يعالجه الوكيل، و«غير مأذون» يعالجه صاحب المتجر
 API_NOT_ENABLED = (123, "API access is not enabled for this account")
+# توكن متجرٍ نُودي به على عنوان متجرٍ آخر — مستقلّ كي لا يُشخَّص خطأَ توكن
+WRONG_STORE_HOST = (124, "This token does not belong to the store at this address")
 
 INSUFFICIENT_BALANCE = (100, "Insufficient balance")
 PRODUCT_NOT_FOUND = (105, "Product not found")

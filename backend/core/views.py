@@ -45,6 +45,16 @@ def login_view(request):
             {"detail": "بيانات الدخول غير صحيحة"}, status=status.HTTP_401_UNAUTHORIZED
         )
 
+    # على عنوان متجرٍ بعينه لا يدخل إلا أهلُه. ويُقال صراحةً ولا يُخلط بخطأ
+    # كلمة السرّ: من دخل عنواناً خاطئاً يجرّب كلمته حتى يُقفل حسابه بلا ذنب.
+    # (`wtn4.com` يبقى مفتوحاً للجميع — قرار المالك 2026-08-16.)
+    store = getattr(request, "store", None)
+    if store is not None and user.tenant_id != store.id:
+        return Response(
+            {"detail": f"هذا الحساب ليس من متجر «{store.name}» — ادخل من عنوان متجرك."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
     # القفل يُفحص **قبل** كلمة السرّ: بعده كانت المحاولة تُختبَر فعلياً على
     # حسابٍ مقفل، فيبقى التخمين ممكناً وإن لم يُفتح الباب.
     if user.is_locked:
@@ -84,6 +94,32 @@ def login_view(request):
     user.save(update_fields=["failed_login_count"])
 
     return Response({"user": UserSerializer(user).data, "tokens": _tokens_for(user)})
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def storefront_view(request):
+    """
+    هويّة المتجر صاحبِ هذا العنوان — تقرأها صفحة الدخول **قبل** أي حساب.
+
+    على الباب العام (`wtn4.com`) تعود `null`، فتظهر الصفحة العامّة كما هي.
+    ولا تُعاد من الحقول إلا ما يُرسم: لا اشتراك ولا أسرار — هي نقطةٌ مفتوحة
+    بلا توكن، يقرؤها كل من كتب العنوان.
+    """
+    store = getattr(request, "store", None)
+    if store is None:
+        return Response({"store": None})
+    return Response({
+        "store": {
+            "name": store.name,
+            "short_name": store.short_name or store.name,
+            "subdomain": store.subdomain,
+            "logo_url": store.logo_url,
+            "theme": store.theme,
+            "theme_color": store.theme_color,
+            "font": store.font,
+        }
+    })
 
 
 @api_view(["GET"])

@@ -1,0 +1,34 @@
+"""
+منع الخلط بين المتاجر على العناوين الفرعية.
+
+`login_id` فريدٌ عبر المنصّة كلّها، فالدخول ينجح من أيّ عنوان. وهذا مقبولٌ على
+الباب العام (`wtn4.com` يبقى مفتوحاً للجميع بقرار المالك)، وغيرُ مقبولٍ على
+عنوان متجرٍ بعينه: `islam.wtn4.com` بابُ إسلام ووكلائه لا باب المنصّة كلّها.
+
+والحراسة هنا في **موضعين لا موضع**، لأن للتوكن حياتين:
+
+1. عند **إصداره** — في `login_view`.
+2. عند **استعماله** — هنا. توكنٌ صدر من الباب العام يظلّ صالحاً ثماني ساعات،
+   وبلا هذا الفحص كان يُلصَق في متصفّحٍ مفتوحٍ على متجرٍ آخر فيعمل.
+"""
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
+FOREIGN_STORE = "هذا الحساب ليس من هذا المتجر."
+
+
+class StoreBoundJWTAuthentication(JWTAuthentication):
+    """المصادقة المعتادة، وفوقها شرطٌ واحد: الحساب من متجر هذا العنوان."""
+
+    def authenticate(self, request):
+        result = super().authenticate(request)
+        if result is None:
+            return None
+
+        user, _token = result
+        # `request` هنا طلبُ DRF، وهو يمرّر ما لا يعرفه إلى طلب Django تحته
+        store = getattr(request, "store", None)
+        if store is not None and user.tenant_id != store.id:
+            raise AuthenticationFailed(FOREIGN_STORE)
+
+        return result

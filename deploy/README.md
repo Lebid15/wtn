@@ -26,7 +26,7 @@ git clone https://github.com/Lebid15/wtn /opt/wtn
 cd /opt/wtn
 
 cp deploy/.env.example deploy/.env
-nano deploy/.env          # املأ الأسرار الأربعة
+nano deploy/.env          # املأ الأسرار الخمسة
 cp deploy/.env.bot.example deploy/.env.bot
 nano deploy/.env.bot
 
@@ -45,6 +45,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
 | `DATABASE_URL` | لوحة Neon (أو Render ← Environment) | **لا يعمل شيء** |
 | `INTERNAL_API_KEY` | `openssl rand -hex 32` | يتوقّف البوت (والواجهة الداخلية تُغلق 503) |
 | `BOT_ENCRYPTION_KEY` | `cd bot && npm run keygen` | **تُفقد كل جلسات واتساب** — احتفظ بنسخة خارج الخادم |
+| `CF_API_TOKEN` | Cloudflare ← My Profile ← API Tokens ← قالب «Edit zone DNS» | تتوقّف عناوين المتاجر الفرعية وحدها — والموقع الرئيسي يعمل. يُنشأ غيرُه ولا يضيع شيء |
 
 `deploy/.env` و`deploy/.env.bot` **خارج المستودع** (`.gitignore`). صلاحيتهما `600`.
 
@@ -77,9 +78,26 @@ cd /opt/wtn && git pull && docker compose -f deploy/docker-compose.yml up -d --b
 
 ---
 
-## ما لم يُبنَ بعد
+## عناوين المتاجر (`islam.wtn4.com`)
 
-**النطاقات الفرعية للمتاجر** (`islam.wtn4.com`). سجلّ `*.wtn4.com` جاهزٌ في
-Cloudflare، وقالبُ الشهادة الشاملة مكتوبٌ معطَّلاً في [Caddyfile](Caddyfile).
-ينقص شيئان: تحقّقٌ عبر DNS بمفتاح Cloudflare، و**وسيطٌ يستنتج المتجر من
-العنوان** — فالكود اليوم يعرف المتجر من الحساب الذي دخل لا من الرابط.
+**لا تُفتح Cloudflare عند كل متجر جديد.** السجلّ `*.wtn4.com` والشهادة
+الشاملة يغطّيان كل اسمٍ لم يُخلق بعد — فإنشاء متجرٍ صار صفّاً في القاعدة،
+وعنوانه يعمل في نفس اللحظة.
+
+| | |
+|---|---|
+| الشهادة | واحدة شاملة، تحقّقُها عبر DNS بـ `CF_API_TOKEN`، يجدّدها Caddy وحده |
+| الموجّه | يُبنى من [caddy.Dockerfile](caddy.Dockerfile) — الصورة الرسمية بلا وحدة Cloudflare |
+| الوسيط | [backend/core/middleware.py](../backend/core/middleware.py) — يستنتج المتجر من `Host` |
+| السحابة | تبقى **رمادية** (`DNS only`). البرتقالية تحتاج تحقّقاً من خطة Cloudflare للشهادة الشاملة |
+
+**ثلاثة عناوين ليست متاجر**: `wtn4.com` و`www` و`api` — تبقى الباب العام
+ولوحة المنصّة. وعنوانٌ لا متجر له يعطي صفحة «لا متجر بهذا العنوان» لا صفحة
+الدخول، ومتجرٌ موقوفٌ يعطي صفحة توقّف.
+
+**فحصُ أن الشهادة صدرت** بعد أول نشر:
+
+```bash
+docker compose -f deploy/docker-compose.yml logs caddy | grep -i "certificate obtained"
+curl -sI https://<أي-متجر>.wtn4.com | head -1
+```

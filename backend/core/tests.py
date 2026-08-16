@@ -600,3 +600,110 @@ class StorePackagesTest(APITestCase):
         self.product.save(update_fields=["status"])
         self.client.force_authenticate(self.dealer)
         self.assertEqual(self.client.get("/api/store/packages/").json()["results"], [])
+
+
+class StoreHostTest(APITestCase):
+    """
+    النطاقات الفرعية: `islam.wtn4.com` باب إسلام، و`wtn4.com` باب الجميع.
+
+    ثلاثة أشياء تُحرَس هنا، وكلّها ثغراتٌ لو انفتحت:
+    عنوانٌ لا متجر له لا يعطي صفحة دخولٍ كاذبة · متجرٌ موقوفٌ بابُه مغلق ·
+    وحسابُ متجرٍ لا يعمل على عنوان متجرٍ آخر لا عند الدخول ولا بتوكنٍ قديم.
+    """
+
+    def setUp(self):
+        self.islam = Tenant.objects.create(
+            subdomain="islam", name="متجر إسلام", status=Tenant.Status.ACTIVE,
+        )
+        self.alaya = Tenant.objects.create(
+            subdomain="alaya", name="علايا", status=Tenant.Status.ACTIVE,
+        )
+        self.islam_dealer = User.objects.create(
+            login_id="i-bayi", name="وكيل إسلام", tenant=self.islam, role=User.Role.BAYI,
+        )
+        self.islam_dealer.set_password("pass123")
+        self.islam_dealer.save()
+        self.alaya_dealer = User.objects.create(
+            login_id="a-bayi", name="وكيل علايا", tenant=self.alaya, role=User.Role.BAYI,
+        )
+        self.alaya_dealer.set_password("pass123")
+        self.alaya_dealer.save()
+
+    def _login(self, login_id, host):
+        return self.client.post(
+            "/api/auth/login/",
+            {"login_id": login_id, "password": "pass123"},
+            format="json", HTTP_HOST=host,
+        )
+
+    # ————— استنتاج المتجر من العنوان —————
+
+    def test_platform_domain_and_reserved_names_are_not_stores(self):
+        for host in ("wtn4.com", "www.wtn4.com", "api.wtn4.com"):
+            r = self.client.get("/api/storefront/", HTTP_HOST=host)
+            self.assertEqual(r.status_code, 200, host)
+            self.assertIsNone(r.json()["store"], host)
+
+    def test_store_subdomain_returns_its_identity(self):
+        store = self.client.get("/api/storefront/", HTTP_HOST="islam.wtn4.com").json()["store"]
+        self.assertEqual(store["name"], "متجر إسلام")
+        self.assertEqual(store["subdomain"], "islam")
+
+    def test_localhost_stays_the_general_door(self):
+        """بدون هذا ينقطع التطوير المحلّي ونبضةُ البوت التي تنادي `http://web:8000`."""
+        for host in ("localhost", "127.0.0.1", "web", "46.224.47.213"):
+            r = self.client.get("/api/storefront/", HTTP_HOST=host)
+            self.assertEqual(r.status_code, 200, host)
+            self.assertIsNone(r.json()["store"], host)
+
+    def test_unknown_subdomain_says_so_instead_of_a_login_page(self):
+        """صفحةُ دخولٍ هنا كذبة: يجرّب الزائر كلمته حتى يُقفل حسابه بلا ذنب."""
+        r = self.client.get("/", HTTP_HOST="nobody.wtn4.com")
+        self.assertEqual(r.status_code, 404)
+        self.assertIn("لا متجر بهذا العنوان", r.content.decode())
+
+    def test_unknown_subdomain_answers_json_on_api_paths(self):
+        r = self.client.get("/api/storefront/", HTTP_HOST="nobody.wtn4.com")
+        self.assertEqual(r.status_code, 404)
+        self.assertEqual(r.json()["code"], "store_not_found")
+
+    # ————— المتجر الموقوف: باب مغلق (قرار المالك) —————
+
+    def test_suspended_store_closes_its_door_to_everyone(self):
+        self.islam.status = Tenant.Status.SUSPENDED
+        self.islam.save(update_fields=["status"])
+        r = self.client.get("/", HTTP_HOST="islam.wtn4.com")
+        self.assertEqual(r.status_code, 403)
+        self.assertIn("متوقّف مؤقّتاً", r.content.decode())
+
+    def test_suspended_store_is_still_reachable_from_the_general_door(self):
+        """الإيقاف يغلق عنوان المتجر، ولا يُسقط المنصّة عن أحد."""
+        self.islam.status = Tenant.Status.SUSPENDED
+        self.islam.save(update_fields=["status"])
+        self.assertEqual(self.client.get("/api/storefront/", HTTP_HOST="wtn4.com").status_code, 200)
+
+    # ————— منع الخلط —————
+
+    def test_dealer_enters_from_his_own_store_address(self):
+        self.assertEqual(self._login("i-bayi", "islam.wtn4.com").status_code, 200)
+
+    def test_dealer_of_another_store_is_refused(self):
+        r = self._login("a-bayi", "islam.wtn4.com")
+        self.assertEqual(r.status_code, 403)
+        self.assertIn("ليس من متجر", r.json()["detail"])
+
+    def test_the_general_door_stays_open_to_all(self):
+        """قرار المالك: `wtn4.com` يبقى بابَ الجميع، فلا ينقطع من حفظ الرابط."""
+        for login_id in ("i-bayi", "a-bayi"):
+            self.assertEqual(self._login(login_id, "wtn4.com").status_code, 200, login_id)
+
+    def test_a_token_issued_at_the_general_door_does_not_open_another_store(self):
+        """للتوكن حياتان: إصدارٌ واستعمال. حراسةُ الإصدار وحدها تترك ثماني ساعات."""
+        token = self._login("a-bayi", "wtn4.com").json()["tokens"]["access"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(self.client.get("/api/auth/me/", HTTP_HOST="alaya.wtn4.com").status_code, 200)
+        # 401 لا 403 عمداً: هي رسالةُ «اعتمادُك لا يصلح هنا»، والواجهة تقرؤها
+        # «سجّل دخولك على هذا العنوان» — وهو بالضبط ما نريده منه.
+        r = self.client.get("/api/auth/me/", HTTP_HOST="islam.wtn4.com")
+        self.assertEqual(r.status_code, 401)
+        self.assertIn("ليس من هذا المتجر", r.json()["detail"])

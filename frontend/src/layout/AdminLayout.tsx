@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import Icon from "../components/Icon";
@@ -104,10 +104,15 @@ function subnavFor(path: string) {
   return SUBNAV_BAYILER; // /dealers + /ayarlar
 }
 
+// جدار الإزعاج: كم ثانيةً يُترك صاحب المتجر في القسم قبل ردّه إلى الرئيسية.
+// ثلاثٌ تكفي ليقرأ العنوان ويفهم أن الاشتراك هو السبب، ولا تكفي للعمل.
+const NAG_SECONDS = 3;
+
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const isAgent = user?.role === "ana_bayi";
   const loc = useLocation();
+  const nav = useNavigate();
   const [ann, setAnn] = useState<{ message: string; ticker: string } | null>(null);
   const [themeCfg, setThemeCfg] = useState<ThemeConfig>({});
   const [customizerOpen, setCustomizerOpen] = useState(false);
@@ -125,6 +130,27 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       applyThemeConfig(cfg);
     }).catch(() => {});
   }, []);
+
+  /**
+   * جدار الإزعاج (قرار المالك 2026-08-16).
+   *
+   * انتهى الاشتراك ⇒ **البيع لا يتوقّف**: وكلاء المتجر يشترون كالمعتاد، فلا
+   * يُعاقَب مَن لا ذنب له. والضغط على صاحب المتجر وحده — من يدفع الفاتورة:
+   * كلّما فتح قسماً رُدَّ إلى الرئيسية بعد ثلاث ثوانٍ، فاللوحة تصير غير
+   * صالحةٍ للعمل بلا أن يُغلق الباب في وجهه.
+   *
+   * والوكيل الكبير مستثنى — لا شأن له بفاتورة صاحب المتجر.
+   */
+  const nagging = !isAgent && (sub?.state === "grace" || sub?.state === "blocked");
+  const [nagLeft, setNagLeft] = useState(NAG_SECONDS);
+
+  useEffect(() => {
+    if (!nagging || loc.pathname.startsWith("/home")) return;
+    setNagLeft(NAG_SECONDS);
+    const tick = setInterval(() => setNagLeft((n) => Math.max(0, n - 1)), 1000);
+    const kick = setTimeout(() => nav("/home", { replace: true }), NAG_SECONDS * 1000);
+    return () => { clearInterval(tick); clearTimeout(kick); };
+  }, [nagging, loc.pathname, nav]);
 
   /** عدّادات شريط التنبيه — نداء واحد كل دقيقة، ومرّة عند كل تنقّل. */
   useEffect(() => {
@@ -147,6 +173,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     <div className="app">
       {/* ===== شريط الاشتراك — فوق كل شيء حين يقارب أو ينتهي ===== */}
       {sub && sub.state !== "ok" && !isAgent && <SubBanner sub={sub} />}
+
+      {/* الردّ إلى الرئيسية بلا سببٍ معلن يُقرأ عطلاً لا رسالة — فيُقال العدّ */}
+      {nagging && !loc.pathname.startsWith("/home") && (
+        <div style={nagBar}>
+          <Icon name="warning" size={16} />
+          <span>
+            اشتراكك منتهٍ — تعود إلى الرئيسية بعد {nagLeft} ثانية.
+            الأقسام تُفتح كاملةً بمجرّد التجديد، ووكلاؤك يشترون كالمعتاد الآن.
+          </span>
+          <Link to="/settings/invoices" style={{ color: "#fff", marginInlineStart: "auto", fontWeight: 800 }}>
+            جدّد الآن ←
+          </Link>
+        </div>
+      )}
 
       {/* ===== شريط تنبيه المنصّة (فوق الهيدر — المساحة محجوزة دائماً) ===== */}
       {flags.show_announce && (
@@ -358,6 +398,11 @@ const footer: React.CSSProperties = {
  * شريط الاشتراك بثلاث لهجات: تذكيرٌ قبل الانتهاء، ثم إنذارٌ في مهلة السماح،
  * ثم خبرٌ بأن الشراء توقّف. ولا يُخفى بزرٍّ: ما يُطفأ يُنسى، وهذا لا يُنسى.
  */
+const nagBar: React.CSSProperties = {
+  background: "#991b1b", color: "#fff", padding: "9px 18px",
+  display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, fontWeight: 700,
+};
+
 function SubBanner({ sub }: { sub: { state: string; expires_at: string | null; days_left: number | null } }) {
   const tone =
     sub.state === "blocked" ? { bg: "#7f1d1d", icon: "warning" as const }

@@ -19,14 +19,23 @@ services:
     # يخرج إلى الشبكة (مزوّدون + قاعدة Neon) ويستقبل من caddy وحده
     networks: [wtn]
 
+  # يُبنى ولا يُسحب جاهزاً: الشهادة الشاملة للمتاجر تحتاج وحدة Cloudflare
+  # التي لا توجد في الصورة الرسمية (caddy.Dockerfile يشرح لماذا).
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: .
+      dockerfile: caddy.Dockerfile
     restart: unless-stopped
     ports: ["80:80", "443:443"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data      # الشهادات — لا تُحذف وإلا أُعيد إصدارها كل مرّة
       - caddy_config:/config
+    # المفتاح من `deploy/.env` نفسه — لا ملفٍّ جديد: `env_file` لملفٍّ ناقص
+    # يُفشل `up` كلَّه، فيصير نسيانُ المفتاح إسقاطاً للموقع لا تعطيلاً لميزة.
+    # و`:-` تجعل غيابَه فراغاً لا خطأ.
+    environment:
+      CF_API_TOKEN: ${CF_API_TOKEN:-}
     depends_on: [web]
     networks: [wtn]
 

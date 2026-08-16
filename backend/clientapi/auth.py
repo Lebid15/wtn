@@ -55,6 +55,14 @@ class ApiTokenAuthentication(authentication.BaseAuthentication):
             request.api_auth_error = errors.API_NOT_ENABLED
             return None
 
+        # عنوان متجرٍ بعينه يخدم أهله وحدهم — وإلّا كانت العناوين الفرعية
+        # باباً خلفياً يلتفّ على عزل المتاجر. و`api.wtn4.com` والنطاق العام
+        # يخدمان الجميع كما كانا، فلا ينقطع عميلٌ مربوطٌ اليوم.
+        store = getattr(request, "store", None)
+        if store is not None and user.tenant_id != store.id:
+            request.api_auth_error = errors.WRONG_STORE_HOST
+            return None
+
         # F() لا `row.calls + 1`: النداءات متوازية، والقراءة‑ثم‑الكتابة تضيّع العدّ
         now = timezone.now()
         fields = {"calls": F("calls") + 1}

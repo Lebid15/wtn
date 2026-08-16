@@ -27,6 +27,19 @@ export interface Tenant {
   /** عملة دفتر المتجر — كل رقم في لوحة الإدارة معروض بها */
   base_currency?: string;
 }
+/**
+ * هويّة المتجر صاحبِ العنوان المفتوح — تُقرأ قبل الدخول من `GET /storefront/`.
+ * `null` تعني الباب العام (`wtn4.com`)، فتظهر صفحة الدخول العامّة.
+ */
+export interface Storefront {
+  name: string;
+  short_name: string;
+  subdomain: string;
+  logo_url: string;
+  theme: string;
+  theme_color: string;
+  font: string;
+}
 export interface User {
   id: number;
   login_id: string;
