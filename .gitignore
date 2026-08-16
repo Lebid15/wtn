@@ -17,3 +17,7 @@ build/
 
 # Logs
 *.log
+
+# أسرار النشر — لا تدخل المستودع
+deploy/.env
+deploy/.env.bot

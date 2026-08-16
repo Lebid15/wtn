@@ -33,6 +33,11 @@ DEBUG = os.environ.get("DEBUG", "1") == "1"
 
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "*").split(",")
 
+# خلف Caddy: العنوان الحقيقي والبروتوكول يصلان في ترويستين. بدون هذا يظنّ
+# Django كل اتصال غير مشفّر، فيعيد التوجيه إلى https إلى ما لا نهاية.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+
 CSRF_TRUSTED_ORIGINS = [
     o for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o
 ]
@@ -165,7 +170,10 @@ SIMPLE_JWT = {
 }
 
 # CORS (dev: allow the Vite frontend)
-CORS_ALLOW_ALL_ORIGINS = True  # dev only
+# الواجهة والـ API على **أصل واحد** (Django يقدّمهما معاً)، فلا متصفّح يعبر
+# أصلاً. وعملاء الواجهة الخارجية خوادمُ لا متصفّحات فلا يمسّهم CORS.
+# فتُفتح للجميع في التطوير وحده — وكانت مفتوحةً في الإنتاج بتعليق «dev only».
+CORS_ALLOW_ALL_ORIGINS = DEBUG
 
 
 # Password validation

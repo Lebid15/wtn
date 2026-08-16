@@ -1,0 +1,50 @@
+# نشر wtn على خادم واحد.
+#
+#   cd /opt/wtn && docker compose -f deploy/docker-compose.yml up -d --build
+#
+# ثلاث خدمات: الموقع، وموجّهٌ يصنع شهادة HTTPS وحده، وبوت واتساب.
+# القاعدة **خارج الخادم** (Neon) عمداً: ضاعت البيانات مرّةً حين كانت رهينة
+# المضيف، فلا تعود رهينة هذا الخادم أيضاً.
+
+name: wtn
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: [.env]
+    expose: ["8000"]
+    # يخرج إلى الشبكة (مزوّدون + قاعدة Neon) ويستقبل من caddy وحده
+    networks: [wtn]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # الشهادات — لا تُحذف وإلا أُعيد إصدارها كل مرّة
+      - caddy_config:/config
+    depends_on: [web]
+    networks: [wtn]
+
+  # بوت واتساب: كان على جهاز المالك فينام معه. هنا يعمل دائماً.
+  # `network_mode` عادي كي يصل إلى الموقع بالاسم الداخلي `web`.
+  bot:
+    image: node:22-slim
+    restart: unless-stopped
+    working_dir: /app
+    volumes: ["../bot:/app"]
+    command: sh -c "npm ci --omit=dev && npm start"
+    env_file: [.env.bot]
+    depends_on: [web]
+    networks: [wtn]
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  wtn:

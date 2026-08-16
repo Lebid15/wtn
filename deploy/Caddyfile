@@ -1,0 +1,39 @@
+# الموجّه: يستقبل الطلبات ويمرّرها إلى الموقع، ويصنع شهادة HTTPS وحده
+# ويجدّدها وحده — بلا خطوة يدوية تُنسى بعد تسعين يوماً.
+
+{
+	# بريدٌ لتنبيهات الشهادة من Let's Encrypt
+	email alayatl.tr@gmail.com
+}
+
+wtn4.com, www.wtn4.com, api.wtn4.com {
+	encode zstd gzip
+
+	# الردود على `/client/api/` تخصّ عملاء خارجيين لا متصفّحات، ولا تُخزَّن
+	header /client/api/* Cache-Control "no-store"
+
+	reverse_proxy web:8000 {
+		# بدونهما يرى Django عنوان الموجّه لا عنوان الزائر، ويظنّ الاتصال
+		# غير مشفّر فيعيد التوجيه إلى https إلى ما لا نهاية.
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+	}
+}
+
+# النطاقات الفرعية للمتاجر (islam.wtn4.com …).
+#
+# الشهادة الشاملة تحتاج تحقّقاً عبر DNS (مفتاح Cloudflare) — ولمّا كان الكود
+# لا يميّز المتجر من العنوان بعد، تُترك حتى تُبنى الميزة. وسجلّ `*.wtn4.com`
+# جاهزٌ في Cloudflare من الآن.
+#
+# *.wtn4.com {
+# 	tls { dns cloudflare {env.CF_API_TOKEN} }
+# 	reverse_proxy web:8000 { header_up X-Forwarded-Proto {scheme} }
+# }
