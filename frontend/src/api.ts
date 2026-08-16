@@ -111,9 +111,16 @@ export interface Provider {
   type_label: string;
   status: string;
   status_label: string;
+  // الأرقام بعملة المزوّد، ويرافقها مقابلُها بعملة الدفتر (null = هي نفسها،
+  // أو لا سعر صرف مضبوط لها)
+  currency: string;
+  base_currency: string;
   real_balance: string;
   balance: string;
   debt: string;
+  real_balance_base: string | null;
+  balance_base: string | null;
+  debt_base: string | null;
   loss_guard: boolean;
   auto_update: boolean;
   config: Record<string, string>;

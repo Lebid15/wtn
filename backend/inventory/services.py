@@ -79,15 +79,18 @@ def build(tenant) -> dict:
     # الرقم المعتمد هو `real_balance` (ما ردّه المزوّد فعلاً)، وقد يكون سالباً
     # فيعني أننا مدينون له. و`balance`/`debt` اليدويان يُعرضان ملاحظةً ولا
     # يُجمعان: النموذج لا يوثّق عملتهما، وجمع رقمٍ بعملة مجهولة يفسد الجرد كلّه.
+    # وكل مزوّد يُحسب **بعملته هو** (`Provider.currency`) لا بليرةٍ مفترضة.
     prov_lines = []
-    for p in Provider.objects.filter(tenant=tenant).order_by("sort_order", "id"):
+    providers = list(Provider.objects.filter(tenant=tenant).order_by("sort_order", "id"))
+    for p in providers:
         bits = []
         if p.balance:
             bits.append(f"رصيد يدوي {p.balance}")
         if p.debt:
             bits.append(f"دَين {p.debt}")
         prov_lines.append(_line(
-            tenant, p.name, p.real_balance, cur.PROVIDER_CURRENCY,
+            # كلٌّ بعملته هو — لا بليرةٍ مفترضةٍ للجميع
+            tenant, p.name, p.real_balance, cur.currency_of(p),
             note=" · ".join(bits), item_id=p.id,
         ))
     groups.append(_group(
@@ -176,8 +179,13 @@ def build(tenant) -> dict:
     notes = []
     if any(g["unresolved"] for g in counted):
         notes.append("بنودٌ عملتها بلا سعر صرف مضبوط لا تدخل المجموع — اضبط سعرها في «أسعار الصرف».")
-    if not cur.rate_of(tenant, cur.PROVIDER_CURRENCY):
-        notes.append(f"لا سعر صرف لـ{cur.PROVIDER_CURRENCY} — أرصدة المزوّدين لا تُحوَّل.")
+    missing = sorted({
+        c for c in (cur.currency_of(p) for p in providers) if not cur.rate_of(tenant, c)
+    })
+    if missing:
+        notes.append(
+            f"لا سعر صرف لـ{'، '.join(missing)} — أرصدة مزوّديها لا تُحوَّل."
+        )
 
     return {
         "base_currency": base,

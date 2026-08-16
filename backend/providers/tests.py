@@ -9,6 +9,7 @@
 from decimal import Decimal
 
 from django.test import TestCase
+from rest_framework.test import APITestCase
 
 from catalog.models import Game, Product
 from core.models import Tenant, User, Wallet
@@ -288,3 +289,115 @@ class InternalRoundTripTest(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.PROCESSING)
         self.assertEqual(Wallet.objects.get(user=self.shop).balance, before)
+
+
+class ProviderCurrencyTest(APITestCase):
+    """
+    لكل مزوّد عملته. كان النظام يفترضها ليرةً للجميع، فيقسم سعر مزوّدٍ دولاريّ
+    على ~41 ويظهر رخيصاً أربعين ضعفاً — ثم تمرّره حماية الخسارة مطمئنّة.
+    """
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(
+            subdomain="t1", name="متجر", base_currency="USD",
+            exchange_rates={"TRY": "41.5"},
+        )
+        self.admin = User.objects.create(
+            login_id="a1", name="مدير", tenant=self.tenant,
+            role=User.Role.TENANT_ADMIN, is_staff=True,
+        )
+        self.client.force_authenticate(self.admin)
+
+    def _provider(self, currency="TRY", **kw):
+        return Provider.objects.create(
+            tenant=self.tenant, name=kw.pop("name", "مزوّد"),
+            type=Provider.Type.CARD_STORE, config={"code": "znet"},
+            currency=currency, **kw,
+        )
+
+    def test_lira_balance_shows_its_dollar_equivalent(self):
+        """100 ل.ت مع 1$ = 41.5 ل.ت ⇒ 2.41$."""
+        self._provider("TRY", real_balance=Decimal("100"), debt=Decimal("100"))
+        row = self.client.get("/api/providers/").json()[0]
+        self.assertEqual(row["currency"], "TRY")
+        self.assertEqual(row["real_balance"], "100.00")
+        self.assertEqual(row["real_balance_base"], "2.41")
+        self.assertEqual(row["debt_base"], "2.41")
+        self.assertEqual(row["base_currency"], "USD")
+
+    def test_a_dollar_provider_has_no_second_line(self):
+        """عملته عملةُ الدفتر — فسطرٌ ثانٍ يكرّر الرقم نفسه لغوٌ."""
+        self._provider("USD", real_balance=Decimal("100"))
+        row = self.client.get("/api/providers/").json()[0]
+        self.assertIsNone(row["real_balance_base"])
+
+    def test_a_currency_without_a_rate_says_so_instead_of_lying(self):
+        self._provider("EUR", real_balance=Decimal("100"))
+        row = self.client.get("/api/providers/").json()[0]
+        self.assertEqual(row["currency"], "EUR")
+        self.assertIsNone(row["real_balance_base"])   # الواجهة تكتب «لا سعر صرف لـEUR»
+
+    def test_totals_convert_before_summing(self):
+        """جمعُ ليرةٍ على دولار يخرج رقماً بلا معنى — فيُحوَّل كلٌّ أوّلاً."""
+        self._provider("TRY", name="ZNET", real_balance=Decimal("415"))    # = 10$
+        self._provider("USD", name="ZDK", real_balance=Decimal("5"))       # = 5$
+        totals = self.client.get("/api/providers/totals/").json()
+        self.assertEqual(totals["real_balance"], "15.00")
+        self.assertEqual(totals["currency"], "USD")
+        self.assertEqual(totals["unconverted"], [])
+
+    def test_totals_name_what_they_could_not_convert(self):
+        """الإسقاط الصامت يجعل المجموع كاذباً بهدوء."""
+        self._provider("USD", name="ZDK", real_balance=Decimal("5"))
+        self._provider("EUR", name="آخر", real_balance=Decimal("99"))
+        totals = self.client.get("/api/providers/totals/").json()
+        self.assertEqual(totals["real_balance"], "5.00")
+        self.assertEqual(totals["unconverted"], ["EUR"])
+
+    def test_old_providers_default_to_lira(self):
+        """المُعدّون قبل الحقل يبقون على السلوك السابق فلا تنقلب أسعارهم."""
+        p = Provider.objects.create(tenant=self.tenant, name="قديم",
+                                    type=Provider.Type.CARD_STORE)
+        self.assertEqual(p.currency, "TRY")
+
+
+class CostConversionUsesProviderCurrencyTest(TestCase):
+    """تكلفة الطلب تُحوَّل بعملة مزوّدها هو — لا بليرةٍ مفترضة للجميع."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(
+            subdomain="t1", name="متجر", base_currency="USD",
+            exchange_rates={"TRY": "41.5"},
+        )
+        self.game = Game.objects.create(tenant=self.tenant, name="PUBG")
+        self.product = Product.objects.create(
+            tenant=self.tenant, game=self.game, name="60 UC",
+            cost_price=Decimal("6"), recommended_price=Decimal("100"),
+        )
+        self.dealer = User.objects.create(
+            login_id="d1", name="وكيل", tenant=self.tenant, role=User.Role.BAYI, dealer_no=1)
+        Wallet.objects.create(tenant=self.tenant, user=self.dealer, balance=Decimal("1000"))
+
+    def _apply(self, provider_currency, reported_cost):
+        from orders import services
+        from providers.adapters.base import ExecutionResult
+
+        provider = Provider.objects.create(
+            tenant=self.tenant, name="مزوّد", type=Provider.Type.CARD_STORE,
+            config={"code": "znet"}, currency=provider_currency,
+        )
+        order = services.create_order(self.dealer, self.product)
+        result = ExecutionResult(status="success", cost=Decimal(reported_cost))
+        services._apply_real_cost(order, result, provider)
+        return order
+
+    def test_a_lira_provider_is_divided_by_the_rate(self):
+        self.assertEqual(self._apply("TRY", "41.50").cost_price, Decimal("1.00"))
+
+    def test_a_dollar_provider_is_taken_as_is(self):
+        """كان يُقسم على 41.5 فيصير 1.00 — أي طلبٌ خاسر يبدو رابحاً."""
+        self.assertEqual(self._apply("USD", "41.50").cost_price, Decimal("41.50"))
+
+    def test_profit_follows_the_corrected_cost(self):
+        order = self._apply("USD", "41.50")
+        self.assertEqual(order.profit, order.sell_price - Decimal("41.50"))

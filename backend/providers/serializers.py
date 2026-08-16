@@ -18,15 +18,48 @@ KIND_LABELS = {
 class ProviderSerializer(serializers.ModelSerializer):
     type_label = serializers.SerializerMethodField()
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+    # الأرقام محفوظة **بعملة المزوّد** كما ردّها. ويرافقها مقابلُها بعملة
+    # الدفتر محسوباً هنا لا في المتصفّح — سعر الصرف مرجعٌ واحد على الخادم،
+    # وحسابُه في الواجهة يكرّره ويجعله يختلف بين شاشة وأخرى.
+    base_currency = serializers.SerializerMethodField()
+    real_balance_base = serializers.SerializerMethodField()
+    balance_base = serializers.SerializerMethodField()
+    debt_base = serializers.SerializerMethodField()
 
     class Meta:
         model = Provider
         fields = [
             "id", "name", "type", "type_label", "config", "status", "status_label",
-            "real_balance", "balance", "debt", "loss_guard", "auto_update",
+            "currency", "base_currency",
+            "real_balance", "balance", "debt",
+            "real_balance_base", "balance_base", "debt_base",
+            "loss_guard", "auto_update",
             "balance_alert_threshold", "sort_order", "created_at",
         ]
         read_only_fields = ["tenant", "created_at"]
+
+    def _base(self, obj, value):
+        """None = لا سعر صرف مضبوط لهذه العملة — تقولها الواجهة صراحةً."""
+        from core import currency as cur
+
+        if cur.currency_of(obj) == cur.base_currency(obj.tenant):
+            return None          # لا معنى لسطرٍ ثانٍ يكرّر الرقم نفسه
+        converted = cur.to_base(obj.tenant, value, cur.currency_of(obj))
+        return str(converted) if converted is not None else None
+
+    def get_base_currency(self, obj) -> str:
+        from core import currency as cur
+
+        return cur.base_currency(obj.tenant)
+
+    def get_real_balance_base(self, obj):
+        return self._base(obj, obj.real_balance)
+
+    def get_balance_base(self, obj):
+        return self._base(obj, obj.balance)
+
+    def get_debt_base(self, obj):
+        return self._base(obj, obj.debt)
 
     def get_type_label(self, obj) -> str:
         code = ((obj.config or {}).get("code") or "").lower()

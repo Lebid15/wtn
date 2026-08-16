@@ -31,22 +31,37 @@ def rate_of(tenant, currency: str) -> Decimal:
     return r if r > 0 else Decimal("0")
 
 
-# عملة المزوّدين: كتالوجاتهم كلّها تُسعّر بالليرة التركية. كل رقم يصل منهم
-# يُحوَّل إلى عملة الدفتر **عند حدوده** — فلا يدخل القاعدة رقمٌ بعملة أخرى.
+# عملة المزوّد الافتراضية حين لا تُضبط — ZNET وأمثاله يسعّرون بالليرة.
+# وهي افتراضٌ لا قاعدة: كل مزوّد يحمل عملته في `Provider.currency`.
 PROVIDER_CURRENCY = "TRY"
 
 
-def from_provider(tenant, amount):
-    """من عملة المزوّدين إلى عملة دفتر المتجر. None = تعذّر (لا سعر صرف مضبوط)."""
+def to_base(tenant, amount, source: str):
+    """من عملة `source` إلى عملة دفتر المتجر. None = تعذّر (لا سعر صرف مضبوط)."""
     if amount is None or amount == "":
         return None
-    rate = rate_of(tenant, PROVIDER_CURRENCY)
+    rate = rate_of(tenant, source)   # تعيد 1 إن كانت هي عملة الدفتر
     if rate <= 0:
         return None
     try:
         return (Decimal(str(amount).replace(",", ".")) / rate).quantize(CENT)
     except (InvalidOperation, TypeError, ValueError):
         return None
+
+
+def currency_of(provider) -> str:
+    """عملة هذا المزوّد — والافتراضية لمن أُنشئ قبل وجود الحقل."""
+    return (getattr(provider, "currency", "") or PROVIDER_CURRENCY)
+
+
+def from_provider(tenant, amount, provider=None):
+    """
+    من عملة المزوّد إلى عملة دفتر المتجر.
+
+    `provider` صريحٌ دائماً حيث أمكن: بدونه نفترض الليرة، وهو افتراضٌ يقسم
+    سعر مزوّدٍ دولاريّ على ~41 فيبدو رخيصاً — ثم تمرّره حماية الخسارة.
+    """
+    return to_base(tenant, amount, currency_of(provider))
 
 
 def display_currency(user) -> str:

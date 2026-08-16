@@ -182,7 +182,7 @@ def refresh_costs_view(request):
     تحديث تكلفة الباقات من كتالوج مزوّد بعينه — تصير تكلفتُنا سعرَه.
 
     يُجلب الكتالوج **مرّة واحدة** ثم تُطابَق الروابط محلياً. وسعر المزوّد
-    بالليرة فيُحوَّل إلى عملة الدفتر قبل الحفظ (`currency.from_provider`).
+    وسعرُه بعملته هو (`Provider.currency`) فيُحوَّل إلى عملة الدفتر قبل الحفظ.
 
     {provider, products: [ids] | فارغ = الكل}
     """
@@ -197,9 +197,10 @@ def refresh_costs_view(request):
     if adapter is None:
         return Response({"detail": f"«{provider.name}» منفّذ يدوي — لا كتالوج له"}, status=400)
 
-    if currency.rate_of(tenant, currency.PROVIDER_CURRENCY) <= 0:
+    prov_cur = currency.currency_of(provider)
+    if currency.rate_of(tenant, prov_cur) <= 0:
         return Response(
-            {"detail": f"لا سعر صرف مضبوط لـ{currency.PROVIDER_CURRENCY} — "
+            {"detail": f"لا سعر صرف مضبوط لـ{prov_cur} (عملة «{provider.name}») — "
                        f"اضبطه في «الإعدادات ← أسعار الصرف» أولاً"},
             status=400,
         )
@@ -232,7 +233,7 @@ def refresh_costs_view(request):
             if not found:
                 skipped.append({"name": link.product.name, "note": why})
                 continue
-            cost = currency.from_provider(tenant, str(found.get("price") or "").strip())
+            cost = currency.from_provider(tenant, str(found.get("price") or "").strip(), provider)
             if cost is None or cost <= 0:
                 skipped.append({"name": link.product.name, "note": "المزوّد لا يعطي سعراً لها"})
                 continue
@@ -638,10 +639,10 @@ def product_links_view(request):
     extra = request.data.get("extra") or {}
     if not isinstance(extra, dict):
         extra = {}
-    # السعر يصل من كتالوج المزوّد بالليرة — يُحوَّل هنا فلا يدخل القاعدة
+    # السعر يصل من كتالوج المزوّد بعملته — يُحوَّل هنا فلا يدخل القاعدة
     # رقمٌ بعملة غير عملة الدفتر.
     if extra.get("price") not in (None, ""):
-        converted = currency.from_provider(tenant, extra["price"])
+        converted = currency.from_provider(tenant, extra["price"], provider)
         extra = {**extra, "price": str(converted)} if converted is not None else (
             {k: v for k, v in extra.items() if k != "price"}
         )
@@ -706,9 +707,9 @@ def refresh_link_prices_view(request):
             if not found:
                 continue
             extra = dict(link.extra or {})
-            # سعر المزوّد بالليرة — يُحوَّل إلى عملة الدفتر قبل الحفظ، وإلا
+            # سعر المزوّد بعملته — يُحوَّل إلى عملة الدفتر قبل الحفظ، وإلا
             # قارنته حماية الخسارة بسعر بيعٍ بعملة أخرى فرأت كل طلب خاسراً.
-            converted = currency.from_provider(tenant, str(found.get("price") or "").strip())
+            converted = currency.from_provider(tenant, str(found.get("price") or "").strip(), provider)
             price = str(converted) if converted is not None else ""
             name = str(found.get("name") or "")[:200]
             if not price or (extra.get("price") == price and link.package_name == name):

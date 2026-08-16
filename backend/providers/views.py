@@ -1,4 +1,6 @@
 """API للمزوّدين (Oyun Apileri) — معزول لكل مستأجر."""
+from decimal import Decimal
+
 from django.db.models import Sum
 from rest_framework import status as http_status
 from rest_framework import viewsets
@@ -77,8 +79,28 @@ class ProviderViewSet(viewsets.ModelViewSet):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def provider_totals_view(request):
-    """مجاميع المزوّدين (صف Toplamlar في المرجع)."""
-    agg = Provider.objects.filter(tenant=request.user.tenant).aggregate(
-        real_balance=Sum("real_balance"), balance=Sum("balance"), debt=Sum("debt"),
-    )
-    return Response({k: str(v or 0) for k, v in agg.items()})
+    """
+    مجاميع المزوّدين (صف Toplamlar في المرجع) — **بعملة الدفتر**.
+
+    كان يجمع الأرقام كما هي، وذلك يجمع ليرةً على دولار فيخرج رقمٌ بلا معنى.
+    فيُحوَّل كلُّ مزوّد بعملته هو قبل الجمع، ومن لا سعر صرف لعملته يُستثنى
+    ويُقال عددُه صراحةً — إسقاطُه صامتاً يجعل المجموع كاذباً بهدوء.
+    """
+    from core import currency as cur
+
+    tenant = request.user.tenant
+    totals = {"real_balance": Decimal("0"), "balance": Decimal("0"), "debt": Decimal("0")}
+    skipped = set()
+    for p in Provider.objects.filter(tenant=tenant):
+        c = cur.currency_of(p)
+        for field in totals:
+            converted = cur.to_base(tenant, getattr(p, field), c)
+            if converted is None:
+                skipped.add(c)
+            else:
+                totals[field] += converted
+
+    out = {k: str(v) for k, v in totals.items()}
+    out["currency"] = cur.base_currency(tenant)
+    out["unconverted"] = sorted(skipped)
+    return Response(out)

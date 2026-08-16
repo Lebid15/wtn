@@ -273,7 +273,8 @@ def _apply_real_cost(order: Order, result, provider) -> list:
     # حدود النظام. بدونه تدخل ليرةٌ إلى حقل دولاري فيظهر الطلب خاسراً بأربعين
     # ضعفاً. أمّا المزوّد الداخلي فقد حوّل بنفسه (المتجران في قاعدتنا ويعرف
     # عملتيهما)، وتمريره على محوّل الليرة كان يقسمه على ~41 فيعكس الخطأ.
-    cost = result.cost if result.cost_is_base else currency.from_provider(order.tenant, result.cost)
+    cost = (result.cost if result.cost_is_base
+            else currency.from_provider(order.tenant, result.cost, provider))
     if cost is None:
         return []
     order.cost_price = cost

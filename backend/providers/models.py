@@ -27,6 +27,14 @@ class Provider(models.Model):
     config = models.JSONField(default=dict, blank=True)  # مفاتيح/روابط API
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
 
+    # عملة هذا المزوّد: بها يسعّر كتالوجه وبها يعطي رصيده ودَينه.
+    # كان النظام يفترضها ليرةً تركيةً لكل مزوّد خارجي — صحيحٌ لـZNET وخطأٌ
+    # لغيره، فيُقسَم سعرُ مزوّدٍ دولاريّ على ~41 ويظهر رخيصاً عشرات المرّات.
+    # افتراضها TRY يُبقي سلوك المزوّدين المُعدّين سابقاً كما هو.
+    # لا معنى لها في «بنك البينات» و«المنفّذ اليدوي» و«المتجر الداخلي» —
+    # الأوّلان بلا أسعار خارجية، والثالث يحوّل بنفسه من دفتر المورّد.
+    currency = models.CharField(max_length=8, default="TRY")
+
     real_balance = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))  # Gerçek Bakiye
     balance = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))       # Bakiye
     debt = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))          # Borç

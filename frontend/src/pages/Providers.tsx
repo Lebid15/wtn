@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { api, type Provider } from "../api";
 import Icon from "../components/Icon";
-import { useBaseSymbol } from "../currency";
+import { symbolOf, useBaseSymbol } from "../currency";
+
+/** رقمٌ مجرّد بلا رمز عملة — الرمز يُلحق بحسب عملة كل مزوّد. */
+const num = (v: string | number) =>
+  Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
 export default function Providers() {
   const cur = useBaseSymbol();
@@ -26,6 +30,30 @@ export default function Providers() {
   useEffect(() => load(), [showPassive]);
 
   const money = (v: string) => Number(v).toLocaleString("en-US", { minimumFractionDigits: 2 }) + " " + cur;
+
+  /**
+   * مبلغٌ بعملة المزوّد، وتحته مقابله بعملة الدفتر.
+   *
+   * ZNET يعطي «100» ويعني مئة ليرة — وقراءتها مئة دولار خطأٌ بأربعين ضعفاً.
+   * فيُكتب الرقم بعملته صريحةً، ويُكتب تحته المقابل بسعر الصرف المضبوط في
+   * «الإعدادات ← أسعار الصرف». والسطر الثاني يغيب إن كانت العملتان واحدة.
+   */
+  const Amount = ({ value, base, curr, baseCur, danger }: {
+    value: string; base: string | null; curr: string; baseCur: string; danger?: boolean;
+  }) => (
+    <div style={{ lineHeight: 1.5 }}>
+      <div style={{ fontWeight: 700, color: danger ? "var(--danger)" : undefined }}>
+        {num(value)} {symbolOf(curr)}
+      </div>
+      {curr !== baseCur && (
+        <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 1 }} dir="rtl">
+          {base === null
+            ? `لا سعر صرف لـ${curr}`
+            : `≈ ${num(base)} ${symbolOf(baseCur)}`}
+        </div>
+      )}
+    </div>
+  );
   const typeColor: Record<string, string> = {
     same_system: "var(--primary)", pool: "#c1692a", card_store: "#33454a", loader: "var(--primary-dark)",
     znet: "#1a7f8c", zdk: "#7a3ba0", barakat: "#7a3ba0", apstore: "#7a3ba0",
@@ -111,10 +139,17 @@ export default function Providers() {
                 }} />
               </td>
               <td style={{ ...td, color: "var(--muted)" }}>0 طلب · 0.00</td>
-              <td style={{ ...td, fontWeight: 600 }}>{money(p.real_balance)}</td>
-              <td style={td}>{money(p.balance)}</td>
-              <td style={{ ...td, color: Number(p.debt) > 0 ? "var(--danger)" : "var(--muted)" }}>
-                {money(p.debt)}
+              <td style={td}>
+                <Amount value={p.real_balance} base={p.real_balance_base}
+                  curr={p.currency} baseCur={p.base_currency} />
+              </td>
+              <td style={td}>
+                <Amount value={p.balance} base={p.balance_base}
+                  curr={p.currency} baseCur={p.base_currency} />
+              </td>
+              <td style={td}>
+                <Amount value={p.debt} base={p.debt_base} danger={Number(p.debt) > 0}
+                  curr={p.currency} baseCur={p.base_currency} />
               </td>
               <td style={td}>
                 <div style={{ display: "flex", gap: 4, justifyContent: "center", alignItems: "center", color: "var(--muted)" }}>
@@ -145,6 +180,7 @@ export default function Providers() {
           <tfoot>
             <tr style={{ background: "#f5c518", fontWeight: 700 }}>
               <td style={{ ...td, textAlign: "right", paddingInlineStart: 12 }} colSpan={4}>المجاميع</td>
+              {/* المجموع بعملة الدفتر — الخادم يحوّل كلّ مزوّد بعملته قبل الجمع */}
               <td style={td}>{money(totals.real_balance)}</td>
               <td style={td}>{money(totals.balance)}</td>
               <td style={td}>{money(totals.debt)}</td>
@@ -223,6 +259,9 @@ function ProviderModal({ edit, onClose, onDone }:
   const [name, setName] = useState(edit?.name || "");
   const [kind, setKind] = useState<Kind>(kindOf(edit));
   const [status, setStatus] = useState(edit?.status || "active");
+  // عملة المزوّد الخارجي — ZNET يسعّر بالليرة، وغيره قد يسعّر بالدولار.
+  // كان النظام يفترضها ليرةً للجميع فيقسم سعر المزوّد الدولاري على ~41.
+  const [providerCurrency, setProviderCurrency] = useState(edit?.currency || "TRY");
   const [cfg, setCfg] = useState<Record<string, string>>({ ...(edit?.config || {}) });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -235,6 +274,9 @@ function ProviderModal({ edit, onClose, onDone }:
     setErr(""); setBusy(true);
     // اجمع النوع + config حسب الاختيار
     const body: any = { name, status };
+    // العملة تخصّ المزوّد الخارجي وحده: البنك والمنفّذ اليدوي بلا أسعار
+    // خارجية، والمتجر الداخلي يحوّل بنفسه من دفتر المورّد.
+    if (kind === "znet" || kind === "zdk") body.currency = providerCurrency;
     if (kind === "znet") {
       body.type = "card_store";
       body.config = { code: "znet", base_url: c("base_url"), kod: c("kod"), sifre: c("sifre") };
@@ -277,6 +319,25 @@ function ProviderModal({ edit, onClose, onDone }:
           <div style={{ fontSize: 12, color: "var(--muted)", margin: "4px 2px 0" }}>
             {KINDS.find((x) => x.k === kind)?.hint}
           </div>
+
+          {(kind === "znet" || kind === "zdk") && (
+            <>
+              <label style={lbl}>عملة المزوّد *</label>
+              <select style={inp} value={providerCurrency}
+                onChange={(e) => setProviderCurrency(e.target.value)}>
+                <option value="TRY">ل.ت — ليرة تركية</option>
+                <option value="USD">$ — دولار</option>
+                <option value="EUR">€ — يورو</option>
+                <option value="SYP">ل.س — ليرة سورية</option>
+              </select>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4, lineHeight: 1.9 }}>
+                العملة التي يسعّر بها هذا المزوّد كتالوجه ويعطي بها رصيده.
+                <b> ZNET بالليرة التركية</b> دائماً. وبها تُحوَّل أرقامه إلى عملة
+                دفترك بسعر الصرف المضبوط في «الإعدادات ← أسعار الصرف» — فاضبطه
+                أوّلاً وإلّا لم تُحسب تكلفة الباقات.
+              </div>
+            </>
+          )}
 
           {kind === "znet" && (
             <>
