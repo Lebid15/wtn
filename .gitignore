@@ -11,6 +11,10 @@ build/
 .env
 .env.*
 !.env.example
+# القاعدة `.env.*` أعلاه تبتلع القوالب أيضاً — والقوالب لا أسرار فيها ومكانها
+# المستودع، وإلا نُقلت يدوياً في كل نشرٍ ونُسيت.
+!*.env.example
+!.env.bot.example
 
 # PHP (for future build)
 /vendor/
