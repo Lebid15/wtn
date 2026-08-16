@@ -125,8 +125,14 @@ function TenantsTab() {
               <tr key={t.id} style={{ borderTop: "1px solid #1e293b" }}>
                 <td style={td}>{t.id}</td>
                 <td style={{ ...td, fontWeight: 700 }}>{t.name}</td>
-                <td style={{ ...td, direction: "ltr", color: "#7dd3fc" }}>
-                  {t.domain || t.subdomain}
+                {/* عنوانٌ **مُزمَع** لا عامل: النطاقات الفرعية لم تُبنَ بعد،
+                    والكود يعرف المتجر من الحساب الذي دخل لا من العنوان. كان
+                    يُعرض أزرق كأنه رابط، فيُضغط فيفشل بخطأ شهادة مبهم. */}
+                <td style={{ ...td, direction: "ltr" }}>
+                  <span style={{ color: "#94a3b8" }}>{t.domain || t.subdomain}</span>
+                  <div style={{ fontSize: 10.5, color: "#64748b", direction: "rtl", marginTop: 2 }}>
+                    غير مفعّل بعد — الدخول من wtn4.com
+                  </div>
                 </td>
                 <td style={td}>{t.dealers}</td>
                 <td style={td}>
