@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { SOCIAL_ICONS, SocialGlyph } from "../socialIcons";
 
 interface Settings {
   logo_url: string; default_locale: string;
@@ -8,18 +9,21 @@ interface Settings {
   tagline: string; login_footer: string; social_links: Record<string, string>;
 }
 
-/** المنصّات المعروضة — نفس مفاتيح `SOCIAL_KEYS` في الخادم وبترتيب العرض. */
-const SOCIAL: { key: string; label: string; ph: string }[] = [
-  { key: "whatsapp",  label: "واتساب",   ph: "+905551234567" },
-  { key: "telegram",  label: "تيليغرام", ph: "https://t.me/yourstore" },
-  { key: "facebook",  label: "فيسبوك",   ph: "https://facebook.com/yourstore" },
-  { key: "instagram", label: "إنستغرام", ph: "https://instagram.com/yourstore" },
-  { key: "x",         label: "إكس",      ph: "https://x.com/yourstore" },
-  { key: "tiktok",    label: "تيك توك",  ph: "https://tiktok.com/@yourstore" },
-  { key: "youtube",   label: "يوتيوب",   ph: "https://youtube.com/@yourstore" },
-  { key: "snapchat",  label: "سناب شات", ph: "https://snapchat.com/add/yourstore" },
-  { key: "website",   label: "موقع آخر", ph: "https://example.com" },
-];
+/**
+ * أمثلة الروابط لكل منصّة. أمّا الأيقونات والأسماء والترتيب فمن
+ * `socialIcons` — مصدرٌ واحد للوحة ولصفحة الدخول، فلا يفترقان بعد تعديل.
+ */
+const SOCIAL_PLACEHOLDER: Record<string, string> = {
+  whatsapp:  "+905551234567",
+  telegram:  "https://t.me/yourstore",
+  facebook:  "https://facebook.com/yourstore",
+  instagram: "https://instagram.com/yourstore",
+  x:         "https://x.com/yourstore",
+  tiktok:    "https://tiktok.com/@yourstore",
+  youtube:   "https://youtube.com/@yourstore",
+  snapchat:  "https://snapchat.com/add/yourstore",
+  website:   "https://example.com",
+};
 
 const MAX_LOGO_BYTES = 2_000_000;  // قبل الترميز — والخادم يحدّ بـ 3M حرفاً بعده
 
@@ -157,12 +161,18 @@ export default function SiteSettings() {
           <div style={{ ...hint, marginBottom: 14 }}>
             تظهر أيقوناتها أسفل زرّ الدخول. اترك ما لا تملكه فارغاً فلا تظهر أيقونته.
           </div>
-          {SOCIAL.map((so) => (
-            <Row key={so.key} label={so.label}>
-              <input style={inp} dir="ltr" placeholder={so.ph}
-                value={s.social_links?.[so.key] || ""}
-                onChange={(e) => setSocial(so.key, e.target.value)} />
-            </Row>
+          {SOCIAL_ICONS.map((so) => (
+            <div key={so.key} style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 13 }}>
+              <div style={{ width: 170, display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-start" }}>
+                <SocialGlyph icon={so} size={24} />
+                <span style={{ color: "var(--muted)", fontSize: 14 }}>{so.label} :</span>
+              </div>
+              <div style={{ flex: 1 }}>
+                <input style={inp} dir="ltr" placeholder={SOCIAL_PLACEHOLDER[so.key] || ""}
+                  value={s.social_links?.[so.key] || ""}
+                  onChange={(e) => setSocial(so.key, e.target.value)} />
+              </div>
+            </div>
           ))}
           <div style={hint}>
             واتساب يُقبل رقماً برمز الدولة — يبني له النظام رابط <b dir="ltr">wa.me</b> وحده.

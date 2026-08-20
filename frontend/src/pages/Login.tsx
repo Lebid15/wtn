@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Storefront } from "../api";
+import { SOCIAL_ICONS, SocialGlyph } from "../socialIcons";
 import { useAuth, roleHome } from "../auth";
 
 export default function Login() {
@@ -104,35 +105,23 @@ export default function Login() {
 }
 
 /**
- * أيقونات التواصل تحت زرّ الدخول.
+ * أيقونات التواصل تحت زرّ الدخول — العلامة الرسمية لكل منصّة بلونها.
  *
- * الترتيب من `SOCIAL` لا من ترتيب المفاتيح في القاموس: صفٌّ يعيد ترتيب نفسه
- * بعد كل حفظ يربك من يحفظ مواضعها بعينه.
+ * الترتيب من `SOCIAL_ICONS` لا من ترتيب المفاتيح في القاموس: صفٌّ يعيد
+ * ترتيب نفسه بعد كل حفظ يربك من يحفظ مواضعها بعينه.
  *
- * `rel="noreferrer"` لازم مع `target="_blank"`: بدونه يملك الموقع المفتوح
+ * `rel="noreferrer"` لازم مع `target="_blank"`: بدونه يملك الموقعُ المفتوح
  * مرجعاً إلى صفحتنا يعيد توجيهها.
  */
-const SOCIAL: { key: string; label: string; icon: string }[] = [
-  { key: "whatsapp",  label: "واتساب",    icon: "💬" },
-  { key: "telegram",  label: "تيليغرام",  icon: "✈️" },
-  { key: "facebook",  label: "فيسبوك",    icon: "📘" },
-  { key: "instagram", label: "إنستغرام",  icon: "📷" },
-  { key: "x",         label: "إكس",       icon: "✖️" },
-  { key: "tiktok",    label: "تيك توك",   icon: "🎵" },
-  { key: "youtube",   label: "يوتيوب",    icon: "▶️" },
-  { key: "snapchat",  label: "سناب شات",  icon: "👻" },
-  { key: "website",   label: "الموقع",    icon: "🌐" },
-];
-
 function Socials({ links }: { links?: Record<string, string> }) {
-  const shown = SOCIAL.filter((s) => links?.[s.key]);
+  const shown = SOCIAL_ICONS.filter((s) => links?.[s.key]);
   if (!shown.length) return null;
   return (
     <div style={socialRow}>
       {shown.map((s) => (
         <a key={s.key} href={links![s.key]} target="_blank" rel="noreferrer"
            title={s.label} aria-label={s.label} style={socialBtn}>
-          {s.icon}
+          <SocialGlyph icon={s} size={36} />
         </a>
       ))}
     </div>
@@ -177,18 +166,7 @@ const socialRow: React.CSSProperties = {
   gap: 10,
   marginTop: 20,
 };
-const socialBtn: React.CSSProperties = {
-  width: 38,
-  height: 38,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: 18,
-  borderRadius: "50%",
-  background: "#f1f5f9",
-  textDecoration: "none",
-  lineHeight: 1,
-};
+const socialBtn: React.CSSProperties = { display: "flex", textDecoration: "none" };
 const footerLine: React.CSSProperties = {
   marginTop: 18,
   fontSize: 12,
