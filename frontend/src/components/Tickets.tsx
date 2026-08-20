@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 
 interface TicketRow {
   id: number; subject: string; target_label: string; status: string;
   status_label: string; opener: string; is_mine: boolean;
-  last_message: string; last_at: string; unread: number;
+  last_message: string; last_at: string; unread: number; can_delete?: boolean;
 }
 interface Msg { id: number; sender: string; is_me: boolean; body: string; created_at: string }
+interface Dealer { id: number; name: string; login_id: string }
 
 /**
  * مكوّن التذاكر/الرسائل — API واعٍ بالدور، فيصلح للوكيل وصاحب المتجر والمنصّة.
@@ -17,6 +18,7 @@ export default function Tickets({ canCreate = true, title = "الرسائل" }: 
   const [rows, setRows] = useState<TicketRow[]>([]);
   const [open, setOpen] = useState<number | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [delFor, setDelFor] = useState<TicketRow | null>(null);
 
   function load() { api.get("/tickets/").then((r) => setRows(r.data.results)); }
   useEffect(load, []);
@@ -47,6 +49,11 @@ export default function Tickets({ canCreate = true, title = "الرسائل" }: 
               <span style={{ fontSize: 12, color: t.status === "open" ? "var(--ok)" : "var(--muted)" }}>
                 ● {t.status_label}
               </span>
+              {t.can_delete && (
+                <button type="button" title="حذف المحادثة" aria-label="حذف المحادثة"
+                  onClick={(e) => { e.stopPropagation(); setDelFor(t); }}
+                  style={delBtn}>🗑</button>
+              )}
             </div>
           ))}
         </div>
@@ -54,6 +61,10 @@ export default function Tickets({ canCreate = true, title = "الرسائل" }: 
 
       {open !== null && <Thread id={open} onClose={() => { setOpen(null); load(); }} />}
       {showNew && <NewTicket onClose={() => setShowNew(false)} onDone={() => { setShowNew(false); load(); }} />}
+      {delFor && (
+        <DeleteTicket ticket={delFor} onClose={() => setDelFor(null)}
+          onDone={() => { setDelFor(null); load(); }} />
+      )}
     </div>
   );
 }
@@ -111,7 +122,7 @@ function NewTicket({ onClose, onDone }: { onClose: () => void; onDone: () => voi
   const [body, setBody] = useState("");
   // "platform" = إلى المنصّة (السلوك القديم) · رقمٌ = إلى وكيلٍ بعينه
   const [to, setTo] = useState("platform");
-  const [dealers, setDealers] = useState<{ id: number; name: string; login_id: string }[]>([]);
+  const [dealers, setDealers] = useState<Dealer[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -137,12 +148,7 @@ function NewTicket({ onClose, onDone }: { onClose: () => void; onDone: () => voi
           {isAdmin && (
             <>
               <label style={lbl}>إلى</label>
-              <select style={{ width: "100%", height: 38 }} value={to} onChange={(e) => setTo(e.target.value)}>
-                <option value="platform">إدارة المنصّة</option>
-                {dealers.map((d) => (
-                  <option key={d.id} value={String(d.id)}>{d.name} ({d.login_id})</option>
-                ))}
-              </select>
+              <RecipientPicker value={to} onChange={setTo} dealers={dealers} />
               <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.8, marginTop: 5 }}>
                 {to === "platform"
                   ? "تصل إلى مالك المنصّة — لا إلى وكلائك."
@@ -164,6 +170,136 @@ function NewTicket({ onClose, onDone }: { onClose: () => void; onDone: () => voi
     </div>
   );
 }
+
+/** تأكيد المحو — المحادثة تذهب برسائلها كلّها، ولا رجعة. */
+function DeleteTicket({ ticket, onClose, onDone }: {
+  ticket: TicketRow; onClose: () => void; onDone: () => void;
+}) {
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function remove() {
+    setBusy(true); setErr("");
+    try { await api.delete(`/tickets/${ticket.id}/`); onDone(); }
+    catch (e: any) { setErr(e?.response?.data?.detail || "تعذّر الحذف"); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={{ ...modal, width: 420, color: "var(--text)" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ ...header, background: "var(--danger)" }}>حذف المحادثة</div>
+        <div style={{ padding: 20 }}>
+          <div style={{ lineHeight: 2 }}>
+            ستُحذف <b>«{ticket.subject}»</b> ومعها كل رسائلها — <b>لا رجعة</b>.
+          </div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.9, marginTop: 8 }}>
+            وتختفي عن الطرف الآخر أيضاً.
+          </div>
+          {err && <div style={errBox}>{err}</div>}
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <button className="btn" style={{ flex: 1, height: 40, background: "var(--danger)" }}
+              onClick={remove} disabled={busy}>{busy ? "جارٍ..." : "احذف"}</button>
+            <button className="btn" style={{ flex: 1, height: 40, background: "#8a999e" }}
+              onClick={onClose}>إلغاء</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * اختيار المخاطَب مع بحثٍ بالاسم أو برقم الدخول.
+ *
+ * ليس `<select>`: قائمةُ متجرٍ فيها عشرات الوكلاء تُمرَّر بالإصبع بحثاً عن
+ * اسم، والمتصفّح لا يبحث في `<option>` إلا بالحرف الأول وبالإنجليزية.
+ */
+function RecipientPicker({ value, onChange, dealers }: {
+  value: string;
+  onChange: (v: string) => void;
+  dealers: Dealer[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const box = useRef<HTMLDivElement>(null);
+
+  const chosen = value === "platform"
+    ? "إدارة المنصّة"
+    : dealers.find((d) => String(d.id) === value)?.name || "اختر…";
+
+  const found = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return dealers;
+    return dealers.filter((d) =>
+      d.name.toLowerCase().includes(t) || d.login_id.toLowerCase().includes(t));
+  }, [q, dealers]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  function pick(v: string) { onChange(v); setOpen(false); setQ(""); }
+
+  return (
+    <div ref={box} style={{ position: "relative" }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={pickerBtn}>
+        <span>{chosen}</span>
+        <span style={{ opacity: 0.6 }}>▾</span>
+      </button>
+
+      {open && (
+        <div style={pickerPanel}>
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder="ابحث بالاسم أو رقم الدخول…"
+            style={{ width: "100%", height: 34, marginBottom: 6 }} />
+
+          <div style={{ maxHeight: 210, overflowY: "auto" }}>
+            <div onClick={() => pick("platform")}
+              style={{ ...pickerRow, fontWeight: 700 }}>إدارة المنصّة</div>
+
+            {found.length === 0 ? (
+              <div style={{ padding: "10px 8px", color: "var(--muted)", fontSize: 13 }}>
+                لا وكيل بهذا الاسم.
+              </div>
+            ) : found.map((d) => (
+              <div key={d.id} onClick={() => pick(String(d.id))}
+                style={{ ...pickerRow, ...(String(d.id) === value ? pickerActive : {}) }}>
+                {d.name}
+                <span style={{ color: "var(--muted)", fontSize: 12 }} dir="ltr"> ({d.login_id})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const delBtn: React.CSSProperties = {
+  background: "transparent", border: 0, cursor: "pointer", fontSize: 15,
+  opacity: 0.55, padding: "2px 4px", lineHeight: 1,
+};
+const pickerBtn: React.CSSProperties = {
+  width: "100%", height: 38, background: "#fff", border: "1px solid var(--border)",
+  borderRadius: 6, padding: "0 10px", cursor: "pointer", textAlign: "start",
+  display: "flex", alignItems: "center", justifyContent: "space-between",
+  color: "var(--text)", fontSize: 14, fontFamily: "inherit",
+};
+const pickerPanel: React.CSSProperties = {
+  position: "absolute", top: 42, insetInlineStart: 0, insetInlineEnd: 0, zIndex: 1100,
+  background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: 8,
+  boxShadow: "0 12px 34px rgba(0,0,0,.22)",
+};
+const pickerRow: React.CSSProperties = {
+  padding: "8px 8px", borderRadius: 5, cursor: "pointer", fontSize: 14,
+};
+const pickerActive: React.CSSProperties = { background: "#e7f6ec" };
 
 const ticketCard: React.CSSProperties = {
   display: "flex", alignItems: "center", gap: 12, background: "#fff",

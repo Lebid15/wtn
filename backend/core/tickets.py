@@ -45,6 +45,7 @@ def _ticket_row(t, user):
         "last_message": last.body[:80] if last else "",
         "last_at": (last.created_at if last else t.created_at).strftime("%Y-%m-%d %H:%M"),
         "unread": unread,
+        "can_delete": can_delete(user, t),
     }
 
 
@@ -85,13 +86,35 @@ def tickets_view(request):
     return Response({"count": len(rows), "results": rows})
 
 
-@api_view(["GET"])
+def can_delete(user, ticket) -> bool:
+    """
+    من يملك محو المحادثة: صاحب المتجر في متجره، ومالك المنصّة فيما يخصّه.
+
+    والوكيل لا يملكه — وهو المقصود: محادثةٌ يشكو فيها لإدارته لا يصحّ أن
+    يمحوها طرفٌ واحد، ولا أن يمحوها هو بعد أن قرأها الطرف الآخر.
+    """
+    if user.role == User.Role.PLATFORM_OWNER:
+        return ticket.target == Ticket.Target.PLATFORM
+    if user.role == User.Role.TENANT_ADMIN:
+        return ticket.tenant_id == user.tenant_id
+    return False
+
+
+@api_view(["GET", "DELETE"])
 @permission_classes([IsAuthenticated])
 def ticket_thread_view(request, ticket_id):
     user = request.user
     ticket = visible_tickets(user).filter(pk=ticket_id).first()
     if ticket is None:
         return Response({"detail": "التذكرة غير موجودة"}, status=404)
+
+    if request.method == "DELETE":
+        # المحو نهائي ويأخذ الرسائل معه (`CASCADE`) — ولا رجعة
+        if not can_delete(user, ticket):
+            return Response({"detail": "لا تملك حذف هذه المحادثة"}, status=403)
+        subject = ticket.subject
+        ticket.delete()
+        return Response({"detail": f"حُذفت المحادثة «{subject}» ومعها رسائلها"})
     # علّم رسائل الطرف الآخر كمقروءة
     ticket.messages.exclude(sender=user).filter(read_by_other=False).update(read_by_other=True)
     msgs = [{
