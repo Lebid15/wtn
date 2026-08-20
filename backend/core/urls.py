@@ -29,6 +29,8 @@ urlpatterns = [
     path("cards/", cards.cards_view, name="cards"),
     path("cards/<int:card_id>/", cards.card_detail_view, name="card-detail"),
     path("my-cards/", cards.my_cards_view, name="my-cards"),
+    path("my-cards/seen/", cards.mark_cards_seen_view, name="my-cards-seen"),
+    path("notifications/", tickets.notifications_view, name="notifications"),
     path("alerts/", alerts.alerts_view, name="alerts"),
     # فواتير المستأجر الحالي
     path("invoices/", views.my_invoices_view, name="my-invoices"),

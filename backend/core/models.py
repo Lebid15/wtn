@@ -314,6 +314,7 @@ class Ticket(models.Model):
     class Target(models.TextChoices):
         ADMIN = "admin", "إدارة المتجر"       # وكيل → صاحب المتجر
         PLATFORM = "platform", "مالك المنصّة"  # صاحب المتجر → المنصّة
+        DEALER = "dealer", "وكيل"             # صاحب المتجر → وكيلٍ بعينه
 
     class Status(models.TextChoices):
         OPEN = "open", "مفتوحة"
@@ -322,6 +323,11 @@ class Ticket(models.Model):
     tenant = models.ForeignKey(Tenant, null=True, blank=True, on_delete=models.CASCADE, related_name="tickets")
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="tickets")
     target = models.CharField(max_length=10, choices=Target.choices, default=Target.ADMIN)
+    # المخاطَب المعيَّن — لوجهة `dealer` وحدها. وبدونه كانت التذاكر تصعد
+    # دائماً: يردّ صاحب المتجر على من راسله، ولا يبدأ هو رسالةً إلى وكيل.
+    recipient = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.CASCADE, related_name="incoming_tickets",
+    )
     subject = models.CharField(max_length=200)
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.OPEN)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -423,6 +429,29 @@ class HomeCard(models.Model):
     class Meta:
         db_table = "home_cards"
         ordering = ["sort_order", "id"]
+
+
+class HomeCardRead(models.Model):
+    """
+    أثرُ أن فلاناً رأى هذه البطاقة.
+
+    صفٌّ لكل (قارئ، بطاقة) لا ختمُ وقتٍ واحد على المستخدم: البطاقات تُحرَّر
+    وتُعاد ترتيباً، فختمٌ واحد يجعل تحريرَ بطاقةٍ قديمة يُشعل الجرس لبطاقات
+    قُرئت كلُّها. وحذفُ البطاقة يمحو أثرها معها (`CASCADE`).
+    """
+
+    card = models.ForeignKey(HomeCard, on_delete=models.CASCADE, related_name="reads")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="card_reads")
+    read_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "home_card_reads"
+        constraints = [
+            models.UniqueConstraint(fields=["card", "user"], name="uniq_card_read"),
+        ]
+
+    def __str__(self):
+        return f"{self.user.name} ← {self.card.title}"
 
     def __str__(self):
         return f"بطاقة {self.get_audience_display()}: {self.title}"

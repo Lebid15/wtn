@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { useAuth } from "../auth";
 
 interface TicketRow {
   id: number; subject: string; target_label: string; status: string;
@@ -104,15 +105,26 @@ function Thread({ id, onClose }: { id: number; onClose: () => void }) {
 }
 
 function NewTicket({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "tenant_admin";
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  // "platform" = إلى المنصّة (السلوك القديم) · رقمٌ = إلى وكيلٍ بعينه
+  const [to, setTo] = useState("platform");
+  const [dealers, setDealers] = useState<{ id: number; name: string; login_id: string }[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // قائمة الوكلاء لصاحب المتجر وحده — الوكيل لا يوجّه رسالته
+  useEffect(() => {
+    if (!isAdmin) return;
+    api.get("/dealers/").then((r) => setDealers(r.data.results || [])).catch(() => {});
+  }, [isAdmin]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setErr("");
-    try { await api.post("/tickets/", { subject, body }); onDone(); }
+    try { await api.post("/tickets/", { subject, body, recipient: to }); onDone(); }
     catch (e: any) { setErr(e?.response?.data?.detail || "فشل الإرسال"); }
     finally { setBusy(false); }
   }
@@ -122,6 +134,22 @@ function NewTicket({ onClose, onDone }: { onClose: () => void; onDone: () => voi
       <form style={{ ...modal, width: 460, color: "var(--text)" }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div style={header}>رسالة جديدة</div>
         <div style={{ padding: 20 }}>
+          {isAdmin && (
+            <>
+              <label style={lbl}>إلى</label>
+              <select style={{ width: "100%", height: 38 }} value={to} onChange={(e) => setTo(e.target.value)}>
+                <option value="platform">إدارة المنصّة</option>
+                {dealers.map((d) => (
+                  <option key={d.id} value={String(d.id)}>{d.name} ({d.login_id})</option>
+                ))}
+              </select>
+              <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.8, marginTop: 5 }}>
+                {to === "platform"
+                  ? "تصل إلى مالك المنصّة — لا إلى وكلائك."
+                  : "تصل إلى هذا الوكيل وحده، ويراها في جرس لوحته."}
+              </div>
+            </>
+          )}
           <label style={lbl}>الموضوع</label>
           <input style={{ width: "100%", height: 38 }} value={subject} onChange={(e) => setSubject(e.target.value)} required autoFocus />
           <label style={lbl}>الرسالة</label>

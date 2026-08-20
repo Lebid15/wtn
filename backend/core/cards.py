@@ -10,7 +10,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import HomeCard, Tenant, User
+from .models import HomeCard, HomeCardRead, Tenant, User
 
 # حقولٌ نصّية تُنسخ كما هي بعد التشذيب والقصّ
 TEXT_FIELDS = {
@@ -121,16 +121,42 @@ def card_detail_view(request, card_id):
 @permission_classes([IsAuthenticated])
 def my_cards_view(request):
     """البطاقات التي تخصّني أنا — تقرأها صفحتي الرئيسية."""
-    user = request.user
+    return Response({"results": [_row(c) for c in cards_for(request.user)]})
+
+
+def cards_for(user):
+    """البطاقات التي تخصّ هذا المستخدم — مصدرٌ واحد للصفحة الرئيسية وللجرس."""
     if user.role == User.Role.TENANT_ADMIN:
         # من مالك المنصّة: العامّة + الموجّهة إلى متجري وحده
-        qs = HomeCard.objects.filter(
+        return HomeCard.objects.filter(
             audience=HomeCard.Audience.TENANTS, tenant__isnull=True, active=True,
         ).filter(Q(target_tenant__isnull=True) | Q(target_tenant_id=user.tenant_id))
-    elif user.role in (User.Role.BAYI, User.Role.ANA_BAYI):
-        qs = HomeCard.objects.filter(
+    if user.role in (User.Role.BAYI, User.Role.ANA_BAYI):
+        return HomeCard.objects.filter(
             audience=HomeCard.Audience.DEALERS, tenant=user.tenant, active=True,
         )
-    else:
-        qs = HomeCard.objects.none()
-    return Response({"results": [_row(c) for c in qs]})
+    return HomeCard.objects.none()
+
+
+def unseen_cards(user):
+    """ما لم يفتحه بعد. البطاقةُ تُقرأ مرّةً، ثم لا يُشعِل تحريرُها الجرسَ ثانية."""
+    seen = HomeCardRead.objects.filter(user=user).values_list("card_id", flat=True)
+    return cards_for(user).exclude(pk__in=seen)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mark_cards_seen_view(request):
+    """
+    «رأيتُها» — يُنادى حين يفتح المستخدم الجرس أو صفحته الرئيسية.
+
+    `bulk_create(ignore_conflicts=True)` لا حلقةُ `get_or_create`: النداء
+    يتكرّر مع كل فتحة، وقيدُ التفرّد يكفي حارساً.
+    """
+    cards = list(unseen_cards(request.user).values_list("id", flat=True))
+    if cards:
+        HomeCardRead.objects.bulk_create(
+            [HomeCardRead(card_id=c, user=request.user) for c in cards],
+            ignore_conflicts=True,
+        )
+    return Response({"marked": len(cards)})

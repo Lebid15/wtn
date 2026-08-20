@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../auth";
 import { symbolOf } from "../currency";
 import Icon from "../components/Icon";
+import NotificationBell from "../components/NotificationBell";
 import Tickets from "../components/Tickets";
 import ApiDocs from "../components/ApiDocs";
 import { CardStrip, type Card } from "../components/HomeCards";
@@ -116,6 +117,7 @@ export default function Store() {
               <Icon name="building" size={14} style={{ marginInlineEnd: 5 }} />لوحة الوكيل الكبير
             </button>
           )}
+          <NotificationBell onOpenItem={(it) => goTab(it.kind === "message" ? "support" : "home")} />
           <button onClick={logout} style={linkBtn}>
             <Icon name="logout" size={14} style={{ marginInlineEnd: 5 }} />خروج آمن
           </button>
@@ -157,7 +159,11 @@ function HomeTab({ summary, onSell }: { summary: Summary | null; onSell: () => v
   // بطاقات يكتبها صاحب المتجر لوكلائه (الإعدادات ← بطاقات الوكلاء)
   const [cards, setCards] = useState<Card[]>([]);
   useEffect(() => {
-    api.get("/my-cards/").then((r) => setCards(r.data.results)).catch(() => setCards([]));
+    api.get("/my-cards/").then((r) => {
+      setCards(r.data.results);
+      // مرورُه بالصفحة رؤيةٌ لها — فلا يبقى الجرس أحمر لبطاقةٍ قرأها هنا
+      if (r.data.results?.length) api.post("/my-cards/seen/", {}).catch(() => {});
+    }).catch(() => setCards([]));
   }, []);
 
   if (!summary) return <div style={{ padding: 20 }}>جارٍ التحميل...</div>;
