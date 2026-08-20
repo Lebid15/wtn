@@ -76,6 +76,26 @@ def _tenant_row(t):
         # ما سيُفقد بالحذف — يُعرض قبل السؤال لا بعده
         "orders": Order.objects.filter(tenant=t).count(),
         "users": User.objects.filter(tenant=t).count(),
+        # صاحب المتجر — تعرضه نافذة التعديل كي يعرف المالك لمن يبدّل الكلمة.
+        # كلمة السرّ لا تُرجَع أبداً: مخزَّنةٌ مُعمّاةً ولا سبيل إلى قراءتها.
+        **_tenant_admin_row(t),
+    }
+
+
+def _tenant_admin_row(t):
+    """حساب صاحب المتجر — أقدمُ `tenant_admin` إن تعدّدوا."""
+    admin = (
+        User.objects
+        .filter(tenant=t, role=User.Role.TENANT_ADMIN)
+        .order_by("id")
+        .first()
+    )
+    if admin is None:
+        return {"admin_login_id": None, "admin_name": None, "admin_locked": False}
+    return {
+        "admin_login_id": admin.login_id,
+        "admin_name": admin.name,
+        "admin_locked": admin.is_locked,
     }
 
 
@@ -182,6 +202,30 @@ def tenant_detail_view(request, tenant_id):
             return Response({"detail": f"«{sub}» مستعمل لمتجر آخر"}, status=400)
         t.subdomain = sub
         fields.append("subdomain")
+
+    # كلمة سرّ صاحب المتجر — المخرج حين ينساها، وقد كان لا مخرج له إلا الخادم.
+    # فارغةً تعني «لا تبدّل»، فحفظُ الاسم وحده لا يمسّ الحساب.
+    admin_password = str(data.get("admin_password") or "")
+    if admin_password:
+        admin = (
+            User.objects
+            .filter(tenant=t, role=User.Role.TENANT_ADMIN)
+            .order_by("id")
+            .first()
+        )
+        if admin is None:
+            return Response({"detail": "لا حساب صاحب متجر لهذا المتجر"}, status=400)
+        if len(admin_password) < 5:
+            return Response({"detail": "كلمة السر قصيرة (5 أحرف على الأقل)"}, status=400)
+        admin.set_password(admin_password)
+        admin_fields = ["password"]
+        # كلمة سرّ جديدة تفتح القفل دائماً — كما في تعديل الوكيل (core/views.py):
+        # فتحٌ بلا تبديل يعيد الحساب بكلمةٍ ثبت أن أحدهم يخمّنها.
+        if admin.is_locked or admin.failed_login_count:
+            admin.locked_at = None
+            admin.failed_login_count = 0
+            admin_fields += ["locked_at", "failed_login_count"]
+        admin.save(update_fields=admin_fields)
 
     if fields:
         t.save(update_fields=fields)

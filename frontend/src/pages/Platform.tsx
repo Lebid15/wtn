@@ -12,6 +12,7 @@ interface Tenant {
   sub_active: boolean; sub_days_left: number | null;
   sub_grace_days?: number; sub_enforce?: boolean; sub_state?: string;
   domain?: string; orders?: number; users?: number;
+  admin_login_id?: string | null; admin_name?: string | null; admin_locked?: boolean;
 }
 interface Stats { tenants: number; active: number; dealers: number }
 interface LibGame {
@@ -639,6 +640,8 @@ function EditTenant({ tenant, onClose, onDone }: {
 }) {
   const [name, setName] = useState(tenant.name);
   const [sub, setSub] = useState(tenant.subdomain);
+  const [pw, setPw] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -646,7 +649,10 @@ function EditTenant({ tenant, onClose, onDone }: {
     e.preventDefault();
     setBusy(true); setErr("");
     try {
-      await api.patch(`/platform/tenants/${tenant.id}/`, { name, subdomain: sub });
+      // الكلمة الفارغة لا تُرسل أصلاً: «احفظ الاسم» لا يعني «بدّل الكلمة».
+      await api.patch(`/platform/tenants/${tenant.id}/`, {
+        name, subdomain: sub, ...(pw ? { admin_password: pw } : {}),
+      });
       onDone();
     } catch (e: any) {
       setErr(e?.response?.data?.detail || "تعذّر الحفظ");
@@ -655,7 +661,7 @@ function EditTenant({ tenant, onClose, onDone }: {
 
   return (
     <div style={overlay} onClick={onClose}>
-      <form style={{ ...modal, width: 420, color: "#0f172a" }}
+      <form style={{ ...modal, width: 420, color: "#0f172a", maxHeight: "90vh", overflowY: "auto" }}
         onClick={(e) => e.stopPropagation()} onSubmit={save}>
         <div style={{ background: "#0f172a", color: "#e2e8f0", padding: "14px 18px", fontWeight: 700 }}>
           تعديل المتجر
@@ -672,6 +678,39 @@ function EditTenant({ tenant, onClose, onDone }: {
             تسميةٌ واحدة لا عنوان كامل: اكتب <b>islam</b> لا <b>islam.wtn4.com</b>.
             حروف إنجليزية صغيرة وأرقام وشرطات فقط.
           </div>
+
+          <div style={{ borderTop: "1px solid #e2e8f0", margin: "18px 0 14px" }} />
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>حساب صاحب المتجر</div>
+          {tenant.admin_login_id ? (
+            <>
+              <div style={{ fontSize: 13, color: "#334155", marginBottom: 10 }}>
+                رقم الدخول:{" "}
+                <b dir="ltr" style={{ display: "inline-block" }}>{tenant.admin_login_id}</b>
+                {tenant.admin_name ? ` · ${tenant.admin_name}` : ""}
+                {tenant.admin_locked && (
+                  <span style={{ color: "#b0463a" }}> · الحساب مقفل</span>
+                )}
+              </div>
+              <F label="كلمة سرّ جديدة">
+                <input style={inp} dir="ltr" type={showPw ? "text" : "password"}
+                  autoComplete="new-password" value={pw}
+                  onChange={(e) => setPw(e.target.value)} />
+              </F>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#64748b", marginTop: 6 }}>
+                <input type="checkbox" checked={showPw} onChange={(e) => setShowPw(e.target.checked)} />
+                أظهر الكلمة
+              </label>
+              <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.9, marginTop: 6 }}>
+                اتركها فارغة فلا تتغيّر. الكلمة القديمة لا تُعرَض — مخزَّنةٌ مُعمّاةً.
+                والكلمة الجديدة تفتح الحساب إن كان مقفلاً.
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 12.5, color: "#b0463a", lineHeight: 1.9 }}>
+              لا حساب صاحب متجر لهذا المتجر — لا كلمةَ سرّ تُبدَّل.
+            </div>
+          )}
+
           {err && <div style={{ ...errBox, marginTop: 12 }}>{err}</div>}
           <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
             <button className="btn g" style={{ flex: 1, height: 38 }} disabled={busy}>
