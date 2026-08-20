@@ -29,7 +29,17 @@ class Tenant(models.Model):
     theme = models.CharField(max_length=20, default="teal")  # teal | blue | orange | custom
     font = models.CharField(max_length=20, default="cairo")  # cairo | tajawal
     theme_color = models.CharField(max_length=9, blank=True, default="")  # لون مخصّص #RRGGBB
-    logo_url = models.CharField(max_length=300, blank=True, default="")
+    # نصّاً: رابط خارجي أو `data:image/...` مرفوعاً من اللوحة. كان `CharField(300)`
+    # فلا يسع صورةً مرفوعة، وكان صاحب المتجر يحتاج استضافةً خارجية لشعاره.
+    logo_url = models.TextField(blank=True, default="")
+    # السطر تحت الاسم في صفحة الدخول. فارغاً يعود إلى «نظام شحن الألعاب».
+    tagline = models.CharField(max_length=120, blank=True, default="")
+    # سطرٌ أسفل بطاقة الدخول — نصٌّ صِرف لا HTML: الصفحة مفتوحة بلا توكن،
+    # وحقنُ وسمٍ فيها يصيب كل زائر. (`footer_html` يبقى للوحة الداخلية.)
+    login_footer = models.CharField(max_length=200, blank=True, default="")
+    # روابط التواصل: {"whatsapp": "+9055…", "telegram": "https://t.me/…", …}
+    # قاموسٌ لا ثمانية أعمدة: إضافة منصّةٍ جديدة لا تستحقّ هجرةً في القاعدة.
+    social_links = models.JSONField(default=dict, blank=True)
     default_locale = models.CharField(max_length=5, default="ar")
     # إعدادات الموقع (Web Site Ayarları)
     founded_year = models.CharField(max_length=8, blank=True, default="")   # Kuruluş Yılı

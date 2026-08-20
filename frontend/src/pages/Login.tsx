@@ -53,7 +53,7 @@ export default function Login() {
           {store?.name || "لوحة الوكلاء"}
         </h1>
         <p style={{ color: "var(--muted)", fontSize: 14, marginBottom: 22 }}>
-          نظام شحن الألعاب
+          {store?.tagline || "نظام شحن الألعاب"}
         </p>
 
         <label style={lbl}>رقم الدخول</label>
@@ -92,7 +92,49 @@ export default function Login() {
         <button className="btn" style={{ width: "100%", height: 40, marginTop: 8 }} disabled={busy}>
           {busy ? "جارٍ الدخول..." : "دخول"}
         </button>
+
+        <Socials links={store?.social_links} />
+
+        {store?.login_footer && (
+          <div style={footerLine}>{store.login_footer}</div>
+        )}
       </form>
+    </div>
+  );
+}
+
+/**
+ * أيقونات التواصل تحت زرّ الدخول.
+ *
+ * الترتيب من `SOCIAL` لا من ترتيب المفاتيح في القاموس: صفٌّ يعيد ترتيب نفسه
+ * بعد كل حفظ يربك من يحفظ مواضعها بعينه.
+ *
+ * `rel="noreferrer"` لازم مع `target="_blank"`: بدونه يملك الموقع المفتوح
+ * مرجعاً إلى صفحتنا يعيد توجيهها.
+ */
+const SOCIAL: { key: string; label: string; icon: string }[] = [
+  { key: "whatsapp",  label: "واتساب",    icon: "💬" },
+  { key: "telegram",  label: "تيليغرام",  icon: "✈️" },
+  { key: "facebook",  label: "فيسبوك",    icon: "📘" },
+  { key: "instagram", label: "إنستغرام",  icon: "📷" },
+  { key: "x",         label: "إكس",       icon: "✖️" },
+  { key: "tiktok",    label: "تيك توك",   icon: "🎵" },
+  { key: "youtube",   label: "يوتيوب",    icon: "▶️" },
+  { key: "snapchat",  label: "سناب شات",  icon: "👻" },
+  { key: "website",   label: "الموقع",    icon: "🌐" },
+];
+
+function Socials({ links }: { links?: Record<string, string> }) {
+  const shown = SOCIAL.filter((s) => links?.[s.key]);
+  if (!shown.length) return null;
+  return (
+    <div style={socialRow}>
+      {shown.map((s) => (
+        <a key={s.key} href={links![s.key]} target="_blank" rel="noreferrer"
+           title={s.label} aria-label={s.label} style={socialBtn}>
+          {s.icon}
+        </a>
+      ))}
     </div>
   );
 }
@@ -128,6 +170,31 @@ const lbl: React.CSSProperties = {
   margin: "12px 2px 5px",
 };
 const inp: React.CSSProperties = { width: "100%", height: 40 };
+const socialRow: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "center",
+  flexWrap: "wrap",
+  gap: 10,
+  marginTop: 20,
+};
+const socialBtn: React.CSSProperties = {
+  width: 38,
+  height: 38,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 18,
+  borderRadius: "50%",
+  background: "#f1f5f9",
+  textDecoration: "none",
+  lineHeight: 1,
+};
+const footerLine: React.CSSProperties = {
+  marginTop: 18,
+  fontSize: 12,
+  color: "var(--muted)",
+  lineHeight: 1.8,
+};
 const errBox: React.CSSProperties = {
   background: "#fdecea",
   border: "1px solid #f5c6c2",

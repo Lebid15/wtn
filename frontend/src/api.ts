@@ -39,6 +39,9 @@ export interface Storefront {
   theme: string;
   theme_color: string;
   font: string;
+  tagline?: string;
+  login_footer?: string;
+  social_links?: Record<string, string>;
 }
 export interface User {
   id: number;

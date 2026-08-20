@@ -11,6 +11,20 @@ class TenantSerializer(serializers.ModelSerializer):
                   "logo_url", "base_currency"]
 
 
+# منصّات التواصل المعروضة في صفحة الدخول، بترتيب عرضها.
+# مغلقةٌ عمداً: المفتاح يختار أيقونةً ونمطَ رابط، فمفتاحٌ حرّ يعطي زرّاً بلا وجه.
+SOCIAL_KEYS = (
+    "whatsapp", "telegram", "facebook", "instagram",
+    "x", "tiktok", "youtube", "snapchat", "website",
+)
+
+# مخططات مقبولة في رابط التواصل. `javascript:` و`data:` مرفوضان: الرابط
+# يُعرض لكل زائر بلا توكن، فوسمُ `<a href>` بمخطط تنفيذيّ ثغرةٌ مفتوحة.
+_SAFE_SCHEMES = ("http://", "https://")
+
+MAX_LOGO_CHARS = 3_000_000  # ≈ 2.2 ميغابايت بعد ترميز base64 — كصور الوكلاء
+
+
 class SiteSettingsSerializer(serializers.ModelSerializer):
     """إعدادات الموقع (Web Site Ayarları) القابلة للتعديل."""
 
@@ -21,7 +35,57 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
             "logo_url", "default_locale",
             "founded_year", "short_name", "full_name", "address",
             "email", "phone", "homepage_text", "footer_html",
+            "tagline", "login_footer", "social_links",
         ]
+
+    def validate_logo_url(self, value):
+        """رابطٌ خارجي أو صورةٌ مرفوعة — وفارغٌ يعني «لا شعار»."""
+        v = (value or "").strip()
+        if not v:
+            return ""
+        if v.startswith("data:image/"):
+            if len(v) > MAX_LOGO_CHARS:
+                raise serializers.ValidationError("الشعار كبير جداً — اختر صورة أصغر")
+            return v
+        if not v.startswith(_SAFE_SCHEMES):
+            raise serializers.ValidationError(
+                "رابط الشعار يبدأ بـ http:// أو https:// — أو ارفع صورة"
+            )
+        return v
+
+    def validate_social_links(self, value):
+        """
+        قاموسٌ من `SOCIAL_KEYS` إلى رابط. الفارغ يُحذف لا يُخزَّن فارغاً،
+        كي تعرف الواجهة «غير مضبوط» من «مضبوطٌ إلى لا شيء».
+
+        واتساب يُقبل رقماً (`+9055…`) فيُبنى منه `wa.me` — إذ يكتب صاحب
+        المتجر رقمه لا رابطاً، وكان يخرج زرٌّ لا يفتح شيئاً.
+        """
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("روابط التواصل يجب أن تكون قاموساً")
+
+        out = {}
+        for key, raw in value.items():
+            if key not in SOCIAL_KEYS:
+                raise serializers.ValidationError(f"منصّة غير معروفة: {key}")
+            v = str(raw or "").strip()
+            if not v:
+                continue
+            if key == "whatsapp" and not v.startswith(_SAFE_SCHEMES):
+                digits = v.replace(" ", "").replace("-", "").lstrip("+")
+                if not digits.isdigit():
+                    raise serializers.ValidationError(
+                        "واتساب: اكتب الرقم برمز الدولة (+905551234567) أو رابطاً كاملاً"
+                    )
+                v = f"https://wa.me/{digits}"
+            if not v.startswith(_SAFE_SCHEMES):
+                raise serializers.ValidationError(
+                    f"رابط {key}: يبدأ بـ http:// أو https://"
+                )
+            if len(v) > 300:
+                raise serializers.ValidationError(f"رابط {key} طويل جداً")
+            out[key] = v
+        return out
 
 
 class SmsSettingsSerializer(serializers.ModelSerializer):

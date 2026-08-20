@@ -118,6 +118,10 @@ def storefront_view(request):
             "theme": store.theme,
             "theme_color": store.theme_color,
             "font": store.font,
+            # هويّة المتجر كما يراها الزائر قبل الدخول
+            "tagline": store.tagline,
+            "login_footer": store.login_footer,
+            "social_links": store.social_links or {},
         }
     })
 
