@@ -339,6 +339,9 @@ def dealers_view(request):
             "shopping": mods.get("shopping", True),   # Alışveriş
             "oyun": mods.get("oyun", True),           # لعبة OyunPin
             "active": u.status == User.Status.ACTIVE,  # Aktif
+            # قفلُ المحاولات — كان يُعرف بفتح إعدادات كل وكيل واحداً واحداً،
+            # فمن قُفل حسابه ينتظر أن يتّصل ليُعرف. صار يُرى في الصفّ.
+            "is_locked": u.is_locked,
             # وكيل كبير: تحته دكاكين، ويُميَّز بنجمة وصفوف تتفرّع منه
             "is_big": u.role == User.Role.ANA_BAYI,
             "role": u.role,

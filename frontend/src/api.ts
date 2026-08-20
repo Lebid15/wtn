@@ -160,6 +160,8 @@ export interface Dealer {
   shopping: boolean;
   oyun: boolean;
   active: boolean;
+  /** حسابٌ قُفل بعد محاولات دخول خاطئة — يفكّه تبديلُ كلمة السرّ */
+  is_locked: boolean;
   children_count: number;
   /** وكيل كبير: تحته دكاكين، يُميَّز بنجمة وصفوف تتفرّع منه */
   is_big: boolean;

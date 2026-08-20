@@ -240,9 +240,13 @@ export default function Dealers() {
                           <span style={{ color: "var(--faint)", fontSize: 11, fontWeight: 700 }}>
                             ({d.children_count})
                           </span>
+                          {d.is_locked && <LockTag />}
                         </button>
                       ) : (
-                        <div style={{ fontWeight: 700 }}>{d.name}</div>
+                        <div style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+                          {d.name}
+                          {d.is_locked && <LockTag />}
+                        </div>
                       )}
                     </td>
                     <td>
@@ -427,6 +431,26 @@ function IconBtn({ name, color, title, onClick }:
 const ib: React.CSSProperties = { marginInlineEnd: 5, verticalAlign: -2 };
 
 /* الذهبي للوكيل الكبير: نجمته واسمه وإطار دكاكينه */
+/**
+ * علامةُ حسابٍ مقفل.
+ *
+ * كانت حالة القفل تصل لإعدادات الوكيل وحدها، فلا يُعرف المقفول إلا بفتح
+ * إعدادات كلٍّ على حدة — أي أن صاحب المتجر ينتظر الوكيل يتّصل ليعرف.
+ * ويفكّه تبديلُ كلمة السرّ من ⚙ إعدادات الوكيل.
+ */
+function LockTag() {
+  return (
+    <span title="الحساب مقفل بعد محاولات دخول خاطئة — يفكّه تبديل كلمة السر"
+      style={{
+        background: "#fdecea", color: "var(--danger)", border: "1px solid #f5c6c2",
+        fontSize: 10.5, fontWeight: 700, borderRadius: 9, padding: "1px 7px",
+        whiteSpace: "nowrap",
+      }}>
+      🔒 مقفل
+    </span>
+  );
+}
+
 const GOLD = "#e0a800";
 const GOLD_INK = "#8a6100";
 const GOLD_BG = "rgba(224,168,0,.05)";
