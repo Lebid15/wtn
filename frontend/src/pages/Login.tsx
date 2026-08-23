@@ -11,6 +11,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
   const [needTotp, setNeedTotp] = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   // هويّة المتجر صاحبِ العنوان — `null` على الباب العام (wtn4.com)
@@ -67,13 +68,26 @@ export default function Login() {
         />
 
         <label style={lbl}>كلمة المرور</label>
-        <input
-          style={inp}
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="••••••••"
-        />
+        <div style={pwWrap}>
+          <input
+            style={{ ...inp, paddingLeft: 36 }}
+            type={showPw ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+          />
+          {/* `type="button"` لازم: زرٌّ بلا نوعٍ داخل نموذج يُرسله عند الضغط */}
+          <button
+            type="button"
+            style={pwBtn}
+            onClick={() => setShowPw((v) => !v)}
+            title={showPw ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+            aria-label={showPw ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+            aria-pressed={showPw}
+          >
+            <EyeIcon slashed={showPw} />
+          </button>
+        </div>
 
         {needTotp && (
           <>
@@ -101,6 +115,21 @@ export default function Login() {
         )}
       </form>
     </div>
+  );
+}
+
+/**
+ * شارة إظهار كلمة المرور — العين مشطوبةً حين تكون الكلمة **ظاهرة**، لأن
+ * الأيقونة تقول ما تفعله الضغطة لا ما هو الحال الآن.
+ */
+function EyeIcon({ slashed }: { slashed: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1.6 12S5.3 5.6 12 5.6 22.4 12 22.4 12 18.7 18.4 12 18.4 1.6 12 1.6 12Z" />
+      <circle cx="12" cy="12" r="3.2" />
+      {slashed && <path d="M3.5 3.5l17 17" />}
+    </svg>
   );
 }
 
@@ -159,6 +188,23 @@ const lbl: React.CSSProperties = {
   margin: "12px 2px 5px",
 };
 const inp: React.CSSProperties = { width: "100%", height: 40 };
+// الشارة داخل الحقل على يساره: النصّ عربيٌّ يبدأ من اليمين، فاليسار خالٍ
+const pwWrap: React.CSSProperties = { position: "relative" };
+const pwBtn: React.CSSProperties = {
+  position: "absolute",
+  left: 5,
+  top: 0,
+  height: 40,
+  width: 28,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 0,
+  border: "none",
+  background: "none",
+  color: "var(--muted)",
+  cursor: "pointer",
+};
 const socialRow: React.CSSProperties = {
   display: "flex",
   justifyContent: "center",
