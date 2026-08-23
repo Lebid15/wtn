@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from . import currency, services
+from .text import clean_login_id
 from .models import (
     LOGIN_ATTEMPTS_BEFORE_LOCK, Invoice, User, Wallet, WalletTransaction,
 )
@@ -245,7 +246,7 @@ def _create_dealer(request):
         return Response({"detail": "لا يوجد مستأجر"}, status=400)
 
     data = request.data
-    login_id = (data.get("login_id") or "").strip()
+    login_id = clean_login_id(data.get("login_id"))
     name = (data.get("name") or "").strip()
     password = data.get("password") or ""
     if not login_id or not name or not password:

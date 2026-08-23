@@ -1,6 +1,7 @@
 """DRF serializers للقلب."""
 from rest_framework import serializers
 
+from .text import clean_login_id
 from .models import Tenant, User, Wallet
 
 
@@ -118,9 +119,13 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class LoginSerializer(serializers.Serializer):
-    # رقم الدخول يُشذَّب (افتراض CharField): مسافةٌ من نسخٍ ولصق كانت تُفشل الدخول
-    # برسالة «بيانات غير صحيحة» المبهمة.
+    # رقم الدخول يُنقّى بنفس دالّة الحفظ — وإلّا افترق المكتوب عن المحفوظ.
+    # مسافةٌ أو محرفُ عزلٍ من نسخٍ ولصق كان يُفشل الدخول برسالة «بيانات غير
+    # صحيحة» المبهمة، ولا شيء على الشاشة يفسّرها.
     login_id = serializers.CharField()
+
+    def validate_login_id(self, value):
+        return clean_login_id(value)
     # أمّا كلمة السر فلا تُشذَّب — مسافتها قد تكون منها.
     password = serializers.CharField(write_only=True, trim_whitespace=False)
     totp = serializers.CharField(required=False, allow_blank=True)

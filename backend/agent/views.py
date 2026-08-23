@@ -9,6 +9,7 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from core import currency
+from core.text import clean_login_id
 from core.models import User, Wallet, WalletTransaction
 from catalog.models import AgentMargin, AgentPriceGroup, AgentProductPrice, Product
 from orders.models import Order
@@ -54,7 +55,7 @@ def dealers_view(request):
     agent = request.user
     if request.method == "POST":
         data = request.data
-        login_id = (data.get("login_id") or "").strip()
+        login_id = clean_login_id(data.get("login_id"))
         if not login_id or not data.get("password") or not data.get("name"):
             return Response({"detail": "الاسم ورقم الدخول وكلمة السر مطلوبة"}, status=400)
         if User.objects.filter(login_id=login_id).exists():

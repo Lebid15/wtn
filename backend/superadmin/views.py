@@ -13,6 +13,7 @@ from catalog.models import LibraryGame, LibraryProduct
 from catalog.serializers import (
     LibraryGameDetailSerializer, LibraryGameSerializer, LibraryProductSerializer,
 )
+from core.text import clean_login_id
 from core.models import Invoice, Tenant, User, Wallet
 from orders.models import Order
 from core.views import _invoice_row
@@ -109,7 +110,7 @@ def tenants_view(request):
             return Response({"detail": "الاسم والنطاق الفرعي مطلوبان"}, status=400)
         if Tenant.objects.filter(subdomain=subdomain).exists():
             return Response({"detail": "النطاق الفرعي مستخدم مسبقاً"}, status=400)
-        admin_login = (data.get("admin_login_id") or "").strip()
+        admin_login = clean_login_id(data.get("admin_login_id"))
         if not admin_login or not data.get("admin_password"):
             return Response({"detail": "بيانات أدمن المستأجر مطلوبة"}, status=400)
         if User.objects.filter(login_id=admin_login).exists():

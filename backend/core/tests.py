@@ -311,6 +311,15 @@ class DealerPasswordTest(APITestCase):
         """مسافة من نسخٍ ولصق كانت تُفشل الدخول برسالة «بيانات غير صحيحة»."""
         self.assertEqual(self._login("  5553333333 ", "old12345").status_code, 200)
 
+    def test_login_id_with_invisible_isolate_marks_still_works(self):
+        """
+        نسخُ رقمٍ من عرضٍ عربي يجرّ معه محرفَي العزل U+2066 و U+2069 حول الرقم.
+        لا يُريان على الشاشة، و`strip()` لا تمسكهما — فيُرفض الدخول أبداً
+        برسالة «بيانات غير صحيحة» ولا شيء يفسّرها.
+        """
+        wrapped = chr(0x2066) + "5553333333" + chr(0x2069)   # LRI … PDI
+        self.assertEqual(self._login(wrapped, "old12345").status_code, 200)
+
     def test_short_password_is_refused(self):
         r = self.client.post(
             f"/api/dealers/{self.agent.id}/settings/", {"new_password": "abc"}, format="json",
