@@ -1,13 +1,25 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { SOCIAL_ICONS, SocialGlyph } from "../socialIcons";
+import {
+  UI_SCALE_DEFAULT, UI_SCALE_MAX, UI_SCALE_MIN, UI_SCALE_STEP, applyUiScale,
+} from "../uiScale";
 
 interface Settings {
   logo_url: string; default_locale: string;
   founded_year: string; short_name: string; full_name: string; address: string;
   email: string; phone: string; homepage_text: string; footer_html: string;
   tagline: string; login_footer: string; social_links: Record<string, string>;
+  ui_scale: number;
 }
+
+/** محطّاتٌ جاهزة — أكثر الناس يريد «أصغر قليلاً» لا رقماً بعينه. */
+const SCALE_PRESETS = [
+  { v: 85, label: "مضغوط" },
+  { v: 100, label: "عادي" },
+  { v: 110, label: "مريح" },
+  { v: 120, label: "كبير" },
+];
 
 /**
  * أمثلة الروابط لكل منصّة. أمّا الأيقونات والأسماء والترتيب فمن
@@ -33,14 +45,28 @@ export default function SiteSettings() {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
 
+  // آخر حجمٍ **محفوظ**. المعاينة تغيّر الصفحة فوراً، فمن جرّب ثم خرج بلا
+  // حفظ يجب أن تعود صفحته كما كانت — لا أن يحمل تجربةً لم يقبلها.
+  const savedScale = useRef<number>(UI_SCALE_DEFAULT);
+
   useEffect(() => {
-    api.get("/settings/site/").then((r) => setS(r.data));
+    api.get("/settings/site/").then((r) => {
+      setS(r.data);
+      savedScale.current = r.data.ui_scale ?? UI_SCALE_DEFAULT;
+    });
+    return () => applyUiScale(savedScale.current);
   }, []);
 
   if (!s) return <div style={{ padding: 30 }}>جارٍ التحميل...</div>;
 
   function set<K extends keyof Settings>(k: K, v: Settings[K]) {
     setS((p) => (p ? { ...p, [k]: v } : p));
+  }
+
+  /** المعاينة فورية: رقمٌ في حقلٍ لا يقول شيئاً، والعين وحدها تحكم. */
+  function setScale(v: number) {
+    set("ui_scale", v);
+    applyUiScale(v);
   }
 
   function setSocial(key: string, v: string) {
@@ -64,6 +90,7 @@ export default function SiteSettings() {
     setMsg(""); setErr("");
     try {
       await api.put("/settings/site/", s);
+      savedScale.current = s?.ui_scale ?? UI_SCALE_DEFAULT;
       setMsg("تم حفظ الإعدادات ✅");
     } catch (e: any) {
       // الخادم يردّ برسالة عربية لكل حقل — نعرضها كما هي بدل «تعذّر الحفظ»
@@ -157,6 +184,41 @@ export default function SiteSettings() {
           </Row>
 
           <div style={{ borderTop: "1px solid var(--border)", margin: "20px 0 16px" }} />
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>حجم العرض</div>
+          <div style={{ ...hint, marginBottom: 14, maxWidth: 620 }}>
+            يكبّر الموقع كلَّه أو يصغّره — الخطوط والأزرار والحقول والتباعد معاً،
+            تماماً كزوم المتصفّح. تراه يتغيّر هنا فور تحريكك المؤشّر، ولا يُحفظ
+            إلا بالزرّ أسفل الصفحة.
+          </div>
+          <Row label="الحجم">
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+              <input
+                type="range" dir="ltr" style={{ width: 260, padding: 0, height: 24 }}
+                min={UI_SCALE_MIN} max={UI_SCALE_MAX} step={UI_SCALE_STEP}
+                value={s.ui_scale ?? UI_SCALE_DEFAULT}
+                onChange={(e) => setScale(Number(e.target.value))}
+              />
+              <b style={{ minWidth: 52, color: "var(--primary-dark)", fontSize: 16 }}>
+                {s.ui_scale ?? UI_SCALE_DEFAULT}%
+              </b>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              {SCALE_PRESETS.map((p) => (
+                <button key={p.v} type="button" onClick={() => setScale(p.v)}
+                  style={presetBtn((s.ui_scale ?? UI_SCALE_DEFAULT) === p.v)}>
+                  {p.label} · {p.v}%
+                </button>
+              ))}
+            </div>
+            <div style={{ ...hint, maxWidth: 620 }}>
+              اللوحة مرسومة بعرضٍ ثابت (1366 بكسل)، فإن كانت شاشتك أضيق أو كان
+              تكبير ويندوز عندك 125% فالتصغير هنا هو ما يُدخل اللوحة في الشاشة.
+              والحدّ بين {UI_SCALE_MIN}% و{UI_SCALE_MAX}% عمداً: أبعد منهما يصير
+              الرجوع إلى هذه الصفحة نفسه متعذّراً.
+            </div>
+          </Row>
+
+          <div style={{ borderTop: "1px solid var(--border)", margin: "20px 0 16px" }} />
           <div style={{ fontWeight: 700, marginBottom: 4 }}>روابط التواصل</div>
           <div style={{ ...hint, marginBottom: 14 }}>
             تظهر أيقوناتها أسفل زرّ الدخول. اترك ما لا تملكه فارغاً فلا تظهر أيقونته.
@@ -212,6 +274,16 @@ const inp: React.CSSProperties = { width: "100%", maxWidth: 480 };
 const hint: React.CSSProperties = {
   fontSize: 12, color: "var(--muted)", lineHeight: 1.9, marginTop: 5, maxWidth: 480,
 };
+const presetBtn = (on: boolean): React.CSSProperties => ({
+  height: 32,
+  padding: "0 14px",
+  fontSize: 14,
+  borderRadius: "var(--btn-radius)",
+  cursor: "pointer",
+  border: `1px solid ${on ? "var(--primary)" : "var(--border-strong)"}`,
+  background: on ? "var(--primary)" : "#fff",
+  color: on ? "#fff" : "var(--text)",
+});
 const logoPreview: React.CSSProperties = {
   width: 120, height: 54, objectFit: "contain",
   border: "1px solid var(--border)", borderRadius: 6, background: "#f8fafc",

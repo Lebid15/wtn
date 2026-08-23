@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, type Storefront } from "../api";
 import { SOCIAL_ICONS, SocialGlyph } from "../socialIcons";
 import { useAuth, roleHome } from "../auth";
+import { applyUiScale } from "../uiScale";
 
 export default function Login() {
   const { login } = useAuth();
@@ -25,6 +26,8 @@ export default function Login() {
       setStore(s);
       document.documentElement.setAttribute("data-theme", s.theme || "teal");
       document.documentElement.setAttribute("data-font", s.font || "cairo");
+      // قبل الدخول أيضاً: وإلّا رأى الوكيل الصفحة بمقاسٍ ثم قفزت إلى آخر
+      applyUiScale(s.ui_scale);
       document.title = s.name;
     }).catch(() => {});
   }, []);

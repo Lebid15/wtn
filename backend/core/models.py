@@ -14,6 +14,13 @@ SUB_WARN_DAYS = 7
 LOGIN_ATTEMPTS_BEFORE_LOCK = 3
 
 
+# حدود حجم العرض. أضيق من 75% يصير النصّ غير مقروء، وأوسع من 125% يخرج
+# التصميم ذو العرض الثابت (1366px) عن الشاشة — وفي الحالين يتعذّر الرجوع.
+UI_SCALE_MIN = 75
+UI_SCALE_MAX = 125
+UI_SCALE_DEFAULT = 100
+
+
 # ─────────────────────────── المستأجرون (Platform) ───────────────────────────
 class Tenant(models.Model):
     """مستأجر = وكيل اشترى النظام، له نطاق فرعي ولوحته الخاصة."""
@@ -29,6 +36,11 @@ class Tenant(models.Model):
     theme = models.CharField(max_length=20, default="teal")  # teal | blue | orange | custom
     font = models.CharField(max_length=20, default="cairo")  # cairo | tajawal
     theme_color = models.CharField(max_length=9, blank=True, default="")  # لون مخصّص #RRGGBB
+    # حجم العرض بالمئة (75–125). التصميم مرسومٌ بالبكسل لا بالنسب، فلا يكفي
+    # تكبير الخط وحده: يتباعد السطر ولا يكبر الزرّ معه، فينكسر الصفّ. ولذلك
+    # رقمٌ واحد يُطبَّق بـ `zoom` على الجذر — يكبر كلُّ شيء معاً كما في زوم
+    # المتصفّح: الخطوط والأزرار والحقول والتباعد.
+    ui_scale = models.PositiveSmallIntegerField(default=100)
     # نصّاً: رابط خارجي أو `data:image/...` مرفوعاً من اللوحة. كان `CharField(300)`
     # فلا يسع صورةً مرفوعة، وكان صاحب المتجر يحتاج استضافةً خارجية لشعاره.
     logo_url = models.TextField(blank=True, default="")

@@ -716,3 +716,42 @@ class StoreHostTest(APITestCase):
         r = self.client.get("/api/auth/me/", HTTP_HOST="islam.wtn4.com")
         self.assertEqual(r.status_code, 401)
         self.assertIn("ليس من هذا المتجر", r.json()["detail"])
+
+
+class UiScaleTest(APITestCase):
+    """
+    حجم العرض حقلٌ تجميلي، لكن حدَّه ليس تجميلياً: قيمةٌ متطرّفة تُقزّم اللوحة
+    أو تُخرجها عن الشاشة، فيتعذّر على صاحبها بلوغُ هذه الصفحة نفسها ليصلحها.
+    """
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(subdomain="sc", name="متجر")
+        self.admin = User.objects.create(
+            login_id="sc-admin", name="مدير", tenant=self.tenant,
+            role=User.Role.TENANT_ADMIN, status=User.Status.ACTIVE,
+        )
+        self.client.force_authenticate(self.admin)
+
+    def test_default_is_a_hundred(self):
+        self.assertEqual(self.client.get("/api/settings/site/").json()["ui_scale"], 100)
+
+    def test_a_value_in_range_is_saved(self):
+        r = self.client.put("/api/settings/site/", {"ui_scale": 85}, format="json")
+        self.assertEqual(r.status_code, 200)
+        self.tenant.refresh_from_db()
+        self.assertEqual(self.tenant.ui_scale, 85)
+
+    def test_a_value_out_of_range_is_refused(self):
+        for bad in (10, 300, 0):
+            r = self.client.put("/api/settings/site/", {"ui_scale": bad}, format="json")
+            self.assertEqual(r.status_code, 400, bad)
+        self.tenant.refresh_from_db()
+        self.assertEqual(self.tenant.ui_scale, 100)
+
+    def test_the_login_page_knows_the_size_before_any_account(self):
+        """وإلّا ظهرت الصفحة بمقاسٍ ثم قفزت إلى آخر بعد الدخول."""
+        self.tenant.ui_scale = 90
+        self.tenant.save(update_fields=["ui_scale"])
+        self.client.force_authenticate(None)
+        r = self.client.get("/api/storefront/", HTTP_HOST="sc.wtn4.com")
+        self.assertEqual(r.json()["store"]["ui_scale"], 90)

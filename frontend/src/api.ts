@@ -26,6 +26,8 @@ export interface Tenant {
   theme_color: string;
   /** عملة دفتر المتجر — كل رقم في لوحة الإدارة معروض بها */
   base_currency?: string;
+  /** حجم العرض بالمئة (75–125) — انظر `uiScale.ts` */
+  ui_scale?: number;
 }
 /**
  * هويّة المتجر صاحبِ العنوان المفتوح — تُقرأ قبل الدخول من `GET /storefront/`.
@@ -42,6 +44,7 @@ export interface Storefront {
   tagline?: string;
   login_footer?: string;
   social_links?: Record<string, string>;
+  ui_scale?: number;
 }
 export interface User {
   id: number;

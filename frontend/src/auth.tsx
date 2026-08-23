@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, type User } from "./api";
+import { applyUiScale } from "./uiScale";
 
 interface AuthCtx {
   user: User | null;
@@ -35,11 +36,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  // تطبيق ثيم وخط المستأجر على الصفحة
+  // تطبيق ثيم وخط وحجم عرض المستأجر على الصفحة
   useEffect(() => {
     const theme = user?.tenant?.theme || "teal";
     document.documentElement.setAttribute("data-theme", theme);
     document.documentElement.setAttribute("data-font", (user?.tenant as any)?.font || "cairo");
+    applyUiScale(user?.tenant?.ui_scale);
   }, [user]);
 
   async function login(loginId: string, password: string, totp?: string): Promise<LoginResult> {

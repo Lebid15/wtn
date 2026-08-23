@@ -119,6 +119,9 @@ def storefront_view(request):
             "theme": store.theme,
             "theme_color": store.theme_color,
             "font": store.font,
+            # صفحة الدخول تُرسم قبل أي حساب، فلو غاب الحجم هنا لظهرت بمقاسٍ
+            # ثم قفزت إلى مقاسٍ آخر بعد الدخول.
+            "ui_scale": store.ui_scale,
             # هويّة المتجر كما يراها الزائر قبل الدخول
             "tagline": store.tagline,
             "login_footer": store.login_footer,

@@ -2,14 +2,14 @@
 from rest_framework import serializers
 
 from .text import clean_login_id
-from .models import Tenant, User, Wallet
+from .models import UI_SCALE_MAX, UI_SCALE_MIN, Tenant, User, Wallet
 
 
 class TenantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tenant
         fields = ["id", "name", "subdomain", "status", "theme", "font", "theme_color",
-                  "logo_url", "base_currency"]
+                  "logo_url", "base_currency", "ui_scale"]
 
 
 # منصّات التواصل المعروضة في صفحة الدخول، بترتيب عرضها.
@@ -36,8 +36,21 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
             "logo_url", "default_locale",
             "founded_year", "short_name", "full_name", "address",
             "email", "phone", "homepage_text", "footer_html",
-            "tagline", "login_footer", "social_links",
+            "tagline", "login_footer", "social_links", "ui_scale",
         ]
+
+    # الحدّ لا يُترك للواجهة: قيمةٌ من طلبٍ مباشر تُقزّم الموقع حتى يتعذّر
+    # الوصول إلى الإعدادات لإصلاحها — فيُقفل صاحبُه خارج لوحته بحقلٍ تجميلي.
+    def validate_ui_scale(self, value):
+        try:
+            n = int(value)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError("حجم العرض رقمٌ بالمئة")
+        if not (UI_SCALE_MIN <= n <= UI_SCALE_MAX):
+            raise serializers.ValidationError(
+                f"حجم العرض بين {UI_SCALE_MIN}% و{UI_SCALE_MAX}%"
+            )
+        return n
 
     def validate_logo_url(self, value):
         """رابطٌ خارجي أو صورةٌ مرفوعة — وفارغٌ يعني «لا شعار»."""
