@@ -2,13 +2,43 @@
 #
 #   cd /opt/wtn && docker compose -f deploy/docker-compose.yml up -d --build
 #
-# ثلاث خدمات: الموقع، وموجّهٌ يصنع شهادة HTTPS وحده، وبوت واتساب.
-# القاعدة **خارج الخادم** (Neon) عمداً: ضاعت البيانات مرّةً حين كانت رهينة
-# المضيف، فلا تعود رهينة هذا الخادم أيضاً.
+# أربع خدمات: القاعدة، والموقع، وموجّهٌ يصنع شهادة HTTPS وحده، وبوت واتساب.
+#
+# **القاعدة عادت إلى الخادم (2026-08-23).** كانت على Neon، فبلغت خطتُها المجانية
+# حدَّ نقل البيانات ورفضت كلَّ اتصال، فتوقّف الموقع يومين. والسبب بنيويّ لا
+# عارض: القاعدة في أوهايو والخادم في ألمانيا، و`cron` يسألها كل دقيقة والبوت
+# كل ثلاث ثوانٍ — فكل نبضةٍ تعبر المحيط وتُحسب من الحصّة.
+#
+# وحجّة إخراجها (ألّا تجتمع القاعدة ونسخُها على خادمٍ واحد) تبقى قائمة —
+# يغلقها رفعُ النسخة خارج الخادم في [backup.sh](backup.sh) لا إبعادُ القاعدة.
 
 name: wtn
 
 services:
+  # القاعدة بجوار الموقع: شبكةٌ داخلية لا تُحسب من حصّة نقلٍ ولا تعبر محيطاً.
+  # لا `ports` — لا تُفتح إلى الإنترنت، يصل إليها `web` بالاسم `db` وحده.
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wtn}
+      POSTGRES_USER: ${POSTGRES_USER:-wtn}
+      # بلا كلمة سرّ لا تقلع الخدمة أصلاً — أوضح من قاعدةٍ تقبل الجميع
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD غير مضبوط في deploy/.env}
+      # صريحٌ عمداً: نسخة 18 غيّرت الموضع الافتراضي، وتثبيتُه يُبقي المجلّد
+      # المُركَّب هو مجلّدَ البيانات مهما رُقِّيت الصورة
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    # `web` ينتظرها جاهزةً لا مُقلِعة: `migrate` على قاعدةٍ لم تفتح بابها بعد
+    # يسقط، و`set -e` في start.sh يقتل الحاوية فتدور في حلقة إقلاع
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wtn} -d ${POSTGRES_DB:-wtn}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [wtn]
+
   web:
     build:
       context: ..
@@ -16,8 +46,11 @@ services:
     restart: unless-stopped
     env_file: [.env]
     expose: ["8000"]
-    # يخرج إلى الشبكة (مزوّدون + قاعدة Neon) ويستقبل من caddy وحده
+    # يخرج إلى الشبكة (مزوّدو الشحن) ويستقبل من caddy وحده
     networks: [wtn]
+    depends_on:
+      db:
+        condition: service_healthy
 
   # يُبنى ولا يُسحب جاهزاً: الشهادة الشاملة للمتاجر تحتاج وحدة Cloudflare
   # التي لا توجد في الصورة الرسمية (caddy.Dockerfile يشرح لماذا).
@@ -53,6 +86,7 @@ services:
     networks: [wtn]
 
 volumes:
+  db_data:       # بيانات القاعدة — لا تُحذف. و`down -v` يمحوها، فلا تُستعمل
   caddy_data:
   caddy_config:
 

@@ -128,7 +128,9 @@ _DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 if _DATABASE_URL:
     _url = urlparse(_DATABASE_URL)
     _options = {k: v[-1] for k, v in parse_qs(_url.query).items()}
-    # Managed Postgres is reached over the public internet — never in the clear.
+    # A remote Postgres is reached over the public internet — never in the
+    # clear. `setdefault`, not an override: a database on the same Docker
+    # bridge says `?sslmode=disable` in its URL and means it.
     _options.setdefault("sslmode", "require")
 
     DATABASES = {
